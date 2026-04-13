@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+from app.enums import LeadSourceType, LeadStatus
+from app.models.lead import Lead
+from app.services.normalization import normalize_business_name
+
+
+def _seed_lead(
+    db_session,
+    *,
+    business_name: str,
+    city: str,
+    email: str | None = None,
+    whatsapp: str | None = None,
+    status: LeadStatus = LeadStatus.NEW,
+    do_not_contact: bool = False,
+) -> Lead:
+    lead = Lead(
+        business_name=business_name,
+        normalized_business_name=normalize_business_name(business_name) or business_name.lower(),
+        category="oficina mecânica",
+        city=city,
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        email=email,
+        whatsapp=whatsapp,
+        status=status,
+        do_not_contact=do_not_contact,
+    )
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+    return lead
+
+
+def test_list_leads_with_filters(client, db_session) -> None:
+    _seed_lead(db_session, business_name="Oficina A", city="Sao Paulo", email="a@example.com")
+    _seed_lead(
+        db_session,
+        business_name="Oficina B",
+        city="Campinas",
+        whatsapp="+5511999999999",
+        do_not_contact=True,
+    )
+
+    response = client.get("/leads", params={"city": "Sao Paulo", "has_email": True})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["business_name"] == "Oficina A"
+
+
+def test_get_and_update_lead(client, db_session) -> None:
+    lead = _seed_lead(db_session, business_name="Auto Eletrica Z", city="Santos")
+
+    detail_response = client.get(f"/leads/{lead.id}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["business_name"] == "Auto Eletrica Z"
+
+    update_response = client.patch(
+        f"/leads/{lead.id}",
+        json={
+            "status": "reviewed",
+            "notes": "Contato inicial revisado.",
+            "tags": ["baterias", "prioridade_alta"],
+            "do_not_contact": True,
+        },
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["status"] == "do_not_contact"
+    assert payload["do_not_contact"] is True
+    assert "prioridade_alta" in payload["tags"]
+    actions = [item["action"] for item in payload["activity_logs"]]
+    assert "status_changed" in actions
+    assert "note_added" in actions
+    assert "lead_updated" in actions

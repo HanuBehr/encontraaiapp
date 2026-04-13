@@ -1,0 +1,1 @@
+"""Sender adapter package."""
