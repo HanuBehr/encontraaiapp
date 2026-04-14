@@ -139,6 +139,7 @@ class DiscoveryService:
 
                 self.db.add(
                     ActivityLog(
+                        organization_id=lead.organization_id or self.lead_repository.organization_id,
                         lead_id=lead.id,
                         entity_type="lead",
                         entity_id=lead.id,

@@ -3,12 +3,18 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from app.enums import ContactType
+from app.models.activity_log import ActivityLog
 from app.models.lead import Lead
 from app.models.lead_contact import LeadContact
+from app.models.lead_enrichment_record import LeadEnrichmentRecord
+from app.models.market_taxonomy import MarketSegment, MarketSubsegment
 from app.models.raw_discovery_record import RawDiscoveryRecord
+from app.models.sales_region import SalesRegion
+from app.models.sales_rep import SalesRep
+from app.repositories.organization_repository import get_or_create_default_organization
 from app.schemas.discovery import DiscoveryLeadCandidate
 from app.schemas.lead import LeadListFilters
 
@@ -22,14 +28,23 @@ CONTACT_FIELD_MAP: dict[ContactType, str] = {
 
 
 class LeadRepository:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, organization_id: int | None = None) -> None:
         self.db = db
+        self._organization_id = organization_id
+        self._include_unassigned_leads = organization_id is None
+
+    @property
+    def organization_id(self) -> int:
+        if self._organization_id is None:
+            self._organization_id = get_or_create_default_organization(self.db).id
+        return self._organization_id
 
     def list_leads(self, filters: LeadListFilters) -> tuple[list[Lead], int]:
         conditions = self._build_filter_conditions(filters)
         total = self.db.execute(select(func.count(Lead.id)).where(*conditions)).scalar_one()
         query = (
             select(Lead)
+            .options(*self._assignment_loader_options())
             .where(*conditions)
             .order_by(Lead.updated_at.desc(), Lead.id.desc())
             .offset(filters.offset)
@@ -44,9 +59,11 @@ class LeadRepository:
         query = (
             select(Lead)
             .options(
+                *self._assignment_loader_options(),
                 selectinload(Lead.contacts),
                 selectinload(Lead.enrichments),
                 selectinload(Lead.raw_discovery_records),
+                *self._tenant_child_loader_options(),
             )
             .where(*conditions)
             .order_by(Lead.id.asc())
@@ -54,19 +71,22 @@ class LeadRepository:
         return self.db.execute(query).scalars().all()
 
     def get_by_id(self, lead_id: int) -> Lead | None:
-        return self.db.get(Lead, lead_id)
+        query = select(Lead).where(Lead.id == lead_id, *self._organization_conditions())
+        return self.db.execute(query).scalar_one_or_none()
 
     def get_detail(self, lead_id: int) -> Lead | None:
         query = (
             select(Lead)
             .options(
+                *self._assignment_loader_options(),
                 selectinload(Lead.contacts),
                 selectinload(Lead.enrichments),
                 selectinload(Lead.activity_logs),
                 selectinload(Lead.raw_discovery_records),
                 selectinload(Lead.outreach_drafts),
+                *self._tenant_child_loader_options(),
             )
-            .where(Lead.id == lead_id)
+            .where(Lead.id == lead_id, *self._organization_conditions())
         )
         lead = self.db.execute(query).scalar_one_or_none()
         if lead is None:
@@ -81,13 +101,15 @@ class LeadRepository:
         query = (
             select(Lead)
             .options(
+                *self._assignment_loader_options(),
                 selectinload(Lead.contacts),
                 selectinload(Lead.enrichments),
                 selectinload(Lead.raw_discovery_records),
                 selectinload(Lead.outreach_drafts),
                 selectinload(Lead.activity_logs),
+                *self._tenant_child_loader_options(),
             )
-            .where(Lead.id == lead_id)
+            .where(Lead.id == lead_id, *self._organization_conditions())
         )
         return self.db.execute(query).scalar_one_or_none()
 
@@ -98,24 +120,45 @@ class LeadRepository:
         query = (
             select(Lead)
             .options(
+                *self._assignment_loader_options(),
                 selectinload(Lead.contacts),
                 selectinload(Lead.enrichments),
                 selectinload(Lead.raw_discovery_records),
+                *self._tenant_child_loader_options(),
             )
-            .where(Lead.id.in_(normalized_ids))
+            .where(Lead.id.in_(normalized_ids), *self._organization_conditions())
             .order_by(Lead.id.asc())
         )
         return self.db.execute(query).scalars().all()
 
     def list_distinct_cities(self) -> list[str]:
-        query = select(Lead.city).where(Lead.city.is_not(None)).distinct().order_by(Lead.city.asc())
+        query = (
+            select(Lead.city)
+            .where(Lead.city.is_not(None), *self._organization_conditions())
+            .distinct()
+            .order_by(Lead.city.asc())
+        )
         return [value for value in self.db.execute(query).scalars().all() if value]
 
     def list_distinct_categories(self) -> list[str]:
-        query = select(Lead.category).where(Lead.category.is_not(None)).distinct().order_by(Lead.category.asc())
+        query = (
+            select(Lead.category)
+            .where(Lead.category.is_not(None), *self._organization_conditions())
+            .distinct()
+            .order_by(Lead.category.asc())
+        )
         return [value for value in self.db.execute(query).scalars().all() if value]
 
+    def list_assignment_filter_options(self) -> dict[str, list[tuple[int, str]]]:
+        return {
+            "sales_reps": self._assignment_options(SalesRep, Lead.assigned_sales_rep_id),
+            "sales_regions": self._assignment_options(SalesRegion, Lead.sales_region_id),
+            "market_segments": self._assignment_options(MarketSegment, Lead.market_segment_id),
+            "market_subsegments": self._assignment_options(MarketSubsegment, Lead.market_subsegment_id),
+        }
+
     def get_overview_snapshot(self, recent_limit: int = 10) -> tuple[dict[str, int], list[Lead]]:
+        conditions = self._organization_conditions()
         metrics_query = select(
             func.count(Lead.id).label("total"),
             func.coalesce(
@@ -130,10 +173,12 @@ class LeadRepository:
                 func.sum(case((Lead.do_not_contact.is_(True), 1), else_=0)),
                 0,
             ).label("do_not_contact"),
-        )
+        ).where(*conditions)
         metrics_row = self.db.execute(metrics_query).one()
         recent_query = (
             select(Lead)
+            .options(*self._assignment_loader_options())
+            .where(*conditions)
             .order_by(Lead.updated_at.desc(), Lead.id.desc())
             .limit(recent_limit)
         )
@@ -175,11 +220,14 @@ class LeadRepository:
                 source_provider=candidate.source_provider,
                 source_url=candidate.source_url,
                 lead_source_type=candidate.lead_source_type,
+                organization_id=self.organization_id,
             )
             self.db.add(lead)
             self.db.flush()
             return lead, created
 
+        if lead.organization_id is None and self._include_unassigned_leads:
+            lead.organization_id = self.organization_id
         self._fill_if_missing(lead, "category", candidate.category)
         self._fill_if_missing(lead, "address", candidate.address)
         self._fill_if_missing(lead, "neighborhood", candidate.neighborhood)
@@ -217,9 +265,15 @@ class LeadRepository:
         label: str | None = None,
         note: str | None = None,
     ) -> LeadContact | None:
+        lead = self.get_by_id(lead_id)
+        if lead is None:
+            raise ValueError(f"Lead {lead_id} not found in organization scope.")
+
+        organization_id = lead.organization_id or self.organization_id
         comparison_value = normalized_value or raw_value
         query = select(LeadContact).where(
             LeadContact.lead_id == lead_id,
+            *self._tenant_child_conditions(LeadContact),
             LeadContact.contact_type == contact_type,
             func.coalesce(LeadContact.normalized_value, LeadContact.raw_value) == comparison_value,
             LeadContact.source_record_type == source_record_type,
@@ -230,6 +284,7 @@ class LeadRepository:
             return None
 
         contact = LeadContact(
+            organization_id=organization_id,
             lead_id=lead_id,
             contact_type=contact_type,
             raw_value=raw_value,
@@ -248,9 +303,13 @@ class LeadRepository:
         return contact
 
     def sync_canonical_contacts(self, lead: Lead) -> list[str]:
+        scoped_lead = self.get_by_id(lead.id)
+        if scoped_lead is None:
+            raise ValueError(f"Lead {lead.id} not found in organization scope.")
+
         query = (
             select(LeadContact)
-            .where(LeadContact.lead_id == lead.id)
+            .where(LeadContact.lead_id == lead.id, *self._tenant_child_conditions(LeadContact))
             .order_by(LeadContact.contact_type.asc(), LeadContact.confidence.desc(), LeadContact.updated_at.desc())
         )
         contacts = self.db.execute(query).scalars().all()
@@ -308,13 +367,14 @@ class LeadRepository:
     def list_raw_records_for_lead(self, lead_id: int) -> list[RawDiscoveryRecord]:
         query = (
             select(RawDiscoveryRecord)
-            .where(RawDiscoveryRecord.lead_id == lead_id)
+            .join(Lead, RawDiscoveryRecord.lead_id == Lead.id)
+            .where(RawDiscoveryRecord.lead_id == lead_id, *self._organization_conditions())
             .order_by(RawDiscoveryRecord.created_at.asc())
         )
         return self.db.execute(query).scalars().all()
 
     def _build_filter_conditions(self, filters: LeadListFilters) -> list[object]:
-        conditions: list[object] = []
+        conditions: list[object] = self._organization_conditions()
 
         if filters.city:
             conditions.append(Lead.city.ilike(filters.city))
@@ -340,23 +400,92 @@ class LeadRepository:
             conditions.append(Lead.whatsapp != "")
         elif filters.has_whatsapp is False:
             conditions.append(or_(Lead.whatsapp.is_(None), Lead.whatsapp == ""))
+        if filters.sales_region_id is not None:
+            conditions.append(Lead.sales_region_id == filters.sales_region_id)
+        if filters.market_segment_id is not None:
+            conditions.append(Lead.market_segment_id == filters.market_segment_id)
+        if filters.market_subsegment_id is not None:
+            conditions.append(Lead.market_subsegment_id == filters.market_subsegment_id)
+        if filters.assigned_sales_rep_id is not None:
+            conditions.append(Lead.assigned_sales_rep_id == filters.assigned_sales_rep_id)
+        if filters.has_assignment is True:
+            conditions.append(Lead.assigned_sales_rep_id.is_not(None))
+        elif filters.has_assignment is False:
+            conditions.append(Lead.assigned_sales_rep_id.is_(None))
 
         return conditions
 
+    def _organization_conditions(self) -> list[object]:
+        if self._include_unassigned_leads:
+            # Legacy MVP rows can be NULL until the default-organization backfill has run.
+            return [or_(Lead.organization_id == self.organization_id, Lead.organization_id.is_(None))]
+        return [Lead.organization_id == self.organization_id]
+
+    def _tenant_child_conditions(self, model) -> list[object]:
+        if self._include_unassigned_leads:
+            # Legacy child rows can be NULL until the child-table backfill has run.
+            return [or_(model.organization_id == self.organization_id, model.organization_id.is_(None))]
+        return [model.organization_id == self.organization_id]
+
+    def _tenant_child_loader_options(self) -> list[object]:
+        return [
+            with_loader_criteria(
+                LeadContact,
+                self._tenant_child_conditions(LeadContact)[0],
+                include_aliases=True,
+            ),
+            with_loader_criteria(
+                LeadEnrichmentRecord,
+                self._tenant_child_conditions(LeadEnrichmentRecord)[0],
+                include_aliases=True,
+            ),
+            with_loader_criteria(
+                ActivityLog,
+                self._tenant_child_conditions(ActivityLog)[0],
+                include_aliases=True,
+            ),
+        ]
+
+    @staticmethod
+    def _assignment_loader_options() -> list[object]:
+        return [
+            selectinload(Lead.sales_region),
+            selectinload(Lead.market_segment),
+            selectinload(Lead.market_subsegment),
+            selectinload(Lead.assigned_sales_rep),
+            selectinload(Lead.assignment_rule),
+        ]
+
+    def _assignment_options(self, model, lead_field) -> list[tuple[int, str]]:
+        query = (
+            select(model.id, model.name)
+            .join(Lead, lead_field == model.id)
+            .where(*self._organization_conditions())
+            .distinct()
+            .order_by(model.name.asc(), model.id.asc())
+        )
+        return [(int(row.id), str(row.name)) for row in self.db.execute(query).all()]
+
     def _find_existing(self, candidate: DiscoveryLeadCandidate) -> Lead | None:
+        organization_conditions = self._organization_conditions()
         if candidate.google_place_id:
-            query = select(Lead).where(Lead.google_place_id == candidate.google_place_id)
+            query = select(Lead).where(*organization_conditions, Lead.google_place_id == candidate.google_place_id)
             lead = self.db.execute(query).scalar_one_or_none()
             if lead is not None:
                 return lead
 
         if candidate.domain and candidate.city:
-            query = select(Lead).where(Lead.domain == candidate.domain, Lead.city == candidate.city)
+            query = select(Lead).where(
+                *organization_conditions,
+                Lead.domain == candidate.domain,
+                Lead.city == candidate.city,
+            )
             lead = self.db.execute(query).scalar_one_or_none()
             if lead is not None:
                 return lead
 
         query = select(Lead).where(
+            *organization_conditions,
             Lead.normalized_business_name == candidate.normalized_business_name,
             or_(Lead.city == candidate.city, Lead.city.is_(None)),
         )

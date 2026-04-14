@@ -28,6 +28,11 @@ def preview_duplicates(
     score_max: int | None = Query(default=None, ge=0, le=100),
     lead_source_type: LeadSourceType | None = Query(default=None),
     do_not_contact: bool | None = Query(default=None),
+    sales_region_id: int | None = Query(default=None),
+    market_segment_id: int | None = Query(default=None),
+    market_subsegment_id: int | None = Query(default=None),
+    assigned_sales_rep_id: int | None = Query(default=None),
+    has_assignment: bool | None = Query(default=None),
     db: Session = Depends(get_db_session),
 ) -> DuplicatePreviewResponse:
     filters = LeadListFilters(
@@ -40,6 +45,11 @@ def preview_duplicates(
         score_max=score_max,
         lead_source_type=lead_source_type,
         do_not_contact=do_not_contact,
+        sales_region_id=sales_region_id,
+        market_segment_id=market_segment_id,
+        market_subsegment_id=market_subsegment_id,
+        assigned_sales_rep_id=assigned_sales_rep_id,
+        has_assignment=has_assignment,
     )
     service = DedupeService(db)
     return service.preview_duplicates(filters=filters)

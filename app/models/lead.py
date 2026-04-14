@@ -27,9 +27,18 @@ class Lead(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_leads_city_state", "city", "state"),
         Index("ix_leads_status_city", "status", "city"),
+        Index("ix_leads_org_city_state", "organization_id", "city", "state"),
+        Index("ix_leads_org_status_city", "organization_id", "status", "city"),
+        Index("ix_leads_org_google_place_id", "organization_id", "google_place_id", unique=True),
+        Index("ix_leads_org_sales_region", "organization_id", "sales_region_id"),
+        Index("ix_leads_org_market_segment", "organization_id", "market_segment_id"),
+        Index("ix_leads_org_market_subsegment", "organization_id", "market_subsegment_id"),
+        Index("ix_leads_org_assigned_sales_rep", "organization_id", "assigned_sales_rep_id"),
+        Index("ix_leads_org_assignment_rule", "organization_id", "assignment_rule_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
     business_name: Mapped[str] = mapped_column(String(255), nullable=False)
     normalized_business_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     category: Mapped[str | None] = mapped_column(String(255))
@@ -53,7 +62,7 @@ class Lead(TimestampMixin, Base):
     whatsapp: Mapped[str | None] = mapped_column(String(32))
     instagram: Mapped[str | None] = mapped_column(String(255))
     google_maps_url: Mapped[str | None] = mapped_column(String(500))
-    google_place_id: Mapped[str | None] = mapped_column(String(128), unique=True, index=True)
+    google_place_id: Mapped[str | None] = mapped_column(String(128), index=True)
     source_provider: Mapped[str | None] = mapped_column(String(100))
     source_url: Mapped[str | None] = mapped_column(String(500))
     material_profile: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
@@ -76,7 +85,24 @@ class Lead(TimestampMixin, Base):
     duplicate_reason: Mapped[str | None] = mapped_column(Text)
     last_contacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    sales_region_id: Mapped[int | None] = mapped_column(ForeignKey("sales_regions.id"), index=True)
+    market_segment_id: Mapped[int | None] = mapped_column(ForeignKey("market_segments.id"), index=True)
+    market_subsegment_id: Mapped[int | None] = mapped_column(ForeignKey("market_subsegments.id"), index=True)
+    assigned_sales_rep_id: Mapped[int | None] = mapped_column(ForeignKey("sales_reps.id"), index=True)
+    assignment_rule_id: Mapped[int | None] = mapped_column(ForeignKey("assignment_rules.id"), index=True)
+    assignment_explanation: Mapped[str | None] = mapped_column(Text)
+    assignment_metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
+    organization: Mapped["Organization | None"] = relationship("Organization", back_populates="leads")
+    sales_region: Mapped["SalesRegion | None"] = relationship("SalesRegion", back_populates="assigned_leads")
+    market_segment: Mapped["MarketSegment | None"] = relationship("MarketSegment", back_populates="classified_leads")
+    market_subsegment: Mapped["MarketSubsegment | None"] = relationship(
+        "MarketSubsegment",
+        back_populates="classified_leads",
+    )
+    assigned_sales_rep: Mapped["SalesRep | None"] = relationship("SalesRep", back_populates="assigned_leads")
+    assignment_rule: Mapped["AssignmentRule | None"] = relationship("AssignmentRule", back_populates="assigned_leads")
     duplicate_of: Mapped["Lead | None"] = relationship(
         "Lead",
         remote_side=lambda: [Lead.id],

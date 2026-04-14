@@ -18,6 +18,7 @@ class CRMService:
         lead = self.repository.get_by_id(lead_id)
         if lead is None:
             raise ValueError(f"Lead {lead_id} not found.")
+        organization_id = lead.organization_id or self.repository.organization_id
 
         changed_fields: list[str] = []
 
@@ -27,6 +28,7 @@ class CRMService:
             changed_fields.append("status")
             self.db.add(
                 ActivityLog(
+                    organization_id=organization_id,
                     lead_id=lead.id,
                     entity_type="lead",
                     entity_id=lead.id,
@@ -44,6 +46,7 @@ class CRMService:
             if payload.notes:
                 self.db.add(
                     ActivityLog(
+                        organization_id=organization_id,
                         lead_id=lead.id,
                         entity_type="lead",
                         entity_id=lead.id,
@@ -76,6 +79,7 @@ class CRMService:
                     changed_fields.append("status")
                 self.db.add(
                     ActivityLog(
+                        organization_id=organization_id,
                         lead_id=lead.id,
                         entity_type="lead",
                         entity_id=lead.id,
@@ -98,6 +102,7 @@ class CRMService:
         if changed_fields:
             self.db.add(
                 ActivityLog(
+                    organization_id=organization_id,
                     lead_id=lead.id,
                     entity_type="lead",
                     entity_id=lead.id,

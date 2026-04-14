@@ -107,6 +107,7 @@ class DedupeService:
         duplicate_reason = ", ".join(reasons)
         self.db.add(
             ActivityLog(
+                organization_id=canonical.organization_id or self.repository.organization_id,
                 lead_id=canonical.id,
                 entity_type="lead",
                 entity_id=canonical.id,
@@ -122,6 +123,7 @@ class DedupeService:
         )
         self.db.add(
             ActivityLog(
+                organization_id=duplicate.organization_id or self.repository.organization_id,
                 lead_id=duplicate.id,
                 entity_type="lead",
                 entity_id=duplicate.id,

@@ -12,9 +12,12 @@ class LeadContact(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_lead_contacts_type_value", "contact_type", "normalized_value"),
         Index("ix_lead_contacts_lead_primary", "lead_id", "is_primary"),
+        Index("ix_lead_contacts_org_type_value", "organization_id", "contact_type", "normalized_value"),
+        Index("ix_lead_contacts_org_lead_primary", "organization_id", "lead_id", "is_primary"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
     lead_id: Mapped[int] = mapped_column(ForeignKey("leads.id"), nullable=False, index=True)
     contact_type: Mapped[ContactType] = mapped_column(
         SAEnum(ContactType, native_enum=False),
@@ -32,4 +35,5 @@ class LeadContact(TimestampMixin, Base):
     is_primary: Mapped[bool] = mapped_column(default=False, nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
 
+    organization: Mapped["Organization | None"] = relationship("Organization", back_populates="lead_contacts")
     lead: Mapped["Lead"] = relationship("Lead", back_populates="contacts")

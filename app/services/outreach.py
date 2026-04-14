@@ -113,6 +113,9 @@ class OutreachService:
         )
 
     def generate_draft(self, lead_id: int, template_key: TemplateKey, *, actor: str = "system"):
+        lead = self.lead_repository.get_by_id(lead_id)
+        if lead is None:
+            raise ValueError(f"Lead {lead_id} not found.")
         preview = self.preview_draft(lead_id, template_key)
         template = self._get_template(template_key)
         draft = self.outreach_repository.create_draft(
@@ -126,6 +129,7 @@ class OutreachService:
         )
         self.db.add(
             ActivityLog(
+                organization_id=lead.organization_id or self.lead_repository.organization_id,
                 lead_id=lead_id,
                 entity_type="lead",
                 entity_id=lead_id,

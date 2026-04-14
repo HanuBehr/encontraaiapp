@@ -1,0 +1,30 @@
+{
+  "mode": "dry-run",
+  "organization": {
+    "id": 1,
+    "slug": "default",
+    "source": "default_no_owned_leads"
+  },
+  "processed": 0,
+  "changed": 0,
+  "assigned_count": 0,
+  "unassigned_count": 0,
+  "assignment_rate": 0.0,
+  "counts_by_rep": {},
+  "counts_by_region": {},
+  "counts_by_segment": {},
+  "counts_by_subsegment": {},
+  "unassigned_reasons": {},
+  "checks": {
+    "expected_sao_jose_do_rio_preto_gap_count": 0,
+    "unexpected_sao_jose_do_rio_preto_gap_count": 0,
+    "suspicious_match_count": 0
+  },
+  "bootstrap_warnings": [],
+  "artifacts": {
+    "summary_json": "data\\exports\\garin_assignment_validation_20260414_022754.json",
+    "assigned_csv": "data\\exports\\garin_assignment_assigned_20260414_022754.csv",
+    "unassigned_csv": "data\\exports\\garin_assignment_unassigned_20260414_022754.csv",
+    "suspicious_matches_csv": "data\\exports\\garin_assignment_suspicious_matches_20260414_022754.csv"
+  }
+}

@@ -400,6 +400,7 @@ class EnrichmentService:
 
         self.db.add(
             ActivityLog(
+                organization_id=lead.organization_id or self.repository.organization_id,
                 lead_id=lead.id,
                 entity_type="lead",
                 entity_id=lead.id,
@@ -493,6 +494,7 @@ class EnrichmentService:
         note: str | None,
     ) -> LeadEnrichmentRecord:
         record = LeadEnrichmentRecord(
+            organization_id=lead.organization_id or self.repository.organization_id,
             lead_id=lead.id,
             source_url=source_url,
             page_type=page_type,

@@ -19,6 +19,24 @@ from app.services.discovery import DiscoveryService
 from app.services.dedupe import DedupeService
 from app.services.enrichment import EnrichmentService
 from app.services.export_excel import ExcelExportService
+from app.services.lead_workflow import (
+    ACTION_QUEUE_SCORE_MIN,
+    SORT_BUSINESS_NAME,
+    SORT_FOLLOW_UP_DATE,
+    SORT_HIGHEST_PRIORITY,
+    SORT_RECENTLY_UPDATED,
+    WORKFLOW_VIEW_DESCRIPTIONS,
+    WORKFLOW_VIEWS,
+    build_filtered_queue as workflow_build_filtered_queue,
+    build_queue_stats as workflow_build_queue_stats,
+    contact_state as workflow_contact_state,
+    default_template_key_for_lead as workflow_default_template_key_for_lead,
+    has_any_contact as workflow_has_any_contact,
+    has_direct_channel as workflow_has_direct_channel,
+    is_follow_up_due as workflow_is_follow_up_due,
+    is_uncontacted as workflow_is_uncontacted,
+    next_best_action as workflow_next_best_action,
+)
 from app.services.normalization import normalize_tags
 from app.services.outreach import OutreachService
 
@@ -27,19 +45,18 @@ settings = get_settings()
 st.set_page_config(page_title="LeadFlow Workspace", layout="wide", initial_sidebar_state="expanded")
 
 LEAD_PAGE_SIZE = 300
-WORKFLOW_VIEWS = [
-    "Action queue",
-    "Ready for outreach",
-    "Needs enrichment",
-    "Follow-up due",
-    "All leads",
-]
 SORT_OPTIONS = [
     "Recently updated",
     "Highest priority",
     "Follow-up date",
     "Business name",
 ]
+SORT_KEY_BY_LABEL = {
+    "Recently updated": SORT_RECENTLY_UPDATED,
+    "Highest priority": SORT_HIGHEST_PRIORITY,
+    "Follow-up date": SORT_FOLLOW_UP_DATE,
+    "Business name": SORT_BUSINESS_NAME,
+}
 DETAIL_SECTION_REVIEW = "Review & Enrich"
 DETAIL_SECTION_DRAFTS = "Drafts"
 DETAIL_SECTION_HISTORY = "History & Sources"
@@ -48,27 +65,6 @@ DETAIL_SECTION_OPTIONS = [
     DETAIL_SECTION_DRAFTS,
     DETAIL_SECTION_HISTORY,
 ]
-ACTIVE_STATUSES = {
-    LeadStatus.NEW,
-    LeadStatus.REVIEWED,
-    LeadStatus.APPROVED,
-    LeadStatus.CONTACTED,
-    LeadStatus.REPLIED,
-    LeadStatus.INTERESTED,
-}
-FOLLOW_UP_STATUSES = {
-    LeadStatus.CONTACTED,
-    LeadStatus.REPLIED,
-    LeadStatus.INTERESTED,
-}
-ACTION_QUEUE_SCORE_MIN = 70
-ACTIVE_STATUS_VALUES = {status.value for status in ACTIVE_STATUSES}
-FOLLOW_UP_STATUS_VALUES = {status.value for status in FOLLOW_UP_STATUSES}
-UNCONTACTED_STATUS_VALUES = {
-    LeadStatus.NEW.value,
-    LeadStatus.REVIEWED.value,
-    LeadStatus.APPROVED.value,
-}
 DISCOVERY_LOCATION_MODES = ["City / neighborhood", "Coordinates"]
 DISCOVERY_SEARCH_TERM_OPTIONS = [
     "oficina mecânica",
@@ -80,13 +76,6 @@ DISCOVERY_SEARCH_TERM_OPTIONS = [
     "manutenção de computadores",
     "eletrônica",
 ]
-WORKFLOW_VIEW_DESCRIPTIONS = {
-    "Action queue": "Best leads to review before first outreach: contactable, high-priority, and not yet contacted.",
-    "Ready for outreach": "High-priority leads with email or WhatsApp already stored and no do-not-contact block.",
-    "Needs enrichment": "Saved leads that still need a public contact refresh or stronger evidence before outreach.",
-    "Follow-up due": "Saved leads with a due or overdue follow-up date.",
-    "All leads": "Every saved lead that matches the current filters.",
-}
 def _inject_styles() -> None:
     st.markdown(
         """
@@ -966,6 +955,10 @@ def _init_session_state() -> None:
         "lead_filter_category": "All",
         "lead_filter_source_type": "All",
         "lead_filter_score_range": (0, 100),
+        "lead_filter_assigned_sales_rep_id": None,
+        "lead_filter_sales_region_id": None,
+        "lead_filter_market_segment_id": None,
+        "leads_has_assignment": "Any",
         "leads_has_email": "Any",
         "leads_has_whatsapp": "Any",
         "leads_do_not_contact": "Any",
@@ -1038,6 +1031,47 @@ def _safe_text(value: object | None, *, fallback: str = "-") -> str:
     if value in (None, "", [], {}):
         return fallback
     return str(value)
+
+
+def _related_name(value: object | None) -> str | None:
+    if value is None:
+        return None
+    name = _safe_text(getattr(value, "name", None), fallback="")
+    return name or None
+
+
+def _assignment_rep_name(lead: LeadSummary | LeadDetail) -> str | None:
+    return _related_name(getattr(lead, "assigned_sales_rep", None))
+
+
+def _assignment_region_name(lead: LeadSummary | LeadDetail) -> str | None:
+    return _related_name(getattr(lead, "sales_region", None))
+
+
+def _assignment_segment_name(lead: LeadSummary | LeadDetail) -> str | None:
+    return _related_name(getattr(lead, "market_segment", None))
+
+
+def _assignment_subsegment_name(lead: LeadSummary | LeadDetail) -> str | None:
+    return _related_name(getattr(lead, "market_subsegment", None))
+
+
+def _assignment_rule_name(lead: LeadDetail) -> str | None:
+    return _related_name(getattr(lead, "assignment_rule", None))
+
+
+def _assignment_status(lead: LeadSummary | LeadDetail) -> str:
+    return _assignment_rep_name(lead) or "Unassigned"
+
+
+def _classification_summary(lead: LeadSummary | LeadDetail) -> str:
+    segment = _assignment_segment_name(lead)
+    subsegment = _assignment_subsegment_name(lead)
+    region = _assignment_region_name(lead)
+    classification = " / ".join(value for value in [segment, subsegment] if value)
+    if not classification:
+        classification = "Not classified"
+    return f"{classification} | {_safe_text(region, fallback='No region')}"
 
 
 def _render_key_value_grid(items: list[tuple[str, object | None]]) -> None:
@@ -1332,6 +1366,12 @@ def _tri_state_filter(label: str, key: str) -> bool | None:
     return None
 
 
+def _id_filter_labels(items: list[tuple[int, str]]) -> dict[int | None, str]:
+    labels: dict[int | None, str] = {None: "All"}
+    labels.update({item_id: name for item_id, name in items})
+    return labels
+
+
 def _run_read(fn):
     db = SessionLocal()
     try:
@@ -1378,6 +1418,21 @@ def _list_distinct_values_cached(revision: int) -> tuple[list[str], list[str]]:
 
 def _list_distinct_values() -> tuple[list[str], list[str]]:
     return _list_distinct_values_cached(_data_revision())
+
+
+@st.cache_data(show_spinner=False, ttl=120)
+def _list_assignment_filter_options_cached(revision: int) -> dict[str, list[tuple[int, str]]]:
+    del revision
+
+    def _reader(db):
+        repo = LeadRepository(db)
+        return repo.list_assignment_filter_options()
+
+    return _run_read(_reader)
+
+
+def _list_assignment_filter_options() -> dict[str, list[tuple[int, str]]]:
+    return _list_assignment_filter_options_cached(_data_revision())
 
 
 @st.cache_data(show_spinner=False, ttl=120)
@@ -1613,28 +1668,29 @@ def _clear_discovery_results() -> None:
 
 
 def _has_direct_channel(lead: LeadSummary | LeadDetail) -> bool:
-    return bool(lead.email or lead.whatsapp)
+    return workflow_has_direct_channel(lead)
 
 
 def _has_any_contact(lead: LeadSummary | LeadDetail) -> bool:
-    return bool(lead.email or lead.whatsapp or lead.phone)
+    return workflow_has_any_contact(lead)
 
 
 def _is_follow_up_due(lead: LeadSummary | LeadDetail) -> bool:
-    return bool(lead.follow_up_date and lead.follow_up_date <= date.today())
+    return workflow_is_follow_up_due(lead)
 
 
 def _is_uncontacted(lead: LeadSummary | LeadDetail) -> bool:
-    return _status_in(lead.status, UNCONTACTED_STATUS_VALUES) and lead.last_contacted_at is None
+    return workflow_is_uncontacted(lead)
 
 
 def _contact_summary(lead: LeadSummary | LeadDetail) -> str:
+    state = workflow_contact_state(lead)
     channels: list[str] = []
-    if lead.email:
+    if state.has_email:
         channels.append("Email")
-    if lead.whatsapp:
+    if state.has_whatsapp:
         channels.append("WhatsApp")
-    elif lead.phone:
+    elif state.has_phone:
         channels.append("Phone")
     return " + ".join(channels) if channels else "No direct channel"
 
@@ -1647,20 +1703,7 @@ def _lead_option_label(lead: LeadSummary | LeadDetail) -> str:
 
 
 def _lead_next_step(lead: LeadSummary | LeadDetail) -> str:
-    lead_status = _status_value(lead.status)
-    if lead.do_not_contact:
-        return "Do not contact is active. Keep outreach blocked and preserve the reason in notes."
-    if lead_status == LeadStatus.NEW.value:
-        return "Review fit, confirm the public evidence, and update the pipeline status."
-    if not lead.last_enriched_at:
-        return "Find more public contact info before outreach."
-    if _is_follow_up_due(lead):
-        return "A follow-up is due. Review the latest notes and prepare the next outreach draft."
-    if _has_direct_channel(lead):
-        return "A direct contact channel is available. Review the details and prepare the draft."
-    if _has_any_contact(lead):
-        return "A phone contact is available. Check whether a public contact refresh can find email or WhatsApp before drafting."
-    return "Review the lead and capture the next operator step in notes."
+    return workflow_next_best_action(lead)
 
 
 def _render_lead_workspace_header(
@@ -1701,85 +1744,35 @@ def _render_lead_workspace_header(
     )
 
 
-def _apply_workflow_view(leads: list[LeadSummary], workflow_view: str) -> list[LeadSummary]:
-    if workflow_view == "Action queue":
-        return [
-            lead
-            for lead in leads
-            if _status_in(lead.status, UNCONTACTED_STATUS_VALUES)
-            and not lead.do_not_contact
-            and _has_any_contact(lead)
-            and lead.lead_score >= ACTION_QUEUE_SCORE_MIN
-        ]
-    if workflow_view == "Ready for outreach":
-        return [
-            lead
-            for lead in leads
-            if _status_in(lead.status, ACTIVE_STATUS_VALUES)
-            and not lead.do_not_contact
-            and _has_direct_channel(lead)
-            and lead.lead_score >= ACTION_QUEUE_SCORE_MIN
-        ]
-    if workflow_view == "Needs enrichment":
-        return [
-            lead
-            for lead in leads
-            if _status_in(lead.status, ACTIVE_STATUS_VALUES)
-            and not lead.do_not_contact
-            and lead.last_enriched_at is None
-        ]
-    if workflow_view == "Follow-up due":
-        return [
-            lead
-            for lead in leads
-            if _status_in(lead.status, FOLLOW_UP_STATUS_VALUES)
-            and not lead.do_not_contact
-            and _is_follow_up_due(lead)
-        ]
-    return leads
-
-
-def _matches_search(lead: LeadSummary, search_term: str) -> bool:
-    if not search_term:
-        return True
-    search_value = search_term.lower().strip()
-    haystack = " ".join(
-        [
-            lead.business_name,
-            lead.category or "",
-            lead.neighborhood or "",
-            lead.city or "",
-            lead.state or "",
-            lead.website or "",
-            lead.email or "",
-            lead.phone or "",
-            lead.whatsapp or "",
-            _normalize_enumish(lead.status) or "",
-            _normalize_enumish(lead.lead_source_type) or "",
-        ]
-    ).lower()
-    return search_value in haystack
-
-
-def _sort_leads(leads: list[LeadSummary], sort_by: str) -> list[LeadSummary]:
-    if sort_by == "Highest priority":
-        return sorted(
-            leads,
-            key=lambda lead: (-lead.lead_score, -(lead.updated_at.timestamp()), -lead.id),
+def _render_assignment_section(lead: LeadDetail) -> None:
+    assigned_rep = _assignment_rep_name(lead)
+    with st.container(border=True):
+        st.markdown("### Assignment & classification")
+        _render_badges(
+            [
+                (
+                    f"Assigned: {assigned_rep}" if assigned_rep else "Unassigned",
+                    "good" if assigned_rep else "warn",
+                ),
+                (f"Region: {_assignment_region_name(lead)}", "neutral")
+                if _assignment_region_name(lead)
+                else ("No sales region", "warn"),
+                (f"Segment: {_assignment_segment_name(lead)}", "neutral")
+                if _assignment_segment_name(lead)
+                else ("No market segment", "warn"),
+            ]
         )
-    if sort_by == "Follow-up date":
-        return sorted(
-            leads,
-            key=lambda lead: (
-                lead.follow_up_date is None,
-                lead.follow_up_date or date.max,
-                -lead.lead_score,
-                lead.business_name.lower(),
-            ),
+        _render_key_value_grid(
+            [
+                ("Assigned sales rep", assigned_rep or "Unassigned"),
+                ("Sales region", _assignment_region_name(lead) or "Not matched"),
+                ("Market segment", _assignment_segment_name(lead) or "Not classified"),
+                ("Market subsegment", _assignment_subsegment_name(lead) or "Not classified"),
+                ("Assignment rule", _assignment_rule_name(lead) or "No rule matched"),
+                ("Assigned at", _format_datetime(lead.assigned_at)),
+                ("Assignment explanation", lead.assignment_explanation or "No assignment explanation stored yet."),
+            ]
         )
-    if sort_by == "Business name":
-        return sorted(leads, key=lambda lead: (lead.business_name.lower(), lead.id))
-    return sorted(leads, key=lambda lead: (lead.updated_at.timestamp(), lead.id), reverse=True)
 
 
 def _save_queue(leads: list[LeadSummary], queue_label: str) -> None:
@@ -1843,6 +1836,10 @@ def _reset_queue_filters() -> None:
     st.session_state["lead_filter_category"] = "All"
     st.session_state["lead_filter_source_type"] = "All"
     st.session_state["lead_filter_score_range"] = (0, 100)
+    st.session_state["lead_filter_assigned_sales_rep_id"] = None
+    st.session_state["lead_filter_sales_region_id"] = None
+    st.session_state["lead_filter_market_segment_id"] = None
+    st.session_state["leads_has_assignment"] = "Any"
     st.session_state["leads_has_email"] = "Any"
     st.session_state["leads_has_whatsapp"] = "Any"
     st.session_state["leads_do_not_contact"] = "Any"
@@ -1860,28 +1857,6 @@ def _sync_detail_selected_lead() -> None:
     st.session_state["selected_lead_id"] = selected_lead_id
     if selected_lead_id is not None:
         st.session_state["lead_queue_selected_id"] = selected_lead_id
-
-
-def _apply_operator_quick_filters(
-    leads: list[LeadSummary],
-    *,
-    hide_duplicates: bool,
-    require_contact: bool,
-    high_score_only: bool,
-    only_uncontacted: bool,
-) -> list[LeadSummary]:
-    filtered: list[LeadSummary] = []
-    for lead in leads:
-        if hide_duplicates and lead.is_duplicate:
-            continue
-        if require_contact and not _has_any_contact(lead):
-            continue
-        if high_score_only and lead.lead_score < ACTION_QUEUE_SCORE_MIN:
-            continue
-        if only_uncontacted and not _is_uncontacted(lead):
-            continue
-        filtered.append(lead)
-    return filtered
 
 
 def _render_queue_action_context(filtered_lead_ids: list[int]) -> None:
@@ -1910,8 +1885,12 @@ def _queue_filter_badges(
     selected_status: str,
     selected_category: str,
     selected_source_type: str,
+    selected_sales_rep: str | None,
+    selected_sales_region: str | None,
+    selected_market_segment: str | None,
     has_email: bool | None,
     has_whatsapp: bool | None,
+    has_assignment: bool | None,
     do_not_contact: bool | None,
     score_min: int,
     score_max: int,
@@ -1931,6 +1910,16 @@ def _queue_filter_badges(
         badges.append((f"Status: {_humanize(selected_status)}", "neutral"))
     if selected_source_type != "All":
         badges.append((f"Source: {_humanize(selected_source_type)}", "neutral"))
+    if selected_sales_rep:
+        badges.append((f"Assigned rep: {selected_sales_rep}", "good"))
+    if selected_sales_region:
+        badges.append((f"Sales region: {selected_sales_region}", "neutral"))
+    if selected_market_segment:
+        badges.append((f"Segment: {selected_market_segment}", "neutral"))
+    if has_assignment is True:
+        badges.append(("Assigned leads only", "good"))
+    elif has_assignment is False:
+        badges.append(("Unassigned leads only", "warn"))
     if has_email is True:
         badges.append(("Has email", "good"))
     elif has_email is False:
@@ -1967,34 +1956,24 @@ def _build_filtered_queue(
     high_score_only: bool,
     only_uncontacted: bool,
 ) -> list[LeadSummary]:
-    filtered = _apply_workflow_view(leads, workflow_view)
-    filtered = _apply_operator_quick_filters(
-        filtered,
+    return workflow_build_filtered_queue(
+        leads,
+        workflow_view=workflow_view,
+        search_term=search_term,
+        sort_key=SORT_KEY_BY_LABEL.get(sort_by, SORT_RECENTLY_UPDATED),
         hide_duplicates=hide_duplicates,
         require_contact=require_contact,
         high_score_only=high_score_only,
         only_uncontacted=only_uncontacted,
     )
-    if search_term.strip():
-        filtered = [lead for lead in filtered if _matches_search(lead, search_term)]
-    return _sort_leads(filtered, sort_by)
 
 
 def _prepare_queue_display(filtered_leads: list[LeadSummary]) -> tuple[pd.DataFrame, dict[int, str], dict[str, int]]:
     rows: list[dict] = []
     lead_options: dict[int, str] = {}
-    any_contact = 0
-    needs_enrichment = 0
-    follow_up_due = 0
+    queue_stats = workflow_build_queue_stats(filtered_leads)
 
     for lead in filtered_leads:
-        if _has_any_contact(lead):
-            any_contact += 1
-        if lead.last_enriched_at is None and not lead.do_not_contact:
-            needs_enrichment += 1
-        if _is_follow_up_due(lead):
-            follow_up_due += 1
-
         lead_options[lead.id] = _lead_option_label(lead)
         rows.append(
             {
@@ -2004,6 +1983,8 @@ def _prepare_queue_display(filtered_leads: list[LeadSummary]) -> tuple[pd.DataFr
                 "City": lead.city or "-",
                 "Source": _humanize(lead.lead_source_type),
                 "Contact path": _contact_summary(lead),
+                "Assigned": _assignment_status(lead),
+                "Classification": _classification_summary(lead),
                 "Priority": lead.lead_score,
                 "Status": _humanize(lead.status),
                 "Follow-up": lead.follow_up_date,
@@ -2015,12 +1996,7 @@ def _prepare_queue_display(filtered_leads: list[LeadSummary]) -> tuple[pd.DataFr
     return (
         pd.DataFrame.from_records(rows),
         lead_options,
-        {
-            "queue_size": len(filtered_leads),
-            "any_contact": any_contact,
-            "needs_enrichment": needs_enrichment,
-            "follow_up_due": follow_up_due,
-        },
+        queue_stats.as_dict(),
     )
 
 
@@ -2158,17 +2134,7 @@ def _discovery_preview_rows(preview: DiscoveryPreviewResponse) -> list[dict]:
 
 
 def _default_template_key_for_lead(lead: LeadDetail, template_keys: list[str]) -> str:
-    if _status_in(lead.status, FOLLOW_UP_STATUS_VALUES):
-        if TemplateKey.FOLLOW_UP_EMAIL.value in template_keys and lead.email:
-            return TemplateKey.FOLLOW_UP_EMAIL.value
-        if TemplateKey.FOLLOW_UP_WHATSAPP.value in template_keys and lead.whatsapp:
-            return TemplateKey.FOLLOW_UP_WHATSAPP.value
-    else:
-        if TemplateKey.COLD_EMAIL.value in template_keys and lead.email:
-            return TemplateKey.COLD_EMAIL.value
-        if TemplateKey.COLD_WHATSAPP.value in template_keys and lead.whatsapp:
-            return TemplateKey.COLD_WHATSAPP.value
-    return template_keys[0]
+    return workflow_default_template_key_for_lead(lead, template_keys)
 
 
 _inject_styles()
@@ -2202,8 +2168,15 @@ if st.session_state.get("lead_queue_ids") and page in {"Leads", "Lead Detail"}:
 
 city_options: list[str] = []
 category_options: list[str] = []
+assignment_filter_options: dict[str, list[tuple[int, str]]] = {
+    "sales_reps": [],
+    "sales_regions": [],
+    "market_segments": [],
+    "market_subsegments": [],
+}
 if page == "Leads":
     city_options, category_options = _list_distinct_values()
+    assignment_filter_options = _list_assignment_filter_options()
 _render_app_header(page)
 
 if page == "Discovery":
@@ -2725,6 +2698,12 @@ elif page == "Leads":
         category_filter_options = ["All"] + category_options
         status_filter_options = ["All"] + [status.value for status in LeadStatus]
         source_filter_options = ["All"] + [source.value for source in LeadSourceType]
+        sales_rep_filter_labels = _id_filter_labels(assignment_filter_options["sales_reps"])
+        sales_region_filter_labels = _id_filter_labels(assignment_filter_options["sales_regions"])
+        market_segment_filter_labels = _id_filter_labels(assignment_filter_options["market_segments"])
+        sales_rep_filter_options = list(sales_rep_filter_labels.keys())
+        sales_region_filter_options = list(sales_region_filter_labels.keys())
+        market_segment_filter_options = list(market_segment_filter_labels.keys())
         if st.session_state.get("lead_filter_city") not in city_filter_options:
             st.session_state["lead_filter_city"] = "All"
         if st.session_state.get("lead_filter_category") not in category_filter_options:
@@ -2733,6 +2712,12 @@ elif page == "Leads":
             st.session_state["lead_filter_status"] = "All"
         if st.session_state.get("lead_filter_source_type") not in source_filter_options:
             st.session_state["lead_filter_source_type"] = "All"
+        if st.session_state.get("lead_filter_assigned_sales_rep_id") not in sales_rep_filter_options:
+            st.session_state["lead_filter_assigned_sales_rep_id"] = None
+        if st.session_state.get("lead_filter_sales_region_id") not in sales_region_filter_options:
+            st.session_state["lead_filter_sales_region_id"] = None
+        if st.session_state.get("lead_filter_market_segment_id") not in market_segment_filter_options:
+            st.session_state["lead_filter_market_segment_id"] = None
 
         with st.form("lead_queue_filters_form"):
             toolbar_col1, toolbar_col2 = st.columns([2.4, 1.1])
@@ -2794,6 +2779,31 @@ elif page == "Leads":
                     do_not_contact = _tri_state_filter("Do not contact", "leads_do_not_contact")
                     score_min, score_max = st.slider("Priority range", 0, 100, key="lead_filter_score_range")
 
+                assignment_col1, assignment_col2, assignment_col3, assignment_col4 = st.columns(4)
+                with assignment_col1:
+                    has_assignment = _tri_state_filter("Has assignment", "leads_has_assignment")
+                with assignment_col2:
+                    selected_sales_rep_id = st.selectbox(
+                        "Assigned sales rep",
+                        sales_rep_filter_options,
+                        key="lead_filter_assigned_sales_rep_id",
+                        format_func=lambda item: sales_rep_filter_labels.get(item, "Unknown"),
+                    )
+                with assignment_col3:
+                    selected_sales_region_id = st.selectbox(
+                        "Sales region",
+                        sales_region_filter_options,
+                        key="lead_filter_sales_region_id",
+                        format_func=lambda item: sales_region_filter_labels.get(item, "Unknown"),
+                    )
+                with assignment_col4:
+                    selected_market_segment_id = st.selectbox(
+                        "Market segment",
+                        market_segment_filter_options,
+                        key="lead_filter_market_segment_id",
+                        format_func=lambda item: market_segment_filter_labels.get(item, "Unknown"),
+                    )
+
             action_col1, action_col2, action_col3 = st.columns([1.1, 1, 1])
             with action_col1:
                 st.form_submit_button("Apply queue filters", type="primary", use_container_width=True)
@@ -2829,6 +2839,10 @@ elif page == "Leads":
         score_max=score_max,
         lead_source_type=None if selected_source_type == "All" else LeadSourceType(selected_source_type),
         do_not_contact=do_not_contact,
+        assigned_sales_rep_id=selected_sales_rep_id,
+        sales_region_id=selected_sales_region_id,
+        market_segment_id=selected_market_segment_id,
+        has_assignment=has_assignment,
         limit=LEAD_PAGE_SIZE,
         offset=0,
     )
@@ -2856,8 +2870,18 @@ elif page == "Leads":
                 selected_status=selected_status,
                 selected_category=selected_category,
                 selected_source_type=selected_source_type,
+                selected_sales_rep=None
+                if selected_sales_rep_id is None
+                else sales_rep_filter_labels.get(selected_sales_rep_id),
+                selected_sales_region=None
+                if selected_sales_region_id is None
+                else sales_region_filter_labels.get(selected_sales_region_id),
+                selected_market_segment=None
+                if selected_market_segment_id is None
+                else market_segment_filter_labels.get(selected_market_segment_id),
                 has_email=has_email,
                 has_whatsapp=has_whatsapp,
+                has_assignment=has_assignment,
                 do_not_contact=do_not_contact,
                 score_min=score_min,
                 score_max=score_max,
@@ -2898,6 +2922,8 @@ elif page == "Leads":
                     hide_index=True,
                     height=_table_height(len(filtered_leads)),
                     column_config={
+                        "Assigned": st.column_config.TextColumn("Assigned", width="small"),
+                        "Classification": st.column_config.TextColumn("Classification", width="medium"),
                         "Priority": st.column_config.NumberColumn("Priority", min_value=0, max_value=100),
                         "Follow-up": st.column_config.DateColumn("Follow-up"),
                         "Last enriched": st.column_config.DatetimeColumn("Last enriched"),
@@ -2942,8 +2968,15 @@ elif page == "Leads":
                             f"Contact: {_contact_summary(selected_lead)}",
                             "good" if _has_direct_channel(selected_lead) else "warn",
                         ),
+                        (
+                            f"Assigned: {_assignment_rep_name(selected_lead)}"
+                            if _assignment_rep_name(selected_lead)
+                            else "Unassigned",
+                            "good" if _assignment_rep_name(selected_lead) else "warn",
+                        ),
                     ]
                 )
+                st.caption(_classification_summary(selected_lead))
                 st.caption(_lead_next_step(selected_lead))
 
             with st.container(border=True):
@@ -3178,6 +3211,10 @@ else:
                     (f"Priority: {lead.lead_score}", "good" if lead.lead_score >= 70 else "warn"),
                     ("Do not contact", "danger") if lead.do_not_contact else ("Contactable", "good"),
                     (
+                        f"Assigned: {_assignment_rep_name(lead)}" if _assignment_rep_name(lead) else "Unassigned",
+                        "good" if _assignment_rep_name(lead) else "warn",
+                    ),
+                    (
                         f"Follow-up: {_format_date(lead.follow_up_date)}",
                         "warn" if _is_follow_up_due(lead) else "neutral",
                     ),
@@ -3202,6 +3239,8 @@ else:
             metric_cols[1].metric("Contacts", len(lead.contacts))
             metric_cols[2].metric("Last enriched", _format_datetime(lead.last_enriched_at))
             metric_cols[3].metric("Last contacted", _format_datetime(lead.last_contacted_at))
+
+            _render_assignment_section(lead)
 
             with st.container(border=True):
                 st.markdown("### Operator focus")

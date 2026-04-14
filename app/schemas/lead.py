@@ -9,6 +9,38 @@ from app.enums import ActivityAction, ContactType, LeadSourceType, LeadStatus
 from app.schemas.common import ORMBaseModel
 
 
+class SalesRegionRead(ORMBaseModel):
+    id: int
+    name: str
+    region_type: str
+    state: str | None = None
+    code: str | None = None
+
+
+class MarketSegmentRead(ORMBaseModel):
+    id: int
+    key: str
+    name: str
+
+
+class MarketSubsegmentRead(ORMBaseModel):
+    id: int
+    key: str
+    name: str
+
+
+class SalesRepRead(ORMBaseModel):
+    id: int
+    name: str
+    email: str | None = None
+
+
+class AssignmentRuleRead(ORMBaseModel):
+    id: int
+    name: str
+    priority: int
+
+
 class LeadSummary(ORMBaseModel):
     id: int
     business_name: str
@@ -32,6 +64,17 @@ class LeadSummary(ORMBaseModel):
     is_duplicate: bool
     duplicate_of_lead_id: int | None = None
     duplicate_reason: str | None = None
+    sales_region_id: int | None = None
+    market_segment_id: int | None = None
+    market_subsegment_id: int | None = None
+    assigned_sales_rep_id: int | None = None
+    assignment_rule_id: int | None = None
+    assigned_at: datetime | None = None
+    sales_region: SalesRegionRead | None = None
+    market_segment: MarketSegmentRead | None = None
+    market_subsegment: MarketSubsegmentRead | None = None
+    assigned_sales_rep: SalesRepRead | None = None
+    assignment_rule: AssignmentRuleRead | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -91,6 +134,13 @@ class LeadDetail(LeadSummary):
     source_url: str | None = None
     material_profile: dict[str, Any] = Field(default_factory=dict)
     score_breakdown: dict[str, Any] = Field(default_factory=dict)
+    assignment_explanation: str | None = None
+    assignment_metadata_json: dict[str, Any] = Field(default_factory=dict)
+    sales_region: SalesRegionRead | None = None
+    market_segment: MarketSegmentRead | None = None
+    market_subsegment: MarketSubsegmentRead | None = None
+    assigned_sales_rep: SalesRepRead | None = None
+    assignment_rule: AssignmentRuleRead | None = None
     notes: str | None = None
     tags: list[str] = Field(default_factory=list)
     owner: str | None = None
@@ -109,6 +159,11 @@ class LeadListFilters(BaseModel):
     score_max: int | None = Field(default=None, ge=0, le=100)
     lead_source_type: LeadSourceType | None = None
     do_not_contact: bool | None = None
+    sales_region_id: int | None = None
+    market_segment_id: int | None = None
+    market_subsegment_id: int | None = None
+    assigned_sales_rep_id: int | None = None
+    has_assignment: bool | None = None
     limit: int = Field(default=100, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
