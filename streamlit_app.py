@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.enums import LeadSourceType, LeadStatus, TemplateKey
 from app.repositories.lead_repository import LeadRepository
+from app.schemas.dedupe import DuplicatePreviewResponse
 from app.schemas.discovery import DiscoveryPreviewResponse, DiscoverySearchRequest, DiscoverySearchResponse
 from app.schemas.lead import LeadDetail, LeadListFilters, LeadSummary, LeadUpdateRequest
 from app.schemas.outreach import DraftRead, TemplateRead
@@ -2029,6 +2030,45 @@ def _lead_table_rows(leads: list[LeadSummary]) -> list[dict]:
     ]
 
 
+def _lead_location_label(lead: LeadSummary) -> str:
+    parts = [part for part in [lead.city, lead.state] if part]
+    return " / ".join(parts) if parts else "-"
+
+
+def _duplicate_pair_location(lead_a: LeadSummary, lead_b: LeadSummary) -> str:
+    location_a = _lead_location_label(lead_a)
+    location_b = _lead_location_label(lead_b)
+    return location_a if location_a == location_b else f"{location_a} | {location_b}"
+
+
+def _duplicate_reasons_label(reasons: list[str]) -> str:
+    return ", ".join(_humanize(reason) for reason in reasons) or "-"
+
+
+def _duplicate_preview_rows(preview: DuplicatePreviewResponse) -> list[dict]:
+    rows: list[dict] = []
+    for item in preview.items:
+        lead_a = item.lead_a
+        lead_b = item.lead_b
+        rows.append(
+            {
+                "lead_a_id": lead_a.id,
+                "lead_a_name": lead_a.business_name,
+                "lead_b_id": lead_b.id,
+                "lead_b_name": lead_b.business_name,
+                "city": _duplicate_pair_location(lead_a, lead_b),
+                "phone_a": lead_a.phone or "-",
+                "phone_b": lead_b.phone or "-",
+                "whatsapp_a": lead_a.whatsapp or "-",
+                "whatsapp_b": lead_b.whatsapp or "-",
+                "reasons": _duplicate_reasons_label(item.reasons),
+                "confidence": item.confidence,
+                "recommended_canonical_id": item.recommended_canonical_id,
+            }
+        )
+    return rows
+
+
 def _score_rows(score_breakdown: dict) -> list[dict]:
     return [
         {
@@ -3006,7 +3046,7 @@ elif page == "Leads":
                     if st.button("Find more public contact info", use_container_width=True):
                         with st.spinner("Refreshing public contact info..."):
                             result = _enrich_lead(selected_lead_id)
-                        st.session_state["lead_queue_selected_id"] = selected_lead_id
+                        st.session_state["selected_lead_id"] = selected_lead_id
                         st.session_state["queue_action_context"] = {
                             "lead_id": selected_lead_id,
                             "lead_name": selected_lead.business_name,
@@ -3053,9 +3093,7 @@ elif page == "Leads":
                 st.caption("Preview likely duplicates first. Marking duplicates keeps raw history and provenance.")
                 if st.button("Preview possible duplicates in shown leads", use_container_width=True):
                     preview = _preview_duplicates([lead.id for lead in filtered_leads])
-                    st.session_state["duplicate_preview_rows"] = [
-                        item.model_dump(mode="json") for item in preview.items
-                    ]
+                    st.session_state["duplicate_preview_rows"] = _duplicate_preview_rows(preview)
 
                 if st.button("Mark duplicates in shown leads", use_container_width=True):
                     results = _run_dedupe([lead.id for lead in filtered_leads])
