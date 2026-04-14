@@ -42,7 +42,7 @@ from app.services.outreach import OutreachService
 
 settings = get_settings()
 
-st.set_page_config(page_title="LeadFlow Workspace", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Encontra.ai | Garin", layout="wide", initial_sidebar_state="expanded")
 
 LEAD_PAGE_SIZE = 300
 SORT_OPTIONS = [
@@ -67,14 +67,24 @@ DETAIL_SECTION_OPTIONS = [
 ]
 DISCOVERY_LOCATION_MODES = ["City / neighborhood", "Coordinates"]
 DISCOVERY_SEARCH_TERM_OPTIONS = [
-    "oficina mecânica",
-    "auto elétrica",
-    "auto center",
-    "desmanche",
-    "autopeças",
-    "assistência técnica",
-    "manutenção de computadores",
-    "eletrônica",
+    "materiais de construção",
+    "ferragistas",
+    "loja de tintas",
+    "construtoras",
+    "incorporadoras",
+    "vidraceiros",
+    "marmorarias",
+    "aplicadores de impermeabilização",
+    "distribuidoras de materiais de construção",
+    "distribuidoras de tintas",
+    "atacado de ferragens",
+    "indústria têxtil",
+    "indústria moveleira",
+    "indústria metalúrgica",
+    "indústria química",
+    "refrigeração",
+    "e-commerce de materiais de construção",
+    "marketplace / loja virtual",
 ]
 def _inject_styles() -> None:
     st.markdown(
@@ -1253,10 +1263,10 @@ def _render_overview_hero(*, next_step: str, next_copy: str) -> None:
         f"""
         <div class="overview-hero">
             <div>
-                <div class="page-hero__eyebrow">Lead operations workspace</div>
-                <div class="overview-hero__title">Review, qualify, and move leads with clarity.</div>
+                <div class="page-hero__eyebrow">Garin lead operations</div>
+                <div class="overview-hero__title">Review, classify, and move prospects with clarity.</div>
                 <div class="overview-hero__summary">
-                    Run discovery, review the queue, work one business at a time, and export without losing context.
+                    Run discovery for target segments, review assignments, work one business at a time, and export without losing context.
                 </div>
                 <div class="operator-badges">{workflow_badges}</div>
             </div>
@@ -1301,10 +1311,10 @@ def _render_sidebar_brand() -> None:
     st.sidebar.markdown(
         """
         <div class="sidebar-brand">
-            <div class="sidebar-brand__badge">LeadFlow</div>
-            <div class="sidebar-brand__title">LeadFlow Workspace</div>
+            <div class="sidebar-brand__badge">Encontra.ai</div>
+            <div class="sidebar-brand__title">Garin Prospecting</div>
             <div class="sidebar-brand__copy">
-                Discovery, review, and lead work in one shared workspace.
+                Discovery, assignment review, and export in one shared workspace.
             </div>
         </div>
         """,
@@ -1317,12 +1327,12 @@ def _render_app_header(page: str) -> None:
         f"""
         <div class="app-header">
             <div class="app-header__left">
-                <div class="app-header__eyebrow">LeadFlow Workspace</div>
+                <div class="app-header__eyebrow">Garin prospecting workspace</div>
                 <div class="app-header__title">{escape(page)}</div>
             </div>
             <div class="app-header__actions">
                 <div class="app-header__pill">{escape(_humanize(settings.app_env))}</div>
-                <div class="app-header__pill app-header__pill--accent">Shared workspace</div>
+                <div class="app-header__pill app-header__pill--accent">Garin workspace</div>
             </div>
         </div>
         """,
@@ -1905,7 +1915,7 @@ def _queue_filter_badges(
     if selected_city != "All":
         badges.append((f"City: {selected_city}", "neutral"))
     if selected_category != "All":
-        badges.append((f"Category: {selected_category}", "neutral"))
+        badges.append((f"Provider category: {selected_category}", "neutral"))
     if selected_status != "All":
         badges.append((f"Status: {_humanize(selected_status)}", "neutral"))
     if selected_source_type != "All":
@@ -1979,7 +1989,7 @@ def _prepare_queue_display(filtered_leads: list[LeadSummary]) -> tuple[pd.DataFr
             {
                 "ID": lead.id,
                 "Business": lead.business_name,
-                "Category": lead.category or "-",
+                "Provider category": lead.category or "-",
                 "City": lead.city or "-",
                 "Source": _humanize(lead.lead_source_type),
                 "Contact path": _contact_summary(lead),
@@ -2005,7 +2015,7 @@ def _lead_table_rows(leads: list[LeadSummary]) -> list[dict]:
         {
             "ID": lead.id,
             "Business": lead.business_name,
-            "Category": lead.category or "-",
+            "Provider category": lead.category or "-",
             "City": lead.city or "-",
             "Source": _humanize(lead.lead_source_type),
             "Contact path": _contact_summary(lead),
@@ -2122,7 +2132,7 @@ def _discovery_preview_rows(preview: DiscoveryPreviewResponse) -> list[dict]:
             {
                 "Business": candidate.business_name,
                 "Search term": item.search_term,
-                "Category": candidate.category or "-",
+                "Provider category": candidate.category or "-",
                 "Neighborhood": candidate.neighborhood or "-",
                 "City": candidate.city or "-",
                 "Phone": candidate.whatsapp or candidate.phone or "-",
@@ -2182,9 +2192,9 @@ _render_app_header(page)
 if page == "Discovery":
     _render_flash("Discovery")
     _render_page_intro(
-        "Front door",
+        "Garin prospecting",
         "Discovery",
-        "Search a target area, preview businesses, and save the right ones into your working lead queue.",
+        "Search São Paulo territories by Garin target segments, preview businesses, and save the right ones into your working lead queue.",
     )
     _render_badges(
         [
@@ -2204,7 +2214,7 @@ if page == "Discovery":
     with discovery_form_col:
         with st.container(border=True):
             st.markdown("### Discovery setup")
-            st.caption("Define the target area, search language, and preview limits before running a read-only discovery pass.")
+            st.caption("Define the territory, Garin segment terms, and preview limits before running a read-only discovery pass.")
             with st.form("discovery_form"):
                 location_mode = st.radio(
                     "Location mode",
@@ -2272,18 +2282,18 @@ if page == "Discovery":
                         key="discovery_max_results_per_term",
                     )
 
-                st.markdown("### 2. Search categories")
+                st.markdown("### 2. Garin target terms")
                 st.multiselect(
-                    "Suggested categories",
+                    "Suggested Garin segments and subsegments",
                     options=DISCOVERY_SEARCH_TERM_OPTIONS,
                     key="discovery_search_terms",
-                    placeholder="Choose one or more target categories",
+                    placeholder="Choose one or more target segments or subsegments",
                 )
                 st.text_area(
                     "Extra search terms (optional)",
                     key="discovery_custom_terms",
                     height=90,
-                    placeholder="One per line or comma separated",
+                    placeholder="materiais de construção\nloja de tintas\nindústria química",
                 )
                 preview_requested = st.form_submit_button(
                     "Run discovery preview",
@@ -2309,7 +2319,7 @@ if page == "Discovery":
         _render_step_card(
             "How discovery works",
             [
-                "Search a target area and category set.",
+                "Search a target territory and Garin segment terms.",
                 "Preview the matched public businesses.",
                 "Save the right businesses as leads.",
                 "Continue in the Leads queue for review.",
@@ -2422,7 +2432,7 @@ if page == "Discovery":
                 )
             else:
                 _render_notice(
-                    "No businesses were found for the current search. Try different terms or a wider radius.",
+                    "No businesses were found for the current search. Try different Garin terms or a wider radius.",
                     tone="warn",
                     title="No matches found",
                 )
@@ -2725,7 +2735,7 @@ elif page == "Leads":
                 search_term = st.text_input(
                     "Quick search",
                     key="lead_search_term",
-                    placeholder="Business name, city, category, website, email, phone...",
+                    placeholder="Business name, city, provider category, segment, website, email, phone...",
                 )
             with toolbar_col2:
                 sort_by = st.selectbox("Sort results", SORT_OPTIONS, key="lead_sort_by")
@@ -2743,7 +2753,7 @@ elif page == "Leads":
             with quick_col4:
                 only_uncontacted = st.checkbox("Only not yet contacted", key="lead_quick_uncontacted")
             st.caption(
-                "Quick filters follow the selected review lane by default. City, category, source, and tighter priority ranges stay in Advanced filters."
+                "Quick filters follow the selected review lane by default. City, provider category, source, and tighter priority ranges stay in Advanced filters."
             )
 
             with st.expander("Advanced filters", expanded=False):
@@ -2762,7 +2772,7 @@ elif page == "Leads":
                     )
                 with col2:
                     selected_category = st.selectbox(
-                        "Category",
+                        "Provider category",
                         category_filter_options,
                         key="lead_filter_category",
                     )
@@ -3307,7 +3317,7 @@ else:
                         st.markdown("### Lead snapshot")
                         _render_key_value_grid(
                             [
-                                ("Category", lead.category),
+                                ("Provider category", lead.category),
                                 ("Location", f"{_safe_text(lead.city)} / {_safe_text(lead.state)}"),
                                 ("Neighborhood", lead.neighborhood),
                                 ("Address", lead.address),
@@ -3389,7 +3399,7 @@ else:
                                 tags_text = st.text_input(
                                     "Tags (comma separated)",
                                     value=", ".join(lead.tags),
-                                    placeholder="prioridade_alta, baterias, inbound",
+                                    placeholder="prioridade_alta, materiais_construcao, industria",
                                 )
                             with form_col2:
                                 use_follow_up_date = st.checkbox(
