@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.enums import ActivityAction, ContactType, LeadSourceType, LeadStatus
+from app.enums import ActivityAction, CompanySizeFit, ContactType, LeadSourceType, LeadStatus, TradeType
 from app.schemas.common import ORMBaseModel
 
 
@@ -70,6 +70,11 @@ class LeadSummary(ORMBaseModel):
     assigned_sales_rep_id: int | None = None
     assignment_rule_id: int | None = None
     assigned_at: datetime | None = None
+    company_size_fit: CompanySizeFit = CompanySizeFit.UNKNOWN
+    company_size_fit_explanation: str | None = None
+    trade_type: TradeType = TradeType.UNKNOWN
+    trade_type_explanation: str | None = None
+    quality_classified_at: datetime | None = None
     sales_region: SalesRegionRead | None = None
     market_segment: MarketSegmentRead | None = None
     market_subsegment: MarketSubsegmentRead | None = None
@@ -136,6 +141,8 @@ class LeadDetail(LeadSummary):
     score_breakdown: dict[str, Any] = Field(default_factory=dict)
     assignment_explanation: str | None = None
     assignment_metadata_json: dict[str, Any] = Field(default_factory=dict)
+    company_size_fit_metadata_json: dict[str, Any] = Field(default_factory=dict)
+    trade_type_metadata_json: dict[str, Any] = Field(default_factory=dict)
     sales_region: SalesRegionRead | None = None
     market_segment: MarketSegmentRead | None = None
     market_subsegment: MarketSubsegmentRead | None = None
@@ -164,6 +171,8 @@ class LeadListFilters(BaseModel):
     market_subsegment_id: int | None = None
     assigned_sales_rep_id: int | None = None
     has_assignment: bool | None = None
+    company_size_fit: CompanySizeFit | None = None
+    trade_type: TradeType | None = None
     limit: int = Field(default=100, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 

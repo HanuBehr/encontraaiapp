@@ -23,6 +23,23 @@ class LeadSourceType(str, Enum):
     MERGED = "merged"
 
 
+class CompanySizeFit(str, Enum):
+    IDEAL_SME = "ideal_sme"
+    POSSIBLE_SME = "possible_sme"
+    LARGE_ENTERPRISE = "large_enterprise"
+    UNKNOWN = "unknown"
+
+
+class TradeType(str, Enum):
+    VAREJO = "varejo"
+    ATACADO = "atacado"
+    DISTRIBUIDORA = "distribuidora"
+    ECOMMERCE = "ecommerce"
+    INDUSTRIA = "industria"
+    CONSTRUCAO_CIVIL = "construcao_civil"
+    UNKNOWN = "unknown"
+
+
 class ImportBatchType(str, Enum):
     DISCOVERY = "discovery"
     MANUAL_IMPORT = "manual_import"

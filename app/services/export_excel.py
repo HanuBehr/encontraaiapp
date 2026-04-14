@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from io import BytesIO
 import json
@@ -8,95 +9,67 @@ import pandas as pd
 from openpyxl.styles import Font, PatternFill
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.utils import get_column_letter
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.app_setting import AppSetting
-from app.models.outreach import OutreachDraft, OutreachMessage, OutreachTemplate
+from app.enums import ContactType
 from app.repositories.lead_repository import LeadRepository
-from app.repositories.settings_repository import SettingsRepository
 from app.schemas.lead import LeadListFilters
-from app.services.outreach import OutreachService
 
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 MISSING_FILL = PatternFill(fill_type="solid", fgColor="FCE4D6")
-LEADS_COLUMNS = [
-    "id",
-    "business_name",
-    "normalized_business_name",
-    "category",
-    "address",
-    "neighborhood",
-    "city",
-    "state",
-    "postal_code",
-    "latitude",
-    "longitude",
-    "website",
-    "domain",
-    "email",
-    "phone",
-    "whatsapp",
-    "instagram",
-    "google_maps_url",
-    "source_provider",
-    "source_url",
-    "lead_source_type",
-    "sales_region",
-    "market_segment",
-    "market_subsegment",
-    "assigned_sales_rep",
-    "assignment_rule",
-    "lead_score",
-    "status",
-    "notes",
-    "follow_up_date",
-    "assigned_at",
-    "assignment_explanation",
-    "do_not_contact",
-    "is_duplicate",
-    "duplicate_of_lead_id",
-    "created_at",
-    "updated_at",
-    "last_contacted_at",
-    "last_enriched_at",
+EMPRESAS_COLUMNS = [
+    "Nome",
+    "CNPJ",
+    "Razão Social",
+    "Categoria",
+    "Origem",
+    "Usuário responsável",
+    "Setor",
+    "Descrição",
+    "E-mail",
+    "WhatsApp",
+    "Telefone",
+    "Celular",
+    "Fax",
+    "Ramal",
+    "Website",
+    "CEP",
+    "País",
+    "Estado",
+    "Cidade",
+    "Bairro",
+    "Rua",
+    "Número",
+    "Complemento",
+    "Produto",
+    "Facebook",
+    "Twitter",
+    "LinkedIn",
+    "Skype",
+    "Instagram",
+    "Ranking",
 ]
-OUTREACH_LOG_COLUMNS = [
-    "record_type",
-    "id",
-    "lead_id",
-    "channel",
-    "template_key",
-    "subject",
-    "body",
-    "status",
-    "provider",
-    "recipient",
-    "created_at",
-    "updated_at",
-    "sent_at",
-]
-TEMPLATE_COLUMNS = [
-    "id",
-    "key",
-    "channel",
-    "name",
-    "subject_template",
-    "body_template",
-    "is_active",
-    "created_at",
-    "updated_at",
-]
-SETTING_COLUMNS = ["id", "key", "value", "description", "created_at", "updated_at"]
 METADATA_COLUMNS = ["metric", "value"]
 SHEET_COLUMNS = {
-    "Leads": LEADS_COLUMNS,
-    "Outreach_Log": OUTREACH_LOG_COLUMNS,
-    "Templates": TEMPLATE_COLUMNS,
-    "Settings": SETTING_COLUMNS,
+    "Empresas": EMPRESAS_COLUMNS,
     "Metadata": METADATA_COLUMNS,
+}
+COMPANY_SIZE_FIT_LABELS = {
+    "ideal_sme": "Ideal PME",
+    "possible_sme": "Possível PME",
+    "large_enterprise": "Grande empresa",
+    "unknown": "Não classificado",
+}
+TRADE_TYPE_LABELS = {
+    "varejo": "Varejo",
+    "atacado": "Atacado",
+    "distribuidora": "Distribuidora",
+    "ecommerce": "E-commerce",
+    "industria": "Indústria",
+    "construcao_civil": "Construção Civil",
+    "unknown": "Não classificado",
 }
 
 
@@ -104,55 +77,44 @@ class ExcelExportService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.lead_repository = LeadRepository(db)
-        self.settings_repository = SettingsRepository(db)
-        self.outreach_service = OutreachService(db)
 
-    def build_workbook(self, filters: LeadListFilters) -> tuple[str, bytes]:
-        leads = self.lead_repository.list_all_leads(filters)
-        lead_ids = [lead.id for lead in leads]
-
-        templates = self.outreach_service.ensure_default_templates()
-        settings_rows = self.settings_repository.list_settings()
-
-        if lead_ids:
-            draft_query = (
-                select(OutreachDraft)
-                .where(OutreachDraft.lead_id.in_(lead_ids))
-                .order_by(OutreachDraft.created_at.desc())
-            )
-            message_query = (
-                select(OutreachMessage)
-                .where(OutreachMessage.lead_id.in_(lead_ids))
-                .order_by(OutreachMessage.created_at.desc())
-            )
-            drafts = self.db.execute(draft_query).scalars().all()
-            messages = self.db.execute(message_query).scalars().all()
+    def build_workbook(
+        self,
+        filters: LeadListFilters,
+        *,
+        lead_ids: Iterable[int] | None = None,
+        scope_label: str | None = None,
+        scope_metadata: dict[str, object] | None = None,
+    ) -> tuple[str, bytes]:
+        explicit_lead_ids = lead_ids is not None
+        if lead_ids is None:
+            leads = self.lead_repository.list_all_leads(filters)
         else:
-            drafts = []
-            messages = []
+            requested_ids = list(dict.fromkeys(int(lead_id) for lead_id in lead_ids))
+            leads = self.lead_repository.list_export_leads_by_ids(requested_ids)
+        lead_ids = [lead.id for lead in leads]
+        scope_metadata = dict(scope_metadata or {})
+        if explicit_lead_ids:
+            scope_metadata.setdefault("scope_type", "explicit_lead_ids")
 
-        leads_df = pd.DataFrame([self._lead_row(lead) for lead in leads])
-        outreach_df = pd.DataFrame(
-            [self._draft_row(draft) for draft in drafts]
-            + [self._message_row(message) for message in messages]
+        empresas_df = pd.DataFrame([self._lead_row(lead) for lead in leads])
+        metadata_df = pd.DataFrame(
+            self._metadata_rows(
+                leads,
+                empresas_df,
+                filters,
+                scope_label=scope_label,
+                scope_metadata=scope_metadata,
+            )
         )
-        templates_df = pd.DataFrame([self._template_row(template) for template in templates])
-        settings_df = pd.DataFrame([self._setting_row(setting) for setting in settings_rows])
-        metadata_df = pd.DataFrame(self._metadata_rows(leads_df, filters))
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            self._write_sheet(writer, "Leads", leads_df)
-            self._write_sheet(writer, "Outreach_Log", outreach_df)
-            self._write_sheet(writer, "Templates", templates_df)
-            self._write_sheet(writer, "Settings", settings_df)
+            self._write_sheet(writer, "Empresas", empresas_df)
             self._write_sheet(writer, "Metadata", metadata_df)
 
             workbook = writer.book
-            self._format_sheet(workbook["Leads"], highlight_missing_contacts=True)
-            self._format_sheet(workbook["Outreach_Log"])
-            self._format_sheet(workbook["Templates"])
-            self._format_sheet(workbook["Settings"])
+            self._format_sheet(workbook["Empresas"], highlight_missing_contacts=True)
             self._format_sheet(workbook["Metadata"], freeze_headers=False)
 
         filename = f"lead_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -185,7 +147,7 @@ class ExcelExportService:
 
         if highlight_missing_contacts and max_row > 1:
             headers = {worksheet.cell(row=1, column=index).value: index for index in range(1, max_col + 1)}
-            for header_name in ["email", "phone", "whatsapp"]:
+            for header_name in ["E-mail", "Telefone", "WhatsApp"]:
                 column_index = headers.get(header_name)
                 if not column_index:
                     continue
@@ -198,125 +160,136 @@ class ExcelExportService:
                     ),
                 )
 
-    @staticmethod
-    def _lead_row(lead) -> dict[str, object]:
+    def _lead_row(self, lead) -> dict[str, object]:
+        email = self._best_contact_value(lead, ContactType.EMAIL, lead.email)
+        phone = self._best_contact_value(lead, ContactType.PHONE, lead.phone)
+        whatsapp = self._best_contact_value(lead, ContactType.WHATSAPP, lead.whatsapp)
+        instagram = self._best_contact_value(lead, ContactType.INSTAGRAM, lead.instagram)
         return {
-            "id": lead.id,
-            "business_name": lead.business_name,
-            "normalized_business_name": lead.normalized_business_name,
-            "category": lead.category,
-            "address": lead.address,
-            "neighborhood": lead.neighborhood,
-            "city": lead.city,
-            "state": lead.state,
-            "postal_code": lead.postal_code,
-            "latitude": lead.latitude,
-            "longitude": lead.longitude,
-            "website": lead.website,
-            "domain": lead.domain,
-            "email": lead.email,
-            "phone": lead.phone,
-            "whatsapp": lead.whatsapp,
-            "instagram": lead.instagram,
-            "google_maps_url": lead.google_maps_url,
-            "source_provider": lead.source_provider,
-            "source_url": lead.source_url,
-            "lead_source_type": lead.lead_source_type.value if lead.lead_source_type else None,
-            "sales_region": lead.sales_region.name if lead.sales_region else None,
-            "market_segment": lead.market_segment.name if lead.market_segment else None,
-            "market_subsegment": lead.market_subsegment.name if lead.market_subsegment else None,
-            "assigned_sales_rep": lead.assigned_sales_rep.name if lead.assigned_sales_rep else None,
-            "assignment_rule": lead.assignment_rule.name if lead.assignment_rule else None,
-            "lead_score": lead.lead_score,
-            "status": lead.status.value if lead.status else None,
-            "notes": lead.notes,
-            "follow_up_date": lead.follow_up_date,
-            "assigned_at": lead.assigned_at,
-            "assignment_explanation": lead.assignment_explanation,
-            "do_not_contact": lead.do_not_contact,
-            "is_duplicate": lead.is_duplicate,
-            "duplicate_of_lead_id": lead.duplicate_of_lead_id,
-            "created_at": lead.created_at,
-            "updated_at": lead.updated_at,
-            "last_contacted_at": lead.last_contacted_at,
-            "last_enriched_at": lead.last_enriched_at,
+            "Nome": lead.business_name,
+            "CNPJ": None,
+            "Razão Social": None,
+            "Categoria": lead.category,
+            "Origem": self._humanize(lead.lead_source_type.value if lead.lead_source_type else None),
+            "Usuário responsável": lead.assigned_sales_rep.name if lead.assigned_sales_rep else None,
+            "Setor": self._sector_label(lead),
+            "Descrição": self._description(lead),
+            "E-mail": email,
+            "WhatsApp": whatsapp,
+            "Telefone": phone,
+            "Celular": None,
+            "Fax": None,
+            "Ramal": None,
+            "Website": lead.website,
+            "CEP": lead.postal_code,
+            "País": self._country_label(lead),
+            "Estado": lead.state,
+            "Cidade": lead.city,
+            "Bairro": lead.neighborhood,
+            "Rua": lead.address,
+            "Número": None,
+            "Complemento": None,
+            "Produto": None,
+            "Facebook": None,
+            "Twitter": None,
+            "LinkedIn": None,
+            "Skype": None,
+            "Instagram": instagram,
+            "Ranking": lead.lead_score,
         }
 
     @staticmethod
-    def _draft_row(draft: OutreachDraft) -> dict[str, object]:
-        return {
-            "record_type": "draft",
-            "id": draft.id,
-            "lead_id": draft.lead_id,
-            "channel": draft.channel.value if draft.channel else None,
-            "template_key": draft.draft_type.value if draft.draft_type else None,
-            "subject": draft.subject,
-            "body": draft.body,
-            "status": draft.status.value if draft.status else None,
-            "provider": None,
-            "recipient": None,
-            "created_at": draft.created_at,
-            "updated_at": draft.updated_at,
-            "sent_at": None,
-        }
+    def _best_contact_value(lead, contact_type: ContactType, fallback: str | None) -> str | None:
+        contacts = [
+            contact
+            for contact in lead.contacts
+            if contact.contact_type == contact_type and (contact.normalized_value or contact.raw_value)
+        ]
+        if not contacts:
+            return fallback
+        best = max(
+            contacts,
+            key=lambda contact: (
+                1 if contact.is_primary else 0,
+                float(contact.confidence or 0),
+                contact.updated_at.timestamp() if contact.updated_at else 0,
+                contact.id or 0,
+            ),
+        )
+        return best.normalized_value or best.raw_value or fallback
+
+    def _sector_label(self, lead) -> str | None:
+        segment = lead.market_segment.name if lead.market_segment else None
+        subsegment = lead.market_subsegment.name if lead.market_subsegment else None
+        parts = [value for value in [segment, subsegment] if value]
+        if parts:
+            return " - ".join(parts)
+        trade_type = self._label(TRADE_TYPE_LABELS, lead.trade_type)
+        if trade_type and trade_type != TRADE_TYPE_LABELS["unknown"]:
+            return trade_type
+        return lead.category
 
     @staticmethod
-    def _message_row(message: OutreachMessage) -> dict[str, object]:
-        return {
-            "record_type": "message",
-            "id": message.id,
-            "lead_id": message.lead_id,
-            "channel": message.channel.value if message.channel else None,
-            "template_key": None,
-            "subject": message.subject,
-            "body": message.body,
-            "status": message.status.value if message.status else None,
-            "provider": message.provider,
-            "recipient": message.recipient,
-            "created_at": message.created_at,
-            "updated_at": message.updated_at,
-            "sent_at": message.sent_at,
-        }
+    def _description(lead) -> str | None:
+        return lead.notes
 
     @staticmethod
-    def _template_row(template: OutreachTemplate) -> dict[str, object]:
-        return {
-            "id": template.id,
-            "key": template.key.value if template.key else None,
-            "channel": template.channel.value if template.channel else None,
-            "name": template.name,
-            "subject_template": template.subject_template,
-            "body_template": template.body_template,
-            "is_active": template.is_active,
-            "created_at": template.created_at,
-            "updated_at": template.updated_at,
-        }
+    def _country_label(lead) -> str | None:
+        if any([lead.postal_code, lead.state, lead.city, lead.neighborhood, lead.address]):
+            return "Brasil"
+        return None
 
     @staticmethod
-    def _setting_row(setting: AppSetting) -> dict[str, object]:
-        return {
-            "id": setting.id,
-            "key": setting.key,
-            "value": json.dumps(setting.value, ensure_ascii=True),
-            "description": setting.description,
-            "created_at": setting.created_at,
-            "updated_at": setting.updated_at,
-        }
+    def _label(labels: dict[str, str], value: object | None) -> str | None:
+        if value in (None, ""):
+            return None
+        normalized = getattr(value, "value", value)
+        return labels.get(str(normalized), str(normalized))
 
     @staticmethod
-    def _metadata_rows(leads_df: pd.DataFrame, filters: LeadListFilters) -> list[dict[str, object]]:
-        duplicate_count = int(leads_df["is_duplicate"].sum()) if not leads_df.empty else 0
-        total_with_email = int(leads_df["email"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
-        total_with_whatsapp = int(leads_df["whatsapp"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
-        total_with_website = int(leads_df["website"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
-        score_min = int(leads_df["lead_score"].min()) if not leads_df.empty else 0
-        score_avg = float(leads_df["lead_score"].mean()) if not leads_df.empty else 0.0
-        score_max = int(leads_df["lead_score"].max()) if not leads_df.empty else 0
+    def _humanize(value: object | None) -> str | None:
+        if value in (None, ""):
+            return None
+        return str(value).replace("_", " ").strip().title()
+
+    @staticmethod
+    def _metadata_rows(
+        leads: list,
+        leads_df: pd.DataFrame,
+        filters: LeadListFilters,
+        *,
+        scope_label: str | None = None,
+        scope_metadata: dict[str, object] | None = None,
+    ) -> list[dict[str, object]]:
+        scope = dict(scope_metadata or {})
+        scope_type = str(scope.get("scope_type") or "all_leads_matching_advanced_filters")
+        scope_label = scope_label or str(scope.get("scope_label") or "All leads matching advanced filters")
+        scope["scope_type"] = scope_type
+        scope["scope_label"] = scope_label
+        scope["lead_count"] = int(len(leads))
+
+        duplicate_count = sum(1 for lead in leads if lead.is_duplicate)
+        total_with_email = (
+            int(leads_df["E-mail"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+        )
+        total_with_whatsapp = (
+            int(leads_df["WhatsApp"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+        )
+        total_with_website = (
+            int(leads_df["Website"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+        )
+        score_min = int(leads_df["Ranking"].min()) if not leads_df.empty else 0
+        score_avg = float(leads_df["Ranking"].mean()) if not leads_df.empty else 0.0
+        score_max = int(leads_df["Ranking"].max()) if not leads_df.empty else 0
 
         return [
             {"metric": "export_timestamp_utc", "value": datetime.now(timezone.utc).isoformat()},
+            {"metric": "scope_type", "value": scope_type},
+            {"metric": "scope_label", "value": scope_label},
+            {"metric": "lead_count", "value": int(len(leads))},
+            {"metric": "scope_metadata", "value": json.dumps(scope, ensure_ascii=True, default=str)},
             {"metric": "applied_filters", "value": json.dumps(filters.model_dump(mode="json"), ensure_ascii=True)},
-            {"metric": "total_lead_count", "value": int(len(leads_df.index))},
+            {"metric": "total_lead_count", "value": int(len(leads))},
             {"metric": "total_duplicate_count", "value": duplicate_count},
             {"metric": "total_with_email", "value": total_with_email},
             {"metric": "total_with_whatsapp", "value": total_with_whatsapp},

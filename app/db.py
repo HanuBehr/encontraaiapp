@@ -65,3 +65,34 @@ def session_scope() -> Generator[Session, None, None]:
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    if engine.dialect.name == "sqlite":
+        _ensure_sqlite_lead_quality_columns()
+
+
+def _ensure_sqlite_lead_quality_columns() -> None:
+    columns = {
+        "company_size_fit": "VARCHAR(40) NOT NULL DEFAULT 'unknown'",
+        "company_size_fit_explanation": "TEXT",
+        "company_size_fit_metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+        "trade_type": "VARCHAR(40) NOT NULL DEFAULT 'unknown'",
+        "trade_type_explanation": "TEXT",
+        "trade_type_metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+        "quality_classified_at": "DATETIME",
+    }
+    indexes = {
+        "ix_leads_org_company_size_fit": "organization_id, company_size_fit",
+        "ix_leads_org_trade_type": "organization_id, trade_type",
+    }
+    with engine.begin() as connection:
+        existing_columns = {
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(leads)").fetchall()
+        }
+        for name, definition in columns.items():
+            if name not in existing_columns:
+                connection.exec_driver_sql(f"ALTER TABLE leads ADD COLUMN {name} {definition}")
+
+        for name, column_list in indexes.items():
+            connection.exec_driver_sql(
+                f"CREATE INDEX IF NOT EXISTS {name} ON leads ({column_list})"
+            )

@@ -73,3 +73,15 @@ def test_streamlit_duplicate_preview_uses_flat_readable_rows() -> None:
         "reasons",
     ]:
         assert f'"{column_name}"' in source
+
+
+def test_streamlit_surfaces_lead_quality_filters_and_columns() -> None:
+    source = _streamlit_source()
+
+    assert "COMPANY_SIZE_FIT_FILTER_OPTIONS" in source
+    assert "TRADE_TYPE_FILTER_OPTIONS" in source
+    assert '"Target fit"' in source
+    assert '"Trade type"' in source
+    assert '"Fit"' in source
+    assert '"Trade"' in source
+    assert "_render_quality_section(lead)" in source

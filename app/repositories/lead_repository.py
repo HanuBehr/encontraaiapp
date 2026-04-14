@@ -5,8 +5,9 @@ from collections.abc import Iterable
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
-from app.enums import ContactType
+from app.enums import ContactType, ImportBatchStatus
 from app.models.activity_log import ActivityLog
+from app.models.import_batch import ImportBatch
 from app.models.lead import Lead
 from app.models.lead_contact import LeadContact
 from app.models.lead_enrichment_record import LeadEnrichmentRecord
@@ -58,17 +59,20 @@ class LeadRepository:
         conditions = self._build_filter_conditions(filters)
         query = (
             select(Lead)
-            .options(
-                *self._assignment_loader_options(),
-                selectinload(Lead.contacts),
-                selectinload(Lead.enrichments),
-                selectinload(Lead.raw_discovery_records),
-                *self._tenant_child_loader_options(),
-            )
+            .options(*self._export_loader_options())
             .where(*conditions)
             .order_by(Lead.id.asc())
         )
         return self.db.execute(query).scalars().all()
+
+    def list_lead_ids(self, filters: LeadListFilters | None = None) -> list[int]:
+        filters = filters or LeadListFilters()
+        query = (
+            select(Lead.id)
+            .where(*self._build_filter_conditions(filters))
+            .order_by(Lead.id.asc())
+        )
+        return [int(lead_id) for lead_id in self.db.execute(query).scalars().all()]
 
     def get_by_id(self, lead_id: int) -> Lead | None:
         query = select(Lead).where(Lead.id == lead_id, *self._organization_conditions())
@@ -130,6 +134,54 @@ class LeadRepository:
             .order_by(Lead.id.asc())
         )
         return self.db.execute(query).scalars().all()
+
+    def list_export_leads_by_ids(self, lead_ids: Iterable[int]) -> list[Lead]:
+        normalized_ids = list(dict.fromkeys(int(lead_id) for lead_id in lead_ids))
+        if not normalized_ids:
+            return []
+        query = (
+            select(Lead)
+            .options(*self._export_loader_options())
+            .where(Lead.id.in_(normalized_ids), *self._organization_conditions())
+            .execution_options(populate_existing=True)
+        )
+        leads = self.db.execute(query).scalars().all()
+        order = {lead_id: index for index, lead_id in enumerate(normalized_ids)}
+        return sorted(leads, key=lambda lead: order.get(lead.id, len(order)))
+
+    def list_recent_import_batches(self, limit: int = 25) -> list[ImportBatch]:
+        query = (
+            select(ImportBatch)
+            .join(RawDiscoveryRecord, RawDiscoveryRecord.import_batch_id == ImportBatch.id)
+            .join(Lead, RawDiscoveryRecord.lead_id == Lead.id)
+            .where(
+                ImportBatch.status == ImportBatchStatus.COMPLETED,
+                RawDiscoveryRecord.lead_id.is_not(None),
+                *self._organization_conditions(),
+            )
+            .distinct()
+            .order_by(ImportBatch.completed_at.desc(), ImportBatch.id.desc())
+            .limit(limit)
+        )
+        return self.db.execute(query).scalars().all()
+
+    def get_latest_completed_import_batch(self) -> ImportBatch | None:
+        batches = self.list_recent_import_batches(limit=1)
+        return batches[0] if batches else None
+
+    def list_lead_ids_for_import_batch(self, batch_id: int) -> list[int]:
+        query = (
+            select(RawDiscoveryRecord.lead_id)
+            .join(Lead, RawDiscoveryRecord.lead_id == Lead.id)
+            .where(
+                RawDiscoveryRecord.import_batch_id == batch_id,
+                RawDiscoveryRecord.lead_id.is_not(None),
+                *self._organization_conditions(),
+            )
+            .order_by(RawDiscoveryRecord.created_at.asc(), RawDiscoveryRecord.id.asc())
+        )
+        lead_ids = self.db.execute(query).scalars().all()
+        return [int(lead_id) for lead_id in dict.fromkeys(lead_ids) if lead_id is not None]
 
     def list_distinct_cities(self) -> list[str]:
         query = (
@@ -412,6 +464,10 @@ class LeadRepository:
             conditions.append(Lead.assigned_sales_rep_id.is_not(None))
         elif filters.has_assignment is False:
             conditions.append(Lead.assigned_sales_rep_id.is_(None))
+        if filters.company_size_fit is not None:
+            conditions.append(Lead.company_size_fit == filters.company_size_fit.value)
+        if filters.trade_type is not None:
+            conditions.append(Lead.trade_type == filters.trade_type.value)
 
         return conditions
 
@@ -454,6 +510,15 @@ class LeadRepository:
             selectinload(Lead.market_subsegment),
             selectinload(Lead.assigned_sales_rep),
             selectinload(Lead.assignment_rule),
+        ]
+
+    def _export_loader_options(self) -> list[object]:
+        return [
+            *self._assignment_loader_options(),
+            selectinload(Lead.contacts),
+            selectinload(Lead.enrichments),
+            selectinload(Lead.raw_discovery_records),
+            *self._tenant_child_loader_options(),
         ]
 
     def _assignment_options(self, model, lead_field) -> list[tuple[int, str]]:

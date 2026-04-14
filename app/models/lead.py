@@ -35,6 +35,8 @@ class Lead(TimestampMixin, Base):
         Index("ix_leads_org_market_subsegment", "organization_id", "market_subsegment_id"),
         Index("ix_leads_org_assigned_sales_rep", "organization_id", "assigned_sales_rep_id"),
         Index("ix_leads_org_assignment_rule", "organization_id", "assignment_rule_id"),
+        Index("ix_leads_org_company_size_fit", "organization_id", "company_size_fit"),
+        Index("ix_leads_org_trade_type", "organization_id", "trade_type"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -93,6 +95,13 @@ class Lead(TimestampMixin, Base):
     assignment_explanation: Mapped[str | None] = mapped_column(Text)
     assignment_metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    company_size_fit: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False, index=True)
+    company_size_fit_explanation: Mapped[str | None] = mapped_column(Text)
+    company_size_fit_metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    trade_type: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False, index=True)
+    trade_type_explanation: Mapped[str | None] = mapped_column(Text)
+    trade_type_metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    quality_classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     organization: Mapped["Organization | None"] = relationship("Organization", back_populates="leads")
     sales_region: Mapped["SalesRegion | None"] = relationship("SalesRegion", back_populates="assigned_leads")

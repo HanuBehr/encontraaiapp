@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.enums import LeadSourceType, LeadStatus
+from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TradeType
 from app.models.lead import Lead
 from app.services.normalization import normalize_business_name
 
@@ -14,6 +14,8 @@ def _seed_lead(
     whatsapp: str | None = None,
     status: LeadStatus = LeadStatus.NEW,
     do_not_contact: bool = False,
+    company_size_fit: CompanySizeFit = CompanySizeFit.UNKNOWN,
+    trade_type: TradeType = TradeType.UNKNOWN,
 ) -> Lead:
     lead = Lead(
         business_name=business_name,
@@ -26,6 +28,8 @@ def _seed_lead(
         whatsapp=whatsapp,
         status=status,
         do_not_contact=do_not_contact,
+        company_size_fit=company_size_fit.value,
+        trade_type=trade_type.value,
     )
     db_session.add(lead)
     db_session.commit()
@@ -49,6 +53,38 @@ def test_list_leads_with_filters(client, db_session) -> None:
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["business_name"] == "Oficina A"
+
+
+def test_list_leads_with_quality_filters(client, db_session) -> None:
+    _seed_lead(
+        db_session,
+        business_name="Casa de Tintas A",
+        city="Campinas",
+        company_size_fit=CompanySizeFit.IDEAL_SME,
+        trade_type=TradeType.VAREJO,
+    )
+    _seed_lead(
+        db_session,
+        business_name="Distribuidora B",
+        city="Campinas",
+        company_size_fit=CompanySizeFit.POSSIBLE_SME,
+        trade_type=TradeType.DISTRIBUIDORA,
+    )
+
+    response = client.get(
+        "/leads",
+        params={
+            "company_size_fit": "ideal_sme",
+            "trade_type": "varejo",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["business_name"] == "Casa de Tintas A"
+    assert payload["items"][0]["company_size_fit"] == "ideal_sme"
+    assert payload["items"][0]["trade_type"] == "varejo"
 
 
 def test_get_and_update_lead(client, db_session) -> None:

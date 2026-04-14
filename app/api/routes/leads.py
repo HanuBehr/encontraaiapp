@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_app_settings, get_db_session
 from app.config import Settings
-from app.enums import LeadSourceType, LeadStatus
+from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TradeType
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.lead import (
     LeadBatchEnrichmentRequest,
@@ -38,6 +38,8 @@ def list_leads(
     market_subsegment_id: int | None = Query(default=None),
     assigned_sales_rep_id: int | None = Query(default=None),
     has_assignment: bool | None = Query(default=None),
+    company_size_fit: CompanySizeFit | None = Query(default=None),
+    trade_type: TradeType | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db_session),
@@ -57,6 +59,8 @@ def list_leads(
         market_subsegment_id=market_subsegment_id,
         assigned_sales_rep_id=assigned_sales_rep_id,
         has_assignment=has_assignment,
+        company_size_fit=company_size_fit,
+        trade_type=trade_type,
         limit=limit,
         offset=offset,
     )

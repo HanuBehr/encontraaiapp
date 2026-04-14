@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from app.config import get_settings
 from app.db import SessionLocal
-from app.enums import LeadSourceType, LeadStatus, TemplateKey
+from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TemplateKey, TradeType
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.dedupe import DuplicatePreviewResponse
 from app.schemas.discovery import DiscoveryPreviewResponse, DiscoverySearchRequest, DiscoverySearchResponse
@@ -57,6 +57,45 @@ SORT_KEY_BY_LABEL = {
     "Highest priority": SORT_HIGHEST_PRIORITY,
     "Follow-up date": SORT_FOLLOW_UP_DATE,
     "Business name": SORT_BUSINESS_NAME,
+}
+COMPANY_SIZE_FIT_LABELS = {
+    CompanySizeFit.IDEAL_SME.value: "Ideal SME",
+    CompanySizeFit.POSSIBLE_SME.value: "Possible SME",
+    CompanySizeFit.LARGE_ENTERPRISE.value: "Large enterprise",
+    CompanySizeFit.UNKNOWN.value: "Unknown",
+}
+TRADE_TYPE_LABELS = {
+    TradeType.VAREJO.value: "Varejo",
+    TradeType.ATACADO.value: "Atacado",
+    TradeType.DISTRIBUIDORA.value: "Distribuidora",
+    TradeType.ECOMMERCE.value: "E-commerce",
+    TradeType.INDUSTRIA.value: "Industria",
+    TradeType.CONSTRUCAO_CIVIL.value: "Construcao civil",
+    TradeType.UNKNOWN.value: "Unknown",
+}
+COMPANY_SIZE_FIT_FILTER_OPTIONS = ["All"] + [item.value for item in CompanySizeFit]
+TRADE_TYPE_FILTER_OPTIONS = ["All"] + [item.value for item in TradeType]
+EXPORT_SCOPE_FILTERED_QUEUE = "Current filtered queue"
+EXPORT_SCOPE_SAVED_QUEUE = "Current saved working queue"
+EXPORT_SCOPE_LATEST_BATCH = "Latest import batch"
+EXPORT_SCOPE_SPECIFIC_BATCH = "Specific import batch"
+EXPORT_SCOPE_SELECTED_LEADS = "Selected leads"
+EXPORT_SCOPE_ADVANCED_FILTERS = "All leads matching advanced filters"
+EXPORT_SCOPE_OPTIONS = [
+    EXPORT_SCOPE_FILTERED_QUEUE,
+    EXPORT_SCOPE_SAVED_QUEUE,
+    EXPORT_SCOPE_LATEST_BATCH,
+    EXPORT_SCOPE_SPECIFIC_BATCH,
+    EXPORT_SCOPE_SELECTED_LEADS,
+    EXPORT_SCOPE_ADVANCED_FILTERS,
+]
+EXPORT_SCOPE_TYPES = {
+    EXPORT_SCOPE_FILTERED_QUEUE: "current_filtered_queue",
+    EXPORT_SCOPE_SAVED_QUEUE: "current_saved_working_queue",
+    EXPORT_SCOPE_LATEST_BATCH: "latest_import_batch",
+    EXPORT_SCOPE_SPECIFIC_BATCH: "specific_import_batch",
+    EXPORT_SCOPE_SELECTED_LEADS: "selected_leads",
+    EXPORT_SCOPE_ADVANCED_FILTERS: "all_leads_matching_advanced_filters",
 }
 DETAIL_SECTION_REVIEW = "Review & Enrich"
 DETAIL_SECTION_DRAFTS = "Drafts"
@@ -953,6 +992,9 @@ def _init_session_state() -> None:
         "dedupe_results": None,
         "export_filename": None,
         "export_payload": None,
+        "export_scope": EXPORT_SCOPE_FILTERED_QUEUE,
+        "export_specific_batch_id": None,
+        "export_selected_lead_ids": [],
         "lead_workflow_view": "Action queue",
         "lead_search_term": "",
         "lead_sort_by": "Recently updated",
@@ -969,6 +1011,8 @@ def _init_session_state() -> None:
         "lead_filter_assigned_sales_rep_id": None,
         "lead_filter_sales_region_id": None,
         "lead_filter_market_segment_id": None,
+        "lead_filter_company_size_fit": "All",
+        "lead_filter_trade_type": "All",
         "leads_has_assignment": "Any",
         "leads_has_email": "Any",
         "leads_has_whatsapp": "Any",
@@ -1073,6 +1117,16 @@ def _assignment_rule_name(lead: LeadDetail) -> str | None:
 
 def _assignment_status(lead: LeadSummary | LeadDetail) -> str:
     return _assignment_rep_name(lead) or "Unassigned"
+
+
+def _company_size_fit_label(value: object | None) -> str:
+    normalized = _normalize_enumish(value) or CompanySizeFit.UNKNOWN.value
+    return COMPANY_SIZE_FIT_LABELS.get(normalized, _humanize(normalized))
+
+
+def _trade_type_label(value: object | None) -> str:
+    normalized = _normalize_enumish(value) or TradeType.UNKNOWN.value
+    return TRADE_TYPE_LABELS.get(normalized, _humanize(normalized))
 
 
 def _classification_summary(lead: LeadSummary | LeadDetail) -> str:
@@ -1465,6 +1519,69 @@ def _fetch_leads(filters: LeadListFilters) -> tuple[int, list[LeadSummary]]:
 
 
 @st.cache_data(show_spinner=False, ttl=120)
+def _list_import_batches_cached(revision: int) -> list[dict]:
+    del revision
+
+    def _reader(db):
+        repo = LeadRepository(db)
+        batches = []
+        for batch in repo.list_recent_import_batches(limit=25):
+            lead_ids = repo.list_lead_ids_for_import_batch(batch.id)
+            batches.append(
+                {
+                    "id": batch.id,
+                    "batch_type": batch.batch_type.value if batch.batch_type else None,
+                    "status": batch.status.value if batch.status else None,
+                    "source_provider": batch.source_provider,
+                    "source_query": batch.source_query,
+                    "location_label": batch.location_label,
+                    "record_count": batch.record_count,
+                    "lead_count": len(lead_ids),
+                    "created_at": batch.created_at.isoformat() if batch.created_at else None,
+                    "completed_at": batch.completed_at.isoformat() if batch.completed_at else None,
+                }
+            )
+        return batches
+
+    return _run_read(_reader)
+
+
+def _list_import_batches() -> list[dict]:
+    return _list_import_batches_cached(_data_revision())
+
+
+@st.cache_data(show_spinner=False, ttl=120)
+def _list_import_batch_lead_ids_cached(batch_id: int, revision: int) -> list[int]:
+    del revision
+
+    def _reader(db):
+        repo = LeadRepository(db)
+        return repo.list_lead_ids_for_import_batch(batch_id)
+
+    return _run_read(_reader)
+
+
+def _list_import_batch_lead_ids(batch_id: int) -> list[int]:
+    return _list_import_batch_lead_ids_cached(batch_id, _data_revision())
+
+
+@st.cache_data(show_spinner=False, ttl=120)
+def _list_lead_ids_for_filters_cached(filters_payload: str, revision: int) -> list[int]:
+    del revision
+    filters = LeadListFilters.model_validate_json(filters_payload)
+
+    def _reader(db):
+        repo = LeadRepository(db)
+        return repo.list_lead_ids(filters)
+
+    return _run_read(_reader)
+
+
+def _list_lead_ids_for_filters(filters: LeadListFilters) -> list[int]:
+    return _list_lead_ids_for_filters_cached(filters.model_dump_json(), _data_revision())
+
+
+@st.cache_data(show_spinner=False, ttl=120)
 def _fetch_overview_snapshot_cached(revision: int) -> tuple[dict[str, int], list[dict]]:
     del revision
 
@@ -1595,10 +1712,21 @@ def _list_drafts(lead_id: int):
     return [DraftRead.model_validate(payload) for payload in _list_drafts_cached(lead_id, _data_revision())]
 
 
-def _export_excel(filters: LeadListFilters):
+def _export_excel(
+    filters: LeadListFilters,
+    *,
+    lead_ids: list[int] | None = None,
+    scope_label: str | None = None,
+    scope_metadata: dict[str, object] | None = None,
+):
     def _reader(db):
         service = ExcelExportService(db)
-        return service.build_workbook(filters)
+        return service.build_workbook(
+            filters,
+            lead_ids=lead_ids,
+            scope_label=scope_label,
+            scope_metadata=scope_metadata,
+        )
 
     return _run_read(_reader)
 
@@ -1786,10 +1914,61 @@ def _render_assignment_section(lead: LeadDetail) -> None:
         )
 
 
+def _render_quality_section(lead: LeadDetail) -> None:
+    fit_value = _normalize_enumish(lead.company_size_fit)
+    with st.container(border=True):
+        st.markdown("### Lead quality")
+        _render_badges(
+            [
+                (
+                    f"Target fit: {_company_size_fit_label(lead.company_size_fit)}",
+                    "good"
+                    if fit_value == CompanySizeFit.IDEAL_SME.value
+                    else "warn"
+                    if fit_value == CompanySizeFit.LARGE_ENTERPRISE.value
+                    else "neutral",
+                ),
+                (f"Trade: {_trade_type_label(lead.trade_type)}", "info"),
+            ]
+        )
+        _render_key_value_grid(
+            [
+                ("Target fit", _company_size_fit_label(lead.company_size_fit)),
+                ("Trade type", _trade_type_label(lead.trade_type)),
+                ("Fit explanation", lead.company_size_fit_explanation or "No target-fit classification stored yet."),
+                ("Trade explanation", lead.trade_type_explanation or "No trade-type classification stored yet."),
+                ("Classified at", _format_datetime(lead.quality_classified_at)),
+            ]
+        )
+
+
 def _save_queue(leads: list[LeadSummary], queue_label: str) -> None:
     st.session_state["lead_queue_ids"] = [lead.id for lead in leads]
     st.session_state["lead_queue_lookup"] = {lead.id: _lead_option_label(lead) for lead in leads}
     st.session_state["lead_queue_label"] = queue_label
+
+
+def _format_import_batch_label(batch: dict) -> str:
+    query = batch.get("source_query") or batch.get("batch_type") or "import"
+    location = batch.get("location_label")
+    lead_count = batch.get("lead_count", 0)
+    pieces = [f"Batch {batch['id']}", str(query)]
+    if location:
+        pieces.append(str(location))
+    pieces.append(f"{lead_count} lead(s)")
+    return " - ".join(pieces)
+
+
+def _batch_scope_metadata(batch: dict, *, scope_type: str) -> dict[str, object]:
+    return {
+        "scope_type": scope_type,
+        "batch_id": batch.get("id"),
+        "batch_type": batch.get("batch_type"),
+        "source_provider": batch.get("source_provider"),
+        "source_query": batch.get("source_query"),
+        "location_label": batch.get("location_label"),
+        "record_count": batch.get("record_count"),
+    }
 
 
 def _get_queue_ids(fallback_leads: list[LeadSummary]) -> list[int]:
@@ -1850,6 +2029,8 @@ def _reset_queue_filters() -> None:
     st.session_state["lead_filter_assigned_sales_rep_id"] = None
     st.session_state["lead_filter_sales_region_id"] = None
     st.session_state["lead_filter_market_segment_id"] = None
+    st.session_state["lead_filter_company_size_fit"] = "All"
+    st.session_state["lead_filter_trade_type"] = "All"
     st.session_state["leads_has_assignment"] = "Any"
     st.session_state["leads_has_email"] = "Any"
     st.session_state["leads_has_whatsapp"] = "Any"
@@ -1899,6 +2080,8 @@ def _queue_filter_badges(
     selected_sales_rep: str | None,
     selected_sales_region: str | None,
     selected_market_segment: str | None,
+    selected_company_size_fit: str,
+    selected_trade_type: str,
     has_email: bool | None,
     has_whatsapp: bool | None,
     has_assignment: bool | None,
@@ -1927,6 +2110,10 @@ def _queue_filter_badges(
         badges.append((f"Sales region: {selected_sales_region}", "neutral"))
     if selected_market_segment:
         badges.append((f"Segment: {selected_market_segment}", "neutral"))
+    if selected_company_size_fit != "All":
+        badges.append((f"Target fit: {_company_size_fit_label(selected_company_size_fit)}", "neutral"))
+    if selected_trade_type != "All":
+        badges.append((f"Trade: {_trade_type_label(selected_trade_type)}", "neutral"))
     if has_assignment is True:
         badges.append(("Assigned leads only", "good"))
     elif has_assignment is False:
@@ -1996,6 +2183,8 @@ def _prepare_queue_display(filtered_leads: list[LeadSummary]) -> tuple[pd.DataFr
                 "Contact path": _contact_summary(lead),
                 "Assigned": _assignment_status(lead),
                 "Classification": _classification_summary(lead),
+                "Fit": _company_size_fit_label(lead.company_size_fit),
+                "Trade": _trade_type_label(lead.trade_type),
                 "Priority": lead.lead_score,
                 "Status": _humanize(lead.status),
                 "Follow-up": lead.follow_up_date,
@@ -2768,6 +2957,10 @@ elif page == "Leads":
             st.session_state["lead_filter_sales_region_id"] = None
         if st.session_state.get("lead_filter_market_segment_id") not in market_segment_filter_options:
             st.session_state["lead_filter_market_segment_id"] = None
+        if st.session_state.get("lead_filter_company_size_fit") not in COMPANY_SIZE_FIT_FILTER_OPTIONS:
+            st.session_state["lead_filter_company_size_fit"] = "All"
+        if st.session_state.get("lead_filter_trade_type") not in TRADE_TYPE_FILTER_OPTIONS:
+            st.session_state["lead_filter_trade_type"] = "All"
 
         with st.form("lead_queue_filters_form"):
             toolbar_col1, toolbar_col2 = st.columns([2.4, 1.1])
@@ -2854,6 +3047,22 @@ elif page == "Leads":
                         format_func=lambda item: market_segment_filter_labels.get(item, "Unknown"),
                     )
 
+                quality_col1, quality_col2 = st.columns(2)
+                with quality_col1:
+                    selected_company_size_fit = st.selectbox(
+                        "Target fit",
+                        COMPANY_SIZE_FIT_FILTER_OPTIONS,
+                        key="lead_filter_company_size_fit",
+                        format_func=lambda item: "All" if item == "All" else _company_size_fit_label(item),
+                    )
+                with quality_col2:
+                    selected_trade_type = st.selectbox(
+                        "Trade type",
+                        TRADE_TYPE_FILTER_OPTIONS,
+                        key="lead_filter_trade_type",
+                        format_func=lambda item: "All" if item == "All" else _trade_type_label(item),
+                    )
+
             action_col1, action_col2, action_col3 = st.columns([1.1, 1, 1])
             with action_col1:
                 st.form_submit_button("Apply queue filters", type="primary", use_container_width=True)
@@ -2893,6 +3102,12 @@ elif page == "Leads":
         sales_region_id=selected_sales_region_id,
         market_segment_id=selected_market_segment_id,
         has_assignment=has_assignment,
+        company_size_fit=(
+            None
+            if selected_company_size_fit == "All"
+            else CompanySizeFit(selected_company_size_fit)
+        ),
+        trade_type=None if selected_trade_type == "All" else TradeType(selected_trade_type),
         limit=LEAD_PAGE_SIZE,
         offset=0,
     )
@@ -2929,6 +3144,8 @@ elif page == "Leads":
                 selected_market_segment=None
                 if selected_market_segment_id is None
                 else market_segment_filter_labels.get(selected_market_segment_id),
+                selected_company_size_fit=selected_company_size_fit,
+                selected_trade_type=selected_trade_type,
                 has_email=has_email,
                 has_whatsapp=has_whatsapp,
                 has_assignment=has_assignment,
@@ -2974,6 +3191,8 @@ elif page == "Leads":
                     column_config={
                         "Assigned": st.column_config.TextColumn("Assigned", width="small"),
                         "Classification": st.column_config.TextColumn("Classification", width="medium"),
+                        "Fit": st.column_config.TextColumn("Fit", width="small"),
+                        "Trade": st.column_config.TextColumn("Trade", width="small"),
                         "Priority": st.column_config.NumberColumn("Priority", min_value=0, max_value=100),
                         "Follow-up": st.column_config.DateColumn("Follow-up"),
                         "Last enriched": st.column_config.DatetimeColumn("Last enriched"),
@@ -3024,6 +3243,8 @@ elif page == "Leads":
                             else "Unassigned",
                             "good" if _assignment_rep_name(selected_lead) else "warn",
                         ),
+                        (f"Fit: {_company_size_fit_label(selected_lead.company_size_fit)}", "neutral"),
+                        (f"Trade: {_trade_type_label(selected_lead.trade_type)}", "neutral"),
                     ]
                 )
                 st.caption(_classification_summary(selected_lead))
@@ -3106,9 +3327,91 @@ elif page == "Leads":
 
             with st.container(border=True):
                 st.markdown("### Export")
-                st.caption("The workbook includes Leads, Outreach_Log, Templates, Settings, and Metadata.")
-                if st.button("Prepare Excel workbook", use_container_width=True):
-                    filename, payload = _export_excel(filters)
+                st.caption("The workbook starts with the Empresas sheet in the client import template format.")
+                import_batches = _list_import_batches()
+                batch_lookup = {batch["id"]: batch for batch in import_batches}
+                batch_ids = list(batch_lookup.keys())
+                if st.session_state.get("export_scope") not in EXPORT_SCOPE_OPTIONS:
+                    st.session_state["export_scope"] = EXPORT_SCOPE_FILTERED_QUEUE
+                if batch_ids and st.session_state.get("export_specific_batch_id") not in batch_ids:
+                    st.session_state["export_specific_batch_id"] = batch_ids[0]
+                if not batch_ids:
+                    st.session_state["export_specific_batch_id"] = None
+                selected_export_ids = [
+                    lead_id
+                    for lead_id in st.session_state.get("export_selected_lead_ids", [])
+                    if lead_id in lead_options
+                ]
+                if selected_export_ids != st.session_state.get("export_selected_lead_ids"):
+                    st.session_state["export_selected_lead_ids"] = selected_export_ids
+
+                export_scope = st.selectbox(
+                    "Export scope",
+                    EXPORT_SCOPE_OPTIONS,
+                    key="export_scope",
+                )
+                scope_type = EXPORT_SCOPE_TYPES[export_scope]
+                scope_label = export_scope
+                scope_metadata: dict[str, object] = {"scope_type": scope_type}
+                export_lead_ids: list[int] = []
+                scope_caption = ""
+
+                if export_scope == EXPORT_SCOPE_FILTERED_QUEUE:
+                    export_lead_ids = [lead.id for lead in filtered_leads]
+                    scope_caption = f"Will export {len(export_lead_ids)} lead(s) currently shown in the queue."
+                elif export_scope == EXPORT_SCOPE_SAVED_QUEUE:
+                    export_lead_ids = list(dict.fromkeys(st.session_state.get("lead_queue_ids") or []))
+                    scope_label = st.session_state.get("lead_queue_label") or EXPORT_SCOPE_SAVED_QUEUE
+                    scope_caption = f"Will export {len(export_lead_ids)} lead(s) from {scope_label}."
+                elif export_scope == EXPORT_SCOPE_LATEST_BATCH:
+                    latest_batch = import_batches[0] if import_batches else None
+                    if latest_batch:
+                        export_lead_ids = _list_import_batch_lead_ids(latest_batch["id"])
+                        scope_label = _format_import_batch_label(latest_batch)
+                        scope_metadata.update(_batch_scope_metadata(latest_batch, scope_type=scope_type))
+                        scope_caption = f"Will export {len(export_lead_ids)} lead(s) from {scope_label}."
+                    else:
+                        scope_caption = "No completed import batch with scoped leads is available yet."
+                elif export_scope == EXPORT_SCOPE_SPECIFIC_BATCH:
+                    if batch_ids:
+                        selected_batch_id = st.selectbox(
+                            "Import batch",
+                            batch_ids,
+                            key="export_specific_batch_id",
+                            format_func=lambda item: _format_import_batch_label(batch_lookup[item]),
+                        )
+                        selected_batch = batch_lookup[selected_batch_id]
+                        export_lead_ids = _list_import_batch_lead_ids(selected_batch_id)
+                        scope_label = _format_import_batch_label(selected_batch)
+                        scope_metadata.update(_batch_scope_metadata(selected_batch, scope_type=scope_type))
+                        scope_caption = f"Will export {len(export_lead_ids)} lead(s) from {scope_label}."
+                    else:
+                        scope_caption = "No completed import batch with scoped leads is available yet."
+                elif export_scope == EXPORT_SCOPE_SELECTED_LEADS:
+                    export_lead_ids = st.multiselect(
+                        "Leads to export",
+                        options=list(lead_options.keys()),
+                        key="export_selected_lead_ids",
+                        format_func=lambda item: lead_options[item],
+                    )
+                    scope_caption = f"Will export {len(export_lead_ids)} selected lead(s)."
+                elif export_scope == EXPORT_SCOPE_ADVANCED_FILTERS:
+                    export_lead_ids = _list_lead_ids_for_filters(filters)
+                    scope_caption = (
+                        f"Will export {len(export_lead_ids)} lead(s) matching the advanced filters. "
+                        "Quick filters and queue search are not included in this scope."
+                    )
+
+                scope_metadata["requested_lead_count"] = len(export_lead_ids)
+                st.caption(scope_caption)
+
+                if st.button("Prepare Excel workbook", use_container_width=True, disabled=not export_lead_ids):
+                    filename, payload = _export_excel(
+                        filters,
+                        lead_ids=export_lead_ids,
+                        scope_label=scope_label,
+                        scope_metadata=scope_metadata,
+                    )
                     st.session_state["export_filename"] = filename
                     st.session_state["export_payload"] = payload
                     _render_notice("Excel workbook is ready.", tone="good", title="Export prepared")
@@ -3289,6 +3592,7 @@ else:
             metric_cols[3].metric("Last contacted", _format_datetime(lead.last_contacted_at))
 
             _render_assignment_section(lead)
+            _render_quality_section(lead)
 
             with st.container(border=True):
                 st.markdown("### Operator focus")
