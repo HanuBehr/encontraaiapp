@@ -22,3 +22,9 @@ data/demo/
 *.sqlite
 *.sqlite3
 write_test.txt
+
+web/node_modules/
+web/.next/
+web/out/
+web/.env.local
+web/*.tsbuildinfo

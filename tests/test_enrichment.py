@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import requests
 
 from app.config import Settings
-from app.enums import ContactType, LeadSourceType, LeadStatus
+from app.enums import ContactType, ImportBatchStatus, ImportBatchType, LeadSourceType, LeadStatus
+from app.models.import_batch import ImportBatch
 from app.models.lead import Lead
 from app.models.lead_contact import LeadContact
 from app.models.lead_enrichment_record import LeadEnrichmentRecord
+from app.models.raw_discovery_record import RawDiscoveryRecord
 from app.services.enrichment import EnrichmentService, extract_public_page_data
 from app.services.normalization import normalize_business_name
 
@@ -27,13 +31,25 @@ class FakeResponse:
 
 
 class FakeHTTPSession:
-    def __init__(self, responses: dict[str, FakeResponse]) -> None:
+    def __init__(self, responses: dict[str, FakeResponse], *, default_status_code: int | None = 404) -> None:
         self.responses = responses
+        self.default_status_code = default_status_code
 
     def get(self, url: str, **kwargs) -> FakeResponse:
         if url not in self.responses:
+            if self.default_status_code is not None:
+                return FakeResponse(
+                    url=url,
+                    text="<html><body>Not found</body></html>",
+                    status_code=self.default_status_code,
+                )
             raise requests.RequestException(f"No fake response for {url}")
         return self.responses[url]
+
+
+def _cloudflare_email(value: str) -> str:
+    key = 0x12
+    return f"{key:02x}" + "".join(f"{ord(character) ^ key:02x}" for character in value)
 
 
 def test_extract_public_page_data_finds_contacts_and_signals() -> None:
@@ -59,6 +75,36 @@ def test_extract_public_page_data_finds_contacts_and_signals() -> None:
     assert result.extracted_fields["contact_form_urls"]
     assert result.material_signals["batteries"]["relevant"] is True
     assert result.material_signals["electronics"]["relevant"] is True
+
+
+def test_extract_public_page_data_finds_hidden_and_obfuscated_emails() -> None:
+    encoded_cloudflare_email = _cloudflare_email("cloud@empresa.com.br")
+    html = f"""
+    <html>
+      <head>
+        <script type="application/ld+json">{{"email": "vendas@empresa.com.br"}}</script>
+        <meta name="reply-to" content="orcamento@empresa.com.br">
+      </head>
+      <body>
+        <a href="mailto:financeiro%40empresa.com.br">Financeiro</a>
+        <div data-contact="sac%40empresa.com.br"></div>
+        <p>Comercial: comercial [arroba] empresa [ponto] com [ponto] br</p>
+        <span class="__cf_email__" data-cfemail="{encoded_cloudflare_email}"></span>
+      </body>
+    </html>
+    """
+
+    result = extract_public_page_data(html, "https://example.com/")
+    emails = {item["normalized_value"] for item in result.extracted_fields["emails"]}
+
+    assert {
+        "vendas@empresa.com.br",
+        "orcamento@empresa.com.br",
+        "financeiro@empresa.com.br",
+        "sac@empresa.com.br",
+        "comercial@empresa.com.br",
+        "cloud@empresa.com.br",
+    }.issubset(emails)
 
 
 def test_enrichment_service_updates_lead_and_stores_history(db_session) -> None:
@@ -126,3 +172,215 @@ def test_enrichment_service_updates_lead_and_stores_history(db_session) -> None:
     assert refreshed_lead.last_enriched_at is not None
     assert any(contact.contact_type == ContactType.CONTACT_FORM for contact in contacts)
     assert enrichments
+
+
+def test_enrichment_service_follows_discovered_same_host_contact_pages(db_session) -> None:
+    lead = Lead(
+        business_name="Empresa com Atendimento",
+        normalized_business_name=normalize_business_name("Empresa com Atendimento") or "empresa com atendimento",
+        category="materiais para construcao",
+        city="Sao Paulo",
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+        website="https://example.com",
+    )
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_http = FakeHTTPSession(
+        {
+            "https://example.com/robots.txt": FakeResponse(
+                url="https://example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://example.com": FakeResponse(
+                url="https://example.com",
+                text='<html><body><a href="/suporte/comercial">Fale com o suporte comercial</a></body></html>',
+            ),
+            "https://example.com/suporte/comercial": FakeResponse(
+                url="https://example.com/suporte/comercial",
+                text="<html><body>Contato comercial: vendas@example.com</body></html>",
+            ),
+        }
+    )
+
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", EXPORT_DIR="./data/exports", GOOGLE_API_KEY="")
+    service = EnrichmentService(db_session, settings, http_session=fake_http)
+
+    result = service.enrich_lead(lead.id, actor="test")
+
+    refreshed_lead = db_session.get(Lead, lead.id)
+    source_urls = {
+        row.source_url
+        for row in db_session.query(LeadEnrichmentRecord).filter(LeadEnrichmentRecord.lead_id == lead.id).all()
+    }
+
+    assert result.pages_fetched >= 2
+    assert refreshed_lead is not None
+    assert refreshed_lead.email == "vendas@example.com"
+    assert "https://example.com/suporte/comercial" in source_urls
+
+
+def test_enrichment_service_batch_summary_counts_contacts_and_skips(db_session) -> None:
+    lead_with_site = Lead(
+        business_name="Empresa Publica",
+        normalized_business_name=normalize_business_name("Empresa Publica") or "empresa publica",
+        category="materiais para construcao",
+        city="Sao Paulo",
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+        website="https://batch.example.com",
+    )
+    lead_without_site = Lead(
+        business_name="Empresa Sem Site",
+        normalized_business_name=normalize_business_name("Empresa Sem Site") or "empresa sem site",
+        category="materiais para construcao",
+        city="Sao Paulo",
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+    )
+    db_session.add_all([lead_with_site, lead_without_site])
+    db_session.commit()
+    db_session.refresh(lead_with_site)
+    db_session.refresh(lead_without_site)
+
+    fake_http = FakeHTTPSession(
+        {
+            "https://batch.example.com/robots.txt": FakeResponse(
+                url="https://batch.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://batch.example.com": FakeResponse(
+                url="https://batch.example.com",
+                text="""
+                <html><body>
+                <a href="mailto:vendas@batch.example.com">Email</a>
+                <a href="https://wa.me/5511987654321">WhatsApp</a>
+                <a href="https://instagram.com/batchexample">Instagram</a>
+                <form action="/contato"></form>
+                </body></html>
+                """,
+            ),
+        }
+    )
+
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", EXPORT_DIR="./data/exports", GOOGLE_API_KEY="")
+    service = EnrichmentService(db_session, settings, http_session=fake_http)
+
+    response = service.enrich_lead_ids(
+        [lead_with_site.id, lead_without_site.id],
+        actor="test",
+        scope_label="selected leads",
+    )
+
+    assert response.processed == 2
+    assert response.summary.requested == 2
+    assert response.summary.emails_found == 1
+    assert response.summary.whatsapps_found == 1
+    assert response.summary.instagrams_found == 1
+    assert response.summary.contact_forms_found == 1
+    assert response.summary.skipped_no_website == 1
+    assert response.summary.errors == 0
+
+
+def test_enrichment_service_enriches_latest_import_batch(db_session) -> None:
+    old_lead = Lead(
+        business_name="Old Batch Lead",
+        normalized_business_name=normalize_business_name("Old Batch Lead") or "old batch lead",
+        category="materiais para construcao",
+        city="Sao Paulo",
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+        website="https://old.example.com",
+    )
+    new_lead = Lead(
+        business_name="New Batch Lead",
+        normalized_business_name=normalize_business_name("New Batch Lead") or "new batch lead",
+        category="materiais para construcao",
+        city="Sao Paulo",
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+        website="https://new.example.com",
+    )
+    db_session.add_all([old_lead, new_lead])
+    db_session.flush()
+
+    now = datetime.now(timezone.utc)
+    old_batch = ImportBatch(
+        batch_type=ImportBatchType.DISCOVERY,
+        status=ImportBatchStatus.COMPLETED,
+        source_provider="test",
+        source_query="old",
+        location_label="SP",
+        record_count=1,
+        completed_at=now - timedelta(days=1),
+    )
+    new_batch = ImportBatch(
+        batch_type=ImportBatchType.DISCOVERY,
+        status=ImportBatchStatus.COMPLETED,
+        source_provider="test",
+        source_query="new",
+        location_label="SP",
+        record_count=1,
+        completed_at=now,
+    )
+    db_session.add_all([old_batch, new_batch])
+    db_session.flush()
+    db_session.add_all(
+        [
+            RawDiscoveryRecord(
+                import_batch_id=old_batch.id,
+                lead_id=old_lead.id,
+                provider="test",
+                provider_record_id="old-1",
+                payload_json={},
+            ),
+            RawDiscoveryRecord(
+                import_batch_id=new_batch.id,
+                lead_id=new_lead.id,
+                provider="test",
+                provider_record_id="new-1",
+                payload_json={},
+            ),
+        ]
+    )
+    db_session.commit()
+    db_session.refresh(new_lead)
+
+    fake_http = FakeHTTPSession(
+        {
+            "https://new.example.com/robots.txt": FakeResponse(
+                url="https://new.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://new.example.com": FakeResponse(
+                url="https://new.example.com",
+                text='<html><body><a href="mailto:new@example.com">Email</a></body></html>',
+            ),
+        }
+    )
+
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", EXPORT_DIR="./data/exports", GOOGLE_API_KEY="")
+    service = EnrichmentService(db_session, settings, http_session=fake_http)
+
+    response = service.enrich_latest_import_batch(actor="test")
+
+    refreshed_new_lead = db_session.get(Lead, new_lead.id)
+    refreshed_old_lead = db_session.get(Lead, old_lead.id)
+
+    assert response.processed == 1
+    assert response.summary.scope_label == f"latest import batch {new_batch.id}"
+    assert response.summary.emails_found == 1
+    assert refreshed_new_lead is not None
+    assert refreshed_new_lead.email == "new@example.com"
+    assert refreshed_old_lead is not None
+    assert refreshed_old_lead.last_enriched_at is None

@@ -1,12 +1,38 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.enums import ActivityAction, CompanySizeFit, ContactType, LeadSourceType, LeadStatus, TradeType
+from app.enums import (
+    ActivityAction,
+    CompanySizeFit,
+    ContactType,
+    ImportBatchStatus,
+    ImportBatchType,
+    LeadSourceType,
+    LeadStatus,
+    TradeType,
+)
 from app.schemas.common import ORMBaseModel
+
+
+LeadSortBy = Literal[
+    "id",
+    "business_name",
+    "city",
+    "state",
+    "status",
+    "lead_score",
+    "created_at",
+    "updated_at",
+    "last_enriched_at",
+    "assigned_at",
+    "company_size_fit",
+    "trade_type",
+]
+LeadSortDir = Literal["asc", "desc"]
 
 
 class SalesRegionRead(ORMBaseModel):
@@ -52,6 +78,7 @@ class LeadSummary(ORMBaseModel):
     email: str | None = None
     phone: str | None = None
     whatsapp: str | None = None
+    instagram: str | None = None
     website: str | None = None
     lead_score: int
     status: LeadStatus
@@ -158,9 +185,11 @@ class LeadDetail(LeadSummary):
 
 class LeadListFilters(BaseModel):
     city: str | None = None
+    state: str | None = None
     status: LeadStatus | None = None
     has_email: bool | None = None
     has_whatsapp: bool | None = None
+    has_instagram: bool | None = None
     category: str | None = None
     score_min: int | None = Field(default=None, ge=0, le=100)
     score_max: int | None = Field(default=None, ge=0, le=100)
@@ -173,6 +202,8 @@ class LeadListFilters(BaseModel):
     has_assignment: bool | None = None
     company_size_fit: CompanySizeFit | None = None
     trade_type: TradeType | None = None
+    sort_by: LeadSortBy = "updated_at"
+    sort_dir: LeadSortDir = "desc"
     limit: int = Field(default=100, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
@@ -180,6 +211,84 @@ class LeadListFilters(BaseModel):
 class LeadListResponse(BaseModel):
     total: int
     items: list[LeadSummary]
+
+
+class LeadNamedOption(BaseModel):
+    id: int
+    name: str
+
+
+class LeadSalesRegionOption(LeadNamedOption):
+    region_type: str
+    state: str | None = None
+    code: str | None = None
+
+
+class LeadMarketSegmentOption(LeadNamedOption):
+    key: str
+
+
+class LeadMarketSubsegmentOption(LeadNamedOption):
+    key: str
+    market_segment_id: int
+
+
+class LeadOptionsResponse(BaseModel):
+    cities: list[str]
+    states: list[str]
+    statuses: list[str]
+    assigned_reps: list[LeadNamedOption]
+    sales_regions: list[LeadSalesRegionOption]
+    market_segments: list[LeadMarketSegmentOption]
+    market_subsegments: list[LeadMarketSubsegmentOption]
+    target_fit_values: list[str]
+    trade_type_values: list[str]
+
+
+class LeadScopeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lead_ids: list[int] | None = Field(default=None, min_length=1)
+    filters: LeadListFilters | None = None
+    latest_import_batch: bool = False
+
+    @model_validator(mode="after")
+    def validate_exactly_one_scope(self) -> "LeadScopeRequest":
+        scope_count = sum(
+            [
+                self.lead_ids is not None,
+                self.filters is not None,
+                self.latest_import_batch,
+            ]
+        )
+        if scope_count != 1:
+            raise ValueError("Provide exactly one lead scope: lead_ids, filters, or latest_import_batch.")
+        return self
+
+
+class LeadImportBatchResponse(BaseModel):
+    id: int
+    batch_type: ImportBatchType
+    status: ImportBatchStatus
+    source_provider: str | None = None
+    source_query: str | None = None
+    location_label: str | None = None
+    record_count: int
+    lead_count: int
+    lead_ids: list[int]
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LeadScopeResolveResponse(BaseModel):
+    scope_type: str
+    scope_label: str
+    total: int
+    lead_ids: list[int]
+    missing_lead_ids: list[int] = Field(default_factory=list)
+    import_batch: LeadImportBatchResponse | None = None
 
 
 class LeadUpdateRequest(BaseModel):
@@ -202,12 +311,71 @@ class EnrichmentRunResult(BaseModel):
     pages_attempted: int
     pages_fetched: int
     contacts_added: int
+    contacts_added_by_type: dict[str, int] = Field(default_factory=dict)
     fields_updated: list[str]
     last_enriched_at: datetime
     material_profile: dict[str, Any] = Field(default_factory=dict)
     skipped_reason: str | None = None
 
 
+class LeadBatchEnrichmentSummary(BaseModel):
+    scope_label: str | None = None
+    requested: int = 0
+    processed: int = 0
+    contacts_added: int = 0
+    emails_found: int = 0
+    instagrams_found: int = 0
+    whatsapps_found: int = 0
+    contact_forms_found: int = 0
+    skipped: int = 0
+    skipped_no_website: int = 0
+    errors: int = 0
+    error_messages: list[str] = Field(default_factory=list)
+    pages_attempted: int = 0
+    pages_fetched: int = 0
+
+
 class LeadBatchEnrichmentResponse(BaseModel):
     processed: int
     results: list[EnrichmentRunResult]
+    summary: LeadBatchEnrichmentSummary = Field(default_factory=LeadBatchEnrichmentSummary)
+
+
+class LeadAssignmentSuggestionRead(BaseModel):
+    sales_region_id: int | None = None
+    market_segment_id: int | None = None
+    market_subsegment_id: int | None = None
+    assigned_sales_rep_id: int | None = None
+    assignment_rule_id: int | None = None
+    explanation: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class LeadAssignmentRunResult(BaseModel):
+    lead_id: int
+    changed_fields: list[str]
+    suggestion: LeadAssignmentSuggestionRead
+
+
+class LeadBatchAssignmentRequest(LeadScopeRequest):
+    overwrite: bool = False
+    dry_run: bool = False
+
+
+class LeadBatchAssignmentSummary(BaseModel):
+    scope_type: str
+    scope_label: str
+    requested: int
+    processed: int
+    changed: int
+    overwrite: bool
+    dry_run: bool
+    missing_lead_ids: list[int] = Field(default_factory=list)
+
+
+class LeadBatchAssignmentResponse(BaseModel):
+    processed: int
+    changed: int
+    dry_run: bool
+    results: list[LeadAssignmentRunResult]
+    summary: LeadBatchAssignmentSummary

@@ -198,12 +198,12 @@ class ExcelExportService:
             "Ranking": lead.lead_score,
         }
 
-    @staticmethod
-    def _best_contact_value(lead, contact_type: ContactType, fallback: str | None) -> str | None:
+    @classmethod
+    def _best_contact_value(cls, lead, contact_type: ContactType, fallback: str | None) -> str | None:
         contacts = [
             contact
             for contact in lead.contacts
-            if contact.contact_type == contact_type and (contact.normalized_value or contact.raw_value)
+            if cls._contact_type_matches(contact.contact_type, contact_type) and cls._contact_value(contact)
         ]
         if not contacts:
             return fallback
@@ -216,7 +216,29 @@ class ExcelExportService:
                 contact.id or 0,
             ),
         )
-        return best.normalized_value or best.raw_value or fallback
+        return cls._contact_value(best) or fallback
+
+    @staticmethod
+    def _contact_value(contact) -> str | None:
+        return getattr(contact, "normalized_value", None) or getattr(contact, "raw_value", None)
+
+    @classmethod
+    def _contact_type_matches(cls, actual: object, expected: ContactType) -> bool:
+        actual_token = cls._contact_type_token(actual)
+        expected_tokens = {
+            cls._contact_type_token(expected),
+            cls._contact_type_token(expected.name),
+            cls._contact_type_token(expected.value),
+        }
+        return bool(actual_token and actual_token in expected_tokens)
+
+    @staticmethod
+    def _contact_type_token(value: object) -> str:
+        raw_value = getattr(value, "value", value)
+        text = str(raw_value or "").strip()
+        if "." in text:
+            text = text.rsplit(".", 1)[-1]
+        return text.lower()
 
     def _sector_label(self, lead) -> str | None:
         segment = lead.market_segment.name if lead.market_segment else None

@@ -13,7 +13,13 @@ from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TemplateKey, T
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.dedupe import DuplicatePreviewResponse
 from app.schemas.discovery import DiscoveryPreviewResponse, DiscoverySearchRequest, DiscoverySearchResponse
-from app.schemas.lead import LeadDetail, LeadListFilters, LeadSummary, LeadUpdateRequest
+from app.schemas.lead import (
+    LeadBatchEnrichmentResponse,
+    LeadDetail,
+    LeadListFilters,
+    LeadSummary,
+    LeadUpdateRequest,
+)
 from app.schemas.outreach import DraftRead, TemplateRead
 from app.services.crm import CRMService
 from app.services.discovery import DiscoveryService
@@ -990,6 +996,7 @@ def _init_session_state() -> None:
         "lead_queue_label": "All loaded leads",
         "duplicate_preview_rows": None,
         "dedupe_results": None,
+        "batch_enrichment_response": None,
         "export_filename": None,
         "export_payload": None,
         "export_scope": EXPORT_SCOPE_FILTERED_QUEUE,
@@ -1636,10 +1643,30 @@ def _enrich_lead(lead_id: int):
     return result
 
 
-def _enrich_batch(lead_ids: list[int]):
+def _enrich_batch(lead_ids: list[int], *, scope_label: str = "selected leads") -> LeadBatchEnrichmentResponse:
     def _writer(db):
         service = EnrichmentService(db, settings)
-        return service.enrich_batch(lead_ids, actor="streamlit")
+        return service.enrich_lead_ids(lead_ids, actor="streamlit", scope_label=scope_label)
+
+    result = _run_write(_writer)
+    _bump_data_revision()
+    return result
+
+
+def _enrich_saved_queue(lead_ids: list[int], queue_label: str) -> LeadBatchEnrichmentResponse:
+    def _writer(db):
+        service = EnrichmentService(db, settings)
+        return service.enrich_saved_queue(lead_ids, actor="streamlit", queue_label=queue_label)
+
+    result = _run_write(_writer)
+    _bump_data_revision()
+    return result
+
+
+def _enrich_latest_import_batch() -> LeadBatchEnrichmentResponse:
+    def _writer(db):
+        service = EnrichmentService(db, settings)
+        return service.enrich_latest_import_batch(actor="streamlit")
 
     result = _run_write(_writer)
     _bump_data_revision()
@@ -1969,6 +1996,67 @@ def _batch_scope_metadata(batch: dict, *, scope_type: str) -> dict[str, object]:
         "location_label": batch.get("location_label"),
         "record_count": batch.get("record_count"),
     }
+
+
+def _store_batch_enrichment_response(response: LeadBatchEnrichmentResponse) -> None:
+    st.session_state["batch_enrichment_response"] = response.model_dump(mode="json")
+
+
+def _batch_enrichment_result_rows(response: LeadBatchEnrichmentResponse) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for result in response.results:
+        contacts_by_type = result.contacts_added_by_type or {}
+        rows.append(
+            {
+                "Lead": result.business_name,
+                "Pages fetched": result.pages_fetched,
+                "Contacts added": result.contacts_added,
+                "Emails": contacts_by_type.get("email", 0),
+                "WhatsApps": contacts_by_type.get("whatsapp", 0),
+                "Instagrams": contacts_by_type.get("instagram", 0),
+                "Forms": contacts_by_type.get("contact_form", 0),
+                "Skipped": result.skipped_reason or "",
+            }
+        )
+    return rows
+
+
+def _render_batch_enrichment_response() -> None:
+    payload = st.session_state.get("batch_enrichment_response")
+    if not payload:
+        return
+
+    response = LeadBatchEnrichmentResponse.model_validate(payload)
+    summary = response.summary
+    title = f"Public contact refresh complete: {summary.processed} lead(s) processed"
+    if summary.errors and not summary.processed:
+        _render_notice("; ".join(summary.error_messages) or "No leads were refreshed.", tone="warn")
+    else:
+        _render_notice(title, tone="good", title=summary.scope_label or "Batch refresh complete")
+
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Emails found", summary.emails_found)
+    metric_cols[1].metric("WhatsApps found", summary.whatsapps_found)
+    metric_cols[2].metric("Instagrams found", summary.instagrams_found)
+    metric_cols[3].metric("Contact forms", summary.contact_forms_found)
+
+    detail_cols = st.columns(4)
+    detail_cols[0].metric("Processed", summary.processed)
+    detail_cols[1].metric("Contacts added", summary.contacts_added)
+    detail_cols[2].metric("Skipped/no website", summary.skipped_no_website)
+    detail_cols[3].metric("Errors", summary.errors)
+
+    if summary.error_messages:
+        st.caption(" | ".join(summary.error_messages))
+
+    rows = _batch_enrichment_result_rows(response)
+    if rows:
+        st.dataframe(
+            pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True,
+            height=_table_height(len(rows), max_height=360),
+        )
 
 
 def _get_queue_ids(fallback_leads: list[LeadSummary]) -> list[int]:
@@ -3285,29 +3373,54 @@ elif page == "Leads":
 
             with st.container(border=True):
                 st.markdown("### Batch public contact refresh")
-                batch_ids = st.multiselect(
+                saved_queue_ids = list(dict.fromkeys(st.session_state.get("lead_queue_ids") or []))
+                saved_queue_label = st.session_state.get("lead_queue_label") or "Current saved working queue"
+                import_batches = _list_import_batches()
+                latest_batch = import_batches[0] if import_batches else None
+                latest_batch_label = _format_import_batch_label(latest_batch) if latest_batch else "No completed import batch"
+
+                st.caption(
+                    "Run a bounded public-page refresh over the working set. This uses the same robots-aware enrichment as single-lead refresh."
+                )
+
+                saved_col, latest_col = st.columns(2)
+                with saved_col:
+                    st.caption(f"Saved queue: {len(saved_queue_ids)} lead(s)")
+                    if st.button("Enrich current saved batch", use_container_width=True):
+                        if not saved_queue_ids:
+                            st.session_state["batch_enrichment_response"] = None
+                            _render_notice("Save or open a working queue before enriching it.", tone="warn")
+                        else:
+                            with st.spinner("Refreshing public contact info for the saved queue..."):
+                                response = _enrich_saved_queue(saved_queue_ids, saved_queue_label)
+                            _store_batch_enrichment_response(response)
+                with latest_col:
+                    st.caption(latest_batch_label)
+                    if st.button("Enrich latest import batch", use_container_width=True):
+                        if not latest_batch:
+                            st.session_state["batch_enrichment_response"] = None
+                            _render_notice("No completed import batch with leads is available yet.", tone="warn")
+                        else:
+                            with st.spinner("Refreshing public contact info for the latest import batch..."):
+                                response = _enrich_latest_import_batch()
+                            _store_batch_enrichment_response(response)
+
+                selected_batch_ids = st.multiselect(
                     "Selected leads",
                     options=list(lead_options.keys()),
                     format_func=lambda item: lead_options[item],
+                    key="batch_enrichment_selected_ids",
                 )
-                st.caption("Use this when several saved leads need a fresh pass over their public websites.")
-                if st.button("Refresh public contact info for selected leads", use_container_width=True):
-                    if not batch_ids:
-                        _render_notice("Select at least one lead before running a batch refresh.", tone="warn")
+                if st.button("Enrich selected leads", use_container_width=True):
+                    if not selected_batch_ids:
+                        st.session_state["batch_enrichment_response"] = None
+                        _render_notice("Select at least one lead before running a selected-lead refresh.", tone="warn")
                     else:
-                        with st.spinner("Refreshing public contact info..."):
-                            results = _enrich_batch(batch_ids)
-                        _render_notice(
-                            f"Refreshed public contact info for {len(results)} lead(s).",
-                            tone="good",
-                            title="Batch refresh complete",
-                        )
-                        st.dataframe(
-                            pd.DataFrame([result.model_dump(mode="json") for result in results]),
-                            use_container_width=True,
-                            hide_index=True,
-                            height=_table_height(len(results), max_height=420),
-                        )
+                        with st.spinner("Refreshing public contact info for selected leads..."):
+                            response = _enrich_batch(selected_batch_ids, scope_label="selected leads")
+                        _store_batch_enrichment_response(response)
+
+                _render_batch_enrichment_response()
 
             with st.container(border=True):
                 st.markdown("### Duplicate cleanup")

@@ -16,12 +16,13 @@ from app.models.base import utcnow
 from app.models.lead import Lead
 from app.models.lead_enrichment_record import LeadEnrichmentRecord
 from app.repositories.lead_repository import LeadRepository
-from app.schemas.lead import EnrichmentRunResult
+from app.schemas.lead import EnrichmentRunResult, LeadBatchEnrichmentResponse, LeadBatchEnrichmentSummary
 from app.services.normalization import (
     canonicalize_url,
     clean_email,
     extract_emails,
     extract_instagram_links,
+    extract_obfuscated_emails,
     extract_phone_candidates,
     extract_whatsapp_from_url,
     infer_material_signals,
@@ -61,11 +62,27 @@ class PageExtractionResult:
     extracted_fields: dict[str, list[dict[str, Any]]]
     confidence_scores: dict[str, float]
     material_signals: dict[str, dict[str, Any]]
+    candidate_page_urls: list[str]
+
+
+def _decode_cloudflare_email(encoded_value: str | None) -> str | None:
+    if not encoded_value:
+        return None
+    try:
+        encoded_bytes = bytes.fromhex(encoded_value)
+    except ValueError:
+        return None
+    if not encoded_bytes:
+        return None
+    key = encoded_bytes[0]
+    decoded = "".join(chr(byte ^ key) for byte in encoded_bytes[1:])
+    return clean_email(decoded)
 
 
 def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult:
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(separator="\n", strip=True)
+    source_host = urlparse(source_url).netloc.lower()
 
     evidences: list[ExtractedEvidence] = []
     seen_keys: set[tuple[str, str]] = set()
@@ -78,6 +95,7 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
         evidences.append(item)
 
     anchor_hrefs: list[str] = []
+    candidate_page_urls: list[str] = []
     text_lines = [line.strip() for line in text.splitlines() if line.strip()]
 
     for anchor in soup.find_all("a", href=True):
@@ -85,8 +103,9 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
         anchor_text = anchor.get_text(" ", strip=True)
         lower_href = href.lower()
         if lower_href.startswith("mailto:"):
-            email = clean_email(href.split(":", maxsplit=1)[1].split("?", maxsplit=1)[0])
-            if email:
+            mailto_payload = href.split(":", maxsplit=1)[1].split("?", maxsplit=1)[0]
+            mailto_emails = extract_emails(mailto_payload) or list(extract_obfuscated_emails(mailto_payload))
+            for email in mailto_emails:
                 add_evidence(
                     ExtractedEvidence(
                         contact_type=ContactType.EMAIL,
@@ -146,6 +165,8 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
             )
 
         if is_contact_like_url(canonical_href):
+            if urlparse(canonical_href).netloc.lower() == source_host:
+                candidate_page_urls.append(canonical_href)
             add_evidence(
                 ExtractedEvidence(
                     contact_type=ContactType.CONTACT_FORM,
@@ -157,6 +178,20 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
                 )
             )
 
+    for tag in soup.find_all(attrs={"data-cfemail": True}):
+        email = _decode_cloudflare_email(str(tag.get("data-cfemail") or ""))
+        if email:
+            add_evidence(
+                ExtractedEvidence(
+                    contact_type=ContactType.EMAIL,
+                    raw_value=email,
+                    normalized_value=email,
+                    confidence=0.9,
+                    source_url=source_url,
+                    label="cloudflare_email",
+                )
+            )
+
     for email in extract_emails(text):
         add_evidence(
             ExtractedEvidence(
@@ -165,6 +200,30 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
                 normalized_value=email,
                 confidence=0.92,
                 source_url=source_url,
+            )
+        )
+
+    for email in extract_emails(html):
+        add_evidence(
+            ExtractedEvidence(
+                contact_type=ContactType.EMAIL,
+                raw_value=email,
+                normalized_value=email,
+                confidence=0.88,
+                source_url=source_url,
+                label="html_source",
+            )
+        )
+
+    for email in extract_obfuscated_emails("\n".join([text, html])):
+        add_evidence(
+            ExtractedEvidence(
+                contact_type=ContactType.EMAIL,
+                raw_value=email,
+                normalized_value=email,
+                confidence=0.82,
+                source_url=source_url,
+                label="obfuscated_email",
             )
         )
 
@@ -244,12 +303,27 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
         extracted_fields=extracted_fields,
         confidence_scores=confidence_scores,
         material_signals=material_signals,
+        candidate_page_urls=unique_preserve_order(candidate_page_urls),
     )
 
 
 class EnrichmentService:
     USER_AGENT = "reverse-logistics-mvp/0.1"
-    PAGE_PATHS = ("/", "/contato", "/contact", "/sobre", "/about", "/empresa", "/fale-conosco")
+    PAGE_PATHS = (
+        "/",
+        "/contato",
+        "/contact",
+        "/atendimento",
+        "/sac",
+        "/fale-conosco",
+        "/faleconosco",
+        "/sobre",
+        "/about",
+        "/empresa",
+        "/institucional",
+        "/quem-somos",
+    )
+    MAX_DISCOVERED_CONTACT_PAGES = 4
 
     def __init__(
         self,
@@ -271,6 +345,7 @@ class EnrichmentService:
         pages_attempted = 0
         pages_fetched = 0
         contacts_added = 0
+        contacts_added_by_type: dict[str, int] = {}
         aggregated_signals: dict[str, dict[str, Any]] = {}
         skipped_reason: str | None = None
 
@@ -294,7 +369,12 @@ class EnrichmentService:
                 note=skipped_reason,
             )
         else:
-            for page_url in candidate_urls:
+            seen_candidate_urls = set(candidate_urls)
+            discovered_contact_pages = 0
+            page_index = 0
+            while page_index < len(candidate_urls):
+                page_url = candidate_urls[page_index]
+                page_index += 1
                 pages_attempted += 1
                 page_type = self._classify_page(page_url, website_url or page_url)
                 robots_allowed = self._can_fetch(page_url)
@@ -378,8 +458,20 @@ class EnrichmentService:
                     )
                     if contact is not None:
                         contacts_added += 1
+                        contact_type_key = evidence.contact_type.value
+                        contacts_added_by_type[contact_type_key] = contacts_added_by_type.get(contact_type_key, 0) + 1
 
                 aggregated_signals = self._merge_material_signals(aggregated_signals, extraction.material_signals)
+                for discovered_url in extraction.candidate_page_urls:
+                    if discovered_contact_pages >= self.MAX_DISCOVERED_CONTACT_PAGES:
+                        break
+                    if discovered_url in seen_candidate_urls:
+                        continue
+                    if not self._is_same_host(discovered_url, website_url or page_url):
+                        continue
+                    candidate_urls.append(discovered_url)
+                    seen_candidate_urls.add(discovered_url)
+                    discovered_contact_pages += 1
 
         fields_updated = self.repository.sync_canonical_contacts(lead)
         if lead.website and not lead.domain:
@@ -426,6 +518,7 @@ class EnrichmentService:
             pages_attempted=pages_attempted,
             pages_fetched=pages_fetched,
             contacts_added=contacts_added,
+            contacts_added_by_type=contacts_added_by_type,
             fields_updated=unique_preserve_order(fields_updated),
             last_enriched_at=lead.last_enriched_at or utcnow(),
             material_profile=lead.material_profile or {},
@@ -433,10 +526,107 @@ class EnrichmentService:
         )
 
     def enrich_batch(self, lead_ids: list[int], *, actor: str = "system") -> list[EnrichmentRunResult]:
+        return self.enrich_lead_ids(
+            lead_ids,
+            actor=actor,
+            scope_label="lead ids",
+            continue_on_error=False,
+        ).results
+
+    def enrich_lead_ids(
+        self,
+        lead_ids: list[int],
+        *,
+        actor: str = "system",
+        scope_label: str = "lead ids",
+        continue_on_error: bool = True,
+    ) -> LeadBatchEnrichmentResponse:
+        requested_ids = [int(lead_id) for lead_id in dict.fromkeys(lead_ids)]
         results: list[EnrichmentRunResult] = []
-        for lead_id in lead_ids:
-            results.append(self.enrich_lead(lead_id, actor=actor))
-        return results
+        error_messages: list[str] = []
+
+        for lead_id in requested_ids:
+            try:
+                results.append(self.enrich_lead(lead_id, actor=actor))
+            except ValueError as exc:
+                self.db.rollback()
+                if not continue_on_error:
+                    raise
+                error_messages.append(f"Lead {lead_id}: {exc}")
+
+        summary = self._build_batch_summary(
+            requested_ids=requested_ids,
+            results=results,
+            error_messages=error_messages,
+            scope_label=scope_label,
+        )
+        return LeadBatchEnrichmentResponse(processed=len(results), results=results, summary=summary)
+
+    def enrich_latest_import_batch(
+        self,
+        *,
+        actor: str = "system",
+        continue_on_error: bool = True,
+    ) -> LeadBatchEnrichmentResponse:
+        batch = self.repository.get_latest_completed_import_batch()
+        if batch is None:
+            summary = LeadBatchEnrichmentSummary(
+                scope_label="latest import batch",
+                error_messages=["No completed import batch with leads is available."],
+                errors=1,
+            )
+            return LeadBatchEnrichmentResponse(processed=0, results=[], summary=summary)
+
+        lead_ids = self.repository.list_lead_ids_for_import_batch(batch.id)
+        return self.enrich_lead_ids(
+            lead_ids,
+            actor=actor,
+            scope_label=f"latest import batch {batch.id}",
+            continue_on_error=continue_on_error,
+        )
+
+    def enrich_saved_queue(
+        self,
+        lead_ids: list[int],
+        *,
+        actor: str = "system",
+        queue_label: str = "current saved working queue",
+        continue_on_error: bool = True,
+    ) -> LeadBatchEnrichmentResponse:
+        return self.enrich_lead_ids(
+            lead_ids,
+            actor=actor,
+            scope_label=queue_label,
+            continue_on_error=continue_on_error,
+        )
+
+    @staticmethod
+    def _build_batch_summary(
+        *,
+        requested_ids: list[int],
+        results: list[EnrichmentRunResult],
+        error_messages: list[str],
+        scope_label: str,
+    ) -> LeadBatchEnrichmentSummary:
+        def added(contact_type: ContactType) -> int:
+            return sum(result.contacts_added_by_type.get(contact_type.value, 0) for result in results)
+
+        return LeadBatchEnrichmentSummary(
+            scope_label=scope_label,
+            requested=len(requested_ids),
+            processed=len(results),
+            contacts_added=sum(result.contacts_added for result in results),
+            emails_found=added(ContactType.EMAIL),
+            instagrams_found=added(ContactType.INSTAGRAM),
+            whatsapps_found=added(ContactType.WHATSAPP),
+            contact_forms_found=added(ContactType.CONTACT_FORM),
+            skipped=sum(1 for result in results if result.skipped_reason),
+            skipped_no_website=sum(1 for result in results if result.skipped_reason == "Lead has no public website."),
+            errors=len(error_messages),
+            error_messages=error_messages,
+            pages_attempted=sum(result.pages_attempted for result in results),
+            pages_fetched=sum(result.pages_fetched for result in results),
+        )
 
     def _build_candidate_urls(self, lead: Lead) -> list[str]:
         website_url = canonicalize_url(lead.website)
@@ -453,6 +643,10 @@ class EnrichmentService:
             if urlparse(candidate).netloc.lower() == parsed.netloc.lower()
         ]
         return same_host_urls
+
+    @staticmethod
+    def _is_same_host(candidate_url: str, base_url: str) -> bool:
+        return urlparse(candidate_url).netloc.lower() == urlparse(base_url).netloc.lower()
 
     def _get_robot_parser(self, target_url: str) -> RobotFileParser | None:
         parsed = urlparse(target_url)

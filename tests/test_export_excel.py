@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from io import BytesIO
+from types import SimpleNamespace
 
 from openpyxl import load_workbook
 
@@ -212,7 +213,7 @@ def test_excel_export_with_explicit_lead_ids_preserves_scope_and_order(db_sessio
             LeadContact(
                 organization=organization,
                 lead=beta,
-                contact_type=ContactType.EMAIL,
+                contact_type="EMAIL",
                 raw_value="vendas@beta.com.br",
                 normalized_value="vendas@beta.com.br",
                 confidence=0.9,
@@ -221,7 +222,7 @@ def test_excel_export_with_explicit_lead_ids_preserves_scope_and_order(db_sessio
             LeadContact(
                 organization=organization,
                 lead=beta,
-                contact_type=ContactType.INSTAGRAM,
+                contact_type="INSTAGRAM",
                 raw_value="https://instagram.com/beta",
                 normalized_value="https://instagram.com/beta",
                 confidence=0.9,
@@ -265,6 +266,36 @@ def test_excel_export_with_explicit_lead_ids_preserves_scope_and_order(db_sessio
     assert metadata["scope_label"] == "Current filtered queue"
     assert metadata["lead_count"] == 2
     assert metadata["total_lead_count"] == 2
+
+
+def test_best_contact_value_matches_uppercase_raw_contact_type_strings() -> None:
+    lead = SimpleNamespace(
+        email=None,
+        instagram=None,
+        contacts=[
+            SimpleNamespace(
+                contact_type="EMAIL",
+                raw_value="raw@example.com",
+                normalized_value="normalized@example.com",
+                confidence=0.5,
+                is_primary=True,
+                updated_at=None,
+                id=1,
+            ),
+            SimpleNamespace(
+                contact_type="INSTAGRAM",
+                raw_value="https://instagram.com/raw",
+                normalized_value=None,
+                confidence=0.5,
+                is_primary=True,
+                updated_at=None,
+                id=2,
+            ),
+        ],
+    )
+
+    assert ExcelExportService._best_contact_value(lead, ContactType.EMAIL, None) == "normalized@example.com"
+    assert ExcelExportService._best_contact_value(lead, ContactType.INSTAGRAM, None) == "https://instagram.com/raw"
 
 
 def test_import_batch_lead_id_resolution_is_distinct_latest_and_org_scoped(db_session) -> None:

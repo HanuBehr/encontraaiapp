@@ -27,6 +27,21 @@ CONTACT_FIELD_MAP: dict[ContactType, str] = {
     ContactType.INSTAGRAM: "instagram",
 }
 
+LEAD_SORT_COLUMNS = {
+    "id": Lead.id,
+    "business_name": Lead.business_name,
+    "city": Lead.city,
+    "state": Lead.state,
+    "status": Lead.status,
+    "lead_score": Lead.lead_score,
+    "created_at": Lead.created_at,
+    "updated_at": Lead.updated_at,
+    "last_enriched_at": Lead.last_enriched_at,
+    "assigned_at": Lead.assigned_at,
+    "company_size_fit": Lead.company_size_fit,
+    "trade_type": Lead.trade_type,
+}
+
 
 class LeadRepository:
     def __init__(self, db: Session, organization_id: int | None = None) -> None:
@@ -47,7 +62,7 @@ class LeadRepository:
             select(Lead)
             .options(*self._assignment_loader_options())
             .where(*conditions)
-            .order_by(Lead.updated_at.desc(), Lead.id.desc())
+            .order_by(*self._sort_expressions(filters))
             .offset(filters.offset)
             .limit(filters.limit)
         )
@@ -61,7 +76,7 @@ class LeadRepository:
             select(Lead)
             .options(*self._export_loader_options())
             .where(*conditions)
-            .order_by(Lead.id.asc())
+            .order_by(*self._sort_expressions(filters))
         )
         return self.db.execute(query).scalars().all()
 
@@ -70,7 +85,7 @@ class LeadRepository:
         query = (
             select(Lead.id)
             .where(*self._build_filter_conditions(filters))
-            .order_by(Lead.id.asc())
+            .order_by(*self._sort_expressions(filters))
         )
         return [int(lead_id) for lead_id in self.db.execute(query).scalars().all()]
 
@@ -192,6 +207,15 @@ class LeadRepository:
         )
         return [value for value in self.db.execute(query).scalars().all() if value]
 
+    def list_distinct_states(self) -> list[str]:
+        query = (
+            select(Lead.state)
+            .where(Lead.state.is_not(None), *self._organization_conditions())
+            .distinct()
+            .order_by(Lead.state.asc())
+        )
+        return [value for value in self.db.execute(query).scalars().all() if value]
+
     def list_distinct_categories(self) -> list[str]:
         query = (
             select(Lead.category)
@@ -207,6 +231,55 @@ class LeadRepository:
             "sales_regions": self._assignment_options(SalesRegion, Lead.sales_region_id),
             "market_segments": self._assignment_options(MarketSegment, Lead.market_segment_id),
             "market_subsegments": self._assignment_options(MarketSubsegment, Lead.market_subsegment_id),
+        }
+
+    def list_v2_filter_options(self) -> dict[str, list[dict[str, object]]]:
+        organization_id = self.organization_id
+        sales_reps = self.db.execute(
+            select(SalesRep)
+            .where(SalesRep.organization_id == organization_id, SalesRep.is_active.is_(True))
+            .order_by(SalesRep.name.asc(), SalesRep.id.asc())
+        ).scalars().all()
+        sales_regions = self.db.execute(
+            select(SalesRegion)
+            .where(SalesRegion.organization_id == organization_id, SalesRegion.is_active.is_(True))
+            .order_by(SalesRegion.name.asc(), SalesRegion.id.asc())
+        ).scalars().all()
+        market_segments = self.db.execute(
+            select(MarketSegment)
+            .where(MarketSegment.organization_id == organization_id, MarketSegment.is_active.is_(True))
+            .order_by(MarketSegment.sort_order.asc(), MarketSegment.name.asc(), MarketSegment.id.asc())
+        ).scalars().all()
+        market_subsegments = self.db.execute(
+            select(MarketSubsegment)
+            .where(MarketSubsegment.organization_id == organization_id, MarketSubsegment.is_active.is_(True))
+            .order_by(MarketSubsegment.sort_order.asc(), MarketSubsegment.name.asc(), MarketSubsegment.id.asc())
+        ).scalars().all()
+        return {
+            "assigned_reps": [{"id": rep.id, "name": rep.name} for rep in sales_reps],
+            "sales_regions": [
+                {
+                    "id": region.id,
+                    "name": region.name,
+                    "region_type": region.region_type,
+                    "state": region.state,
+                    "code": region.code,
+                }
+                for region in sales_regions
+            ],
+            "market_segments": [
+                {"id": segment.id, "key": segment.key, "name": segment.name}
+                for segment in market_segments
+            ],
+            "market_subsegments": [
+                {
+                    "id": subsegment.id,
+                    "key": subsegment.key,
+                    "name": subsegment.name,
+                    "market_segment_id": subsegment.segment_id,
+                }
+                for subsegment in market_subsegments
+            ],
         }
 
     def get_overview_snapshot(self, recent_limit: int = 10) -> tuple[dict[str, int], list[Lead]]:
@@ -430,6 +503,8 @@ class LeadRepository:
 
         if filters.city:
             conditions.append(Lead.city.ilike(filters.city))
+        if filters.state:
+            conditions.append(Lead.state.ilike(filters.state))
         if filters.status:
             conditions.append(Lead.status == filters.status)
         if filters.category:
@@ -452,6 +527,11 @@ class LeadRepository:
             conditions.append(Lead.whatsapp != "")
         elif filters.has_whatsapp is False:
             conditions.append(or_(Lead.whatsapp.is_(None), Lead.whatsapp == ""))
+        if filters.has_instagram is True:
+            conditions.append(Lead.instagram.is_not(None))
+            conditions.append(Lead.instagram != "")
+        elif filters.has_instagram is False:
+            conditions.append(or_(Lead.instagram.is_(None), Lead.instagram == ""))
         if filters.sales_region_id is not None:
             conditions.append(Lead.sales_region_id == filters.sales_region_id)
         if filters.market_segment_id is not None:
@@ -470,6 +550,19 @@ class LeadRepository:
             conditions.append(Lead.trade_type == filters.trade_type.value)
 
         return conditions
+
+    @staticmethod
+    def _sort_expressions(filters: LeadListFilters) -> list[object]:
+        sort_column = LEAD_SORT_COLUMNS.get(filters.sort_by, Lead.updated_at)
+        if filters.sort_dir == "asc":
+            primary_sort = sort_column.asc()
+            id_sort = Lead.id.asc()
+        else:
+            primary_sort = sort_column.desc()
+            id_sort = Lead.id.desc()
+        if filters.sort_by == "id":
+            return [primary_sort]
+        return [primary_sort, id_sort]
 
     def _organization_conditions(self) -> list[object]:
         if self._include_unassigned_leads:

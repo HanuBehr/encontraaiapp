@@ -3,13 +3,25 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable
-from urllib.parse import parse_qs, urljoin, urlparse
+from html import unescape
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import phonenumbers
 
 
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
+_EMAIL_AT_TOKEN = r"(?:@|\[\s*at\s*\]|\(\s*at\s*\)|\[\s*arroba\s*\]|\(\s*arroba\s*\)|\s+at\s+|\s+arroba\s+)"
+_EMAIL_DOT_TOKEN = r"(?:\.|\[\s*dot\s*\]|\(\s*dot\s*\)|\[\s*ponto\s*\]|\(\s*ponto\s*\)|\s+dot\s+|\s+ponto\s+)"
+_EMAIL_OBFUSCATED_RE = re.compile(
+    rf"\b(?P<local>[A-Z0-9._%+\-]{{2,}})"
+    rf"\s*{_EMAIL_AT_TOKEN}\s*"
+    rf"(?P<domain>[A-Z0-9\-]+(?:\s*{_EMAIL_DOT_TOKEN}\s*[A-Z0-9\-]+)*)"
+    rf"\s*{_EMAIL_DOT_TOKEN}\s*"
+    rf"(?P<tld>[A-Z]{{2,}}(?:\s*{_EMAIL_DOT_TOKEN}\s*[A-Z]{{2,}})?)\b",
+    re.IGNORECASE,
+)
+_EMAIL_DOT_TOKEN_RE = re.compile(_EMAIL_DOT_TOKEN, re.IGNORECASE)
 _PHONE_RE = re.compile(
     r"(?:(?:\+?55)\s*)?(?:\(?\d{2}\)?\s*)?(?:9?\d{4})[\s\-]?\d{4}",
     re.IGNORECASE,
@@ -114,7 +126,8 @@ def normalize_phone_br(value: str | None) -> str | None:
 def clean_email(value: str | None) -> str | None:
     if not value:
         return None
-    return value.strip().lower() or None
+    decoded = unquote(unescape(value))
+    return decoded.strip().strip("<>()[]{}\"'.,;:").lower() or None
 
 
 def unique_preserve_order(values: Iterable[str]) -> list[str]:
@@ -128,11 +141,30 @@ def unique_preserve_order(values: Iterable[str]) -> list[str]:
 
 
 def extract_emails(text: str) -> list[str]:
+    decoded_text = unquote(unescape(text or ""))
     return unique_preserve_order(
         email
-        for email in (clean_email(match.group(0)) for match in _EMAIL_RE.finditer(text or ""))
+        for email in (clean_email(match.group(0)) for match in _EMAIL_RE.finditer(decoded_text))
         if email
     )
+
+
+def _normalize_obfuscated_email_part(value: str) -> str:
+    dotted = _EMAIL_DOT_TOKEN_RE.sub(".", value)
+    return re.sub(r"\s+", "", dotted).strip(".").lower()
+
+
+def extract_obfuscated_emails(text: str) -> list[str]:
+    decoded_text = unquote(unescape(text or ""))
+    candidates: list[str] = []
+    for match in _EMAIL_OBFUSCATED_RE.finditer(decoded_text):
+        local = (match.group("local") or "").strip().lower()
+        domain = _normalize_obfuscated_email_part(match.group("domain") or "")
+        tld = _normalize_obfuscated_email_part(match.group("tld") or "")
+        email = clean_email(f"{local}@{domain}.{tld}")
+        if email and _EMAIL_RE.fullmatch(email):
+            candidates.append(email)
+    return unique_preserve_order(candidates)
 
 
 def extract_phone_candidates(text: str) -> list[tuple[str, str]]:
