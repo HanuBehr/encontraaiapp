@@ -33,6 +33,7 @@ LeadSortBy = Literal[
     "trade_type",
 ]
 LeadSortDir = Literal["asc", "desc"]
+LeadBlockedFilter = Literal["exclude", "include", "only"]
 
 
 class SalesRegionRead(ORMBaseModel):
@@ -97,6 +98,10 @@ class LeadSummary(ORMBaseModel):
     assigned_sales_rep_id: int | None = None
     assignment_rule_id: int | None = None
     assigned_at: datetime | None = None
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+    blocked_rule_id: int | None = None
+    blocked_at: datetime | None = None
     company_size_fit: CompanySizeFit = CompanySizeFit.UNKNOWN
     company_size_fit_explanation: str | None = None
     trade_type: TradeType = TradeType.UNKNOWN
@@ -202,6 +207,7 @@ class LeadListFilters(BaseModel):
     has_assignment: bool | None = None
     company_size_fit: CompanySizeFit | None = None
     trade_type: TradeType | None = None
+    blocked: LeadBlockedFilter = "exclude"
     sort_by: LeadSortBy = "updated_at"
     sort_dir: LeadSortDir = "desc"
     limit: int = Field(default=100, ge=1, le=500)

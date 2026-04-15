@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session
 from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TradeType
-from app.schemas.lead import LeadListFilters, LeadScopeRequest, LeadSortBy, LeadSortDir
+from app.schemas.lead import LeadBlockedFilter, LeadListFilters, LeadScopeRequest, LeadSortBy, LeadSortDir
 from app.services.export_excel import ExcelExportService
 from app.services.lead_scope import LeadScopeResolver
 
@@ -33,6 +33,7 @@ def export_excel(
     has_assignment: bool | None = Query(default=None),
     company_size_fit: CompanySizeFit | None = Query(default=None),
     trade_type: TradeType | None = Query(default=None),
+    blocked: LeadBlockedFilter = Query(default="exclude"),
     sort_by: LeadSortBy = Query(default="updated_at"),
     sort_dir: LeadSortDir = Query(default="desc"),
     db: Session = Depends(get_db_session),
@@ -56,6 +57,7 @@ def export_excel(
         has_assignment=has_assignment,
         company_size_fit=company_size_fit,
         trade_type=trade_type,
+        blocked=blocked,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )

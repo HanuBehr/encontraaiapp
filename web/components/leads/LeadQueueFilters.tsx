@@ -135,6 +135,13 @@ export function LeadQueueFilters({
           onChange={(value) => updateFilter("hasInstagram", value as QueueFilters["hasInstagram"])}
           options={booleanOptions}
         />
+        <SelectField
+          label="Blocked"
+          value={filters.blocked}
+          onChange={(value) => updateFilter("blocked", value as QueueFilters["blocked"])}
+          options={blockedOptions}
+          emptyLabel={null}
+        />
       </div>
     </section>
   );
@@ -145,9 +152,10 @@ type SelectFieldProps = {
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
+  emptyLabel?: string | null;
 };
 
-function SelectField({ label, value, options, onChange }: SelectFieldProps) {
+function SelectField({ label, value, options, onChange, emptyLabel = "Any" }: SelectFieldProps) {
   return (
     <label className="block">
       <span className="text-xs font-medium text-neutral-600">{label}</span>
@@ -156,7 +164,7 @@ function SelectField({ label, value, options, onChange }: SelectFieldProps) {
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm text-neutral-950"
       >
-        <option value="">Any</option>
+        {emptyLabel === null ? null : <option value="">{emptyLabel}</option>}
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -171,6 +179,12 @@ const booleanOptions = [
   { value: "any", label: "Any" },
   { value: "yes", label: "Yes" },
   { value: "no", label: "No" },
+];
+
+const blockedOptions = [
+  { value: "exclude", label: "Hide blocked" },
+  { value: "include", label: "Include blocked" },
+  { value: "only", label: "Only blocked" },
 ];
 
 function labelToken(value: string) {

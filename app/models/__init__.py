@@ -5,6 +5,7 @@ from app.models.import_batch import ImportBatch
 from app.models.lead import Lead
 from app.models.lead_contact import LeadContact
 from app.models.lead_enrichment_record import LeadEnrichmentRecord
+from app.models.lead_exclusion_rule import LeadExclusionRule
 from app.models.market_taxonomy import MarketSegment, MarketSubsegment
 from app.models.organization import Organization
 from app.models.outreach import OutreachDraft, OutreachMessage, OutreachTemplate
@@ -20,6 +21,7 @@ __all__ = [
     "Lead",
     "LeadContact",
     "LeadEnrichmentRecord",
+    "LeadExclusionRule",
     "MarketSegment",
     "MarketSubsegment",
     "Organization",

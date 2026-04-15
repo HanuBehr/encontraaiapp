@@ -37,6 +37,7 @@ class Lead(TimestampMixin, Base):
         Index("ix_leads_org_assignment_rule", "organization_id", "assignment_rule_id"),
         Index("ix_leads_org_company_size_fit", "organization_id", "company_size_fit"),
         Index("ix_leads_org_trade_type", "organization_id", "trade_type"),
+        Index("ix_leads_org_is_blocked", "organization_id", "is_blocked"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -102,6 +103,10 @@ class Lead(TimestampMixin, Base):
     trade_type_explanation: Mapped[str | None] = mapped_column(Text)
     trade_type_metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     quality_classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    blocked_reason: Mapped[str | None] = mapped_column(Text)
+    blocked_rule_id: Mapped[int | None] = mapped_column(ForeignKey("lead_exclusion_rules.id"), index=True)
+    blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     organization: Mapped["Organization | None"] = relationship("Organization", back_populates="leads")
     sales_region: Mapped["SalesRegion | None"] = relationship("SalesRegion", back_populates="assigned_leads")
@@ -112,6 +117,7 @@ class Lead(TimestampMixin, Base):
     )
     assigned_sales_rep: Mapped["SalesRep | None"] = relationship("SalesRep", back_populates="assigned_leads")
     assignment_rule: Mapped["AssignmentRule | None"] = relationship("AssignmentRule", back_populates="assigned_leads")
+    blocked_rule: Mapped["LeadExclusionRule | None"] = relationship("LeadExclusionRule", back_populates="blocked_leads")
     duplicate_of: Mapped["Lead | None"] = relationship(
         "Lead",
         remote_side=lambda: [Lead.id],

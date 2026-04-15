@@ -17,7 +17,7 @@ from app.models.sales_region import SalesRegion
 from app.models.sales_rep import SalesRep
 from app.repositories.organization_repository import get_or_create_default_organization
 from app.schemas.discovery import DiscoveryLeadCandidate
-from app.schemas.lead import LeadListFilters
+from app.schemas.lead import LeadBlockedFilter, LeadListFilters
 
 
 CONTACT_FIELD_MAP: dict[ContactType, str] = {
@@ -150,21 +150,36 @@ class LeadRepository:
         )
         return self.db.execute(query).scalars().all()
 
-    def list_export_leads_by_ids(self, lead_ids: Iterable[int]) -> list[Lead]:
+    def list_export_leads_by_ids(
+        self,
+        lead_ids: Iterable[int],
+        *,
+        blocked: LeadBlockedFilter = "exclude",
+    ) -> list[Lead]:
         normalized_ids = list(dict.fromkeys(int(lead_id) for lead_id in lead_ids))
         if not normalized_ids:
             return []
+        conditions: list[object] = [
+            Lead.id.in_(normalized_ids),
+            *self._organization_conditions(),
+            *self._blocked_conditions(blocked),
+        ]
         query = (
             select(Lead)
             .options(*self._export_loader_options())
-            .where(Lead.id.in_(normalized_ids), *self._organization_conditions())
+            .where(*conditions)
             .execution_options(populate_existing=True)
         )
         leads = self.db.execute(query).scalars().all()
         order = {lead_id: index for index, lead_id in enumerate(normalized_ids)}
         return sorted(leads, key=lambda lead: order.get(lead.id, len(order)))
 
-    def list_recent_import_batches(self, limit: int = 25) -> list[ImportBatch]:
+    def list_recent_import_batches(
+        self,
+        limit: int = 25,
+        *,
+        blocked: LeadBlockedFilter = "exclude",
+    ) -> list[ImportBatch]:
         query = (
             select(ImportBatch)
             .join(RawDiscoveryRecord, RawDiscoveryRecord.import_batch_id == ImportBatch.id)
@@ -173,6 +188,7 @@ class LeadRepository:
                 ImportBatch.status == ImportBatchStatus.COMPLETED,
                 RawDiscoveryRecord.lead_id.is_not(None),
                 *self._organization_conditions(),
+                *self._blocked_conditions(blocked),
             )
             .distinct()
             .order_by(ImportBatch.completed_at.desc(), ImportBatch.id.desc())
@@ -180,11 +196,20 @@ class LeadRepository:
         )
         return self.db.execute(query).scalars().all()
 
-    def get_latest_completed_import_batch(self) -> ImportBatch | None:
-        batches = self.list_recent_import_batches(limit=1)
+    def get_latest_completed_import_batch(
+        self,
+        *,
+        blocked: LeadBlockedFilter = "exclude",
+    ) -> ImportBatch | None:
+        batches = self.list_recent_import_batches(limit=1, blocked=blocked)
         return batches[0] if batches else None
 
-    def list_lead_ids_for_import_batch(self, batch_id: int) -> list[int]:
+    def list_lead_ids_for_import_batch(
+        self,
+        batch_id: int,
+        *,
+        blocked: LeadBlockedFilter = "exclude",
+    ) -> list[int]:
         query = (
             select(RawDiscoveryRecord.lead_id)
             .join(Lead, RawDiscoveryRecord.lead_id == Lead.id)
@@ -192,6 +217,7 @@ class LeadRepository:
                 RawDiscoveryRecord.import_batch_id == batch_id,
                 RawDiscoveryRecord.lead_id.is_not(None),
                 *self._organization_conditions(),
+                *self._blocked_conditions(blocked),
             )
             .order_by(RawDiscoveryRecord.created_at.asc(), RawDiscoveryRecord.id.asc())
         )
@@ -201,7 +227,7 @@ class LeadRepository:
     def list_distinct_cities(self) -> list[str]:
         query = (
             select(Lead.city)
-            .where(Lead.city.is_not(None), *self._organization_conditions())
+            .where(Lead.city.is_not(None), *self._organization_conditions(), *self._blocked_conditions("exclude"))
             .distinct()
             .order_by(Lead.city.asc())
         )
@@ -210,7 +236,7 @@ class LeadRepository:
     def list_distinct_states(self) -> list[str]:
         query = (
             select(Lead.state)
-            .where(Lead.state.is_not(None), *self._organization_conditions())
+            .where(Lead.state.is_not(None), *self._organization_conditions(), *self._blocked_conditions("exclude"))
             .distinct()
             .order_by(Lead.state.asc())
         )
@@ -219,7 +245,7 @@ class LeadRepository:
     def list_distinct_categories(self) -> list[str]:
         query = (
             select(Lead.category)
-            .where(Lead.category.is_not(None), *self._organization_conditions())
+            .where(Lead.category.is_not(None), *self._organization_conditions(), *self._blocked_conditions("exclude"))
             .distinct()
             .order_by(Lead.category.asc())
         )
@@ -283,7 +309,7 @@ class LeadRepository:
         }
 
     def get_overview_snapshot(self, recent_limit: int = 10) -> tuple[dict[str, int], list[Lead]]:
-        conditions = self._organization_conditions()
+        conditions = [*self._organization_conditions(), *self._blocked_conditions("exclude")]
         metrics_query = select(
             func.count(Lead.id).label("total"),
             func.coalesce(
@@ -349,6 +375,7 @@ class LeadRepository:
             )
             self.db.add(lead)
             self.db.flush()
+            self._apply_exclusion_rules(lead)
             return lead, created
 
         if lead.organization_id is None and self._include_unassigned_leads:
@@ -371,6 +398,7 @@ class LeadRepository:
         self._fill_if_missing(lead, "google_place_id", candidate.google_place_id)
         self._fill_if_missing(lead, "source_provider", candidate.source_provider)
         self._fill_if_missing(lead, "source_url", candidate.source_url)
+        self._apply_exclusion_rules(lead)
         self.db.flush()
         return lead, created
 
@@ -548,8 +576,17 @@ class LeadRepository:
             conditions.append(Lead.company_size_fit == filters.company_size_fit.value)
         if filters.trade_type is not None:
             conditions.append(Lead.trade_type == filters.trade_type.value)
+        conditions.extend(self._blocked_conditions(filters.blocked))
 
         return conditions
+
+    @staticmethod
+    def _blocked_conditions(blocked: LeadBlockedFilter) -> list[object]:
+        if blocked == "include":
+            return []
+        if blocked == "only":
+            return [Lead.is_blocked.is_(True)]
+        return [Lead.is_blocked.is_(False)]
 
     @staticmethod
     def _sort_expressions(filters: LeadListFilters) -> list[object]:
@@ -618,7 +655,7 @@ class LeadRepository:
         query = (
             select(model.id, model.name)
             .join(Lead, lead_field == model.id)
-            .where(*self._organization_conditions())
+            .where(*self._organization_conditions(), *self._blocked_conditions("exclude"))
             .distinct()
             .order_by(model.name.asc(), model.id.asc())
         )
@@ -656,3 +693,8 @@ class LeadRepository:
         current_value = getattr(lead, field_name)
         if current_value in (None, "", [], {}):
             setattr(lead, field_name, new_value)
+
+    def _apply_exclusion_rules(self, lead: Lead) -> None:
+        from app.services.exclusion_rules import ExclusionRuleService
+
+        ExclusionRuleService(self.db, organization_id=lead.organization_id or self.organization_id).apply_to_lead(lead)

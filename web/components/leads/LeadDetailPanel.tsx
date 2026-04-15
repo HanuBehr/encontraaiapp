@@ -49,10 +49,18 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
     <aside className="rounded-md border border-neutral-200 bg-white">
       <div className="border-b border-neutral-200 p-4">
         <p className="text-xs font-semibold uppercase text-cyan-700">Lead detail</p>
-        <h2 className="mt-1 text-lg font-semibold text-neutral-950">{lead.business_name}</h2>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold text-neutral-950">{lead.business_name}</h2>
+          {lead.is_blocked ? <BlockedBadge /> : null}
+        </div>
         <p className="mt-1 text-sm text-neutral-500">
           {[lead.category, lead.city, lead.state].filter(Boolean).join(" - ") || "No location"}
         </p>
+        {lead.is_blocked ? (
+          <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            {lead.blocked_reason ?? "Matched an active exclusion rule."}
+          </p>
+        ) : null}
       </div>
 
       <div className="divide-y divide-neutral-200">
@@ -175,6 +183,14 @@ function InfoItem({ label, value }: { label: string; value?: string | null }) {
       <dt className="text-xs font-medium text-neutral-500">{label}</dt>
       <dd className="mt-1 break-words text-sm text-neutral-900">{value || "None"}</dd>
     </div>
+  );
+}
+
+function BlockedBadge() {
+  return (
+    <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">
+      Blocked
+    </span>
   );
 }
 

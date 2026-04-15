@@ -75,8 +75,14 @@ export function LeadQueueTable({
         header: ({ column }) => <SortHeader column={column} label="Company" />,
         cell: ({ row }) => (
           <div>
-            <p className="font-medium text-neutral-950">{row.original.business_name}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium text-neutral-950">{row.original.business_name}</p>
+              {row.original.is_blocked ? <BlockedBadge /> : null}
+            </div>
             <p className="text-xs text-neutral-500">{row.original.category ?? "No category"}</p>
+            {row.original.is_blocked && row.original.blocked_reason ? (
+              <p className="mt-1 line-clamp-2 text-xs text-rose-700">{row.original.blocked_reason}</p>
+            ) : null}
           </div>
         ),
       },
@@ -280,6 +286,14 @@ function Badge({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
       {children}
+    </span>
+  );
+}
+
+function BlockedBadge() {
+  return (
+    <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">
+      Blocked
     </span>
   );
 }

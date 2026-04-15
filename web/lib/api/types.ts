@@ -35,6 +35,7 @@ export type LeadSortBy =
   | "trade_type";
 
 export type LeadSortDir = "asc" | "desc";
+export type LeadBlockedFilter = "exclude" | "include" | "only";
 
 export type SalesRegionRead = {
   id: number;
@@ -98,6 +99,10 @@ export type LeadSummary = {
   assigned_sales_rep_id: number | null;
   assignment_rule_id: number | null;
   assigned_at: string | null;
+  is_blocked: boolean;
+  blocked_reason: string | null;
+  blocked_rule_id: number | null;
+  blocked_at: string | null;
   company_size_fit: CompanySizeFit;
   company_size_fit_explanation: string | null;
   trade_type: TradeType;
@@ -192,6 +197,7 @@ export type LeadListParams = {
   has_assignment?: boolean;
   company_size_fit?: CompanySizeFit;
   trade_type?: TradeType;
+  blocked?: LeadBlockedFilter;
   sort_by?: LeadSortBy;
   sort_dir?: LeadSortDir;
   limit?: number;
@@ -201,6 +207,111 @@ export type LeadListParams = {
 export type LeadListResponse = {
   total: number;
   items: LeadSummary[];
+};
+
+export type LeadScopeRequest =
+  | {
+      lead_ids: number[];
+      filters?: never;
+      latest_import_batch?: false;
+    }
+  | {
+      lead_ids?: never;
+      filters: LeadListParams;
+      latest_import_batch?: false;
+    }
+  | {
+      lead_ids?: never;
+      filters?: never;
+      latest_import_batch: true;
+    };
+
+export type LeadImportBatchResponse = {
+  id: number;
+  batch_type: string;
+  status: string;
+  source_provider: string | null;
+  source_query: string | null;
+  location_label: string | null;
+  record_count: number;
+  lead_count: number;
+  lead_ids: number[];
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeadScopeResolveResponse = {
+  scope_type: string;
+  scope_label: string;
+  total: number;
+  lead_ids: number[];
+  missing_lead_ids: number[];
+  import_batch: LeadImportBatchResponse | null;
+};
+
+export type LeadBatchEnrichmentSummary = {
+  scope_label: string | null;
+  requested: number;
+  processed: number;
+  contacts_added: number;
+  emails_found: number;
+  instagrams_found: number;
+  whatsapps_found: number;
+  contact_forms_found: number;
+  skipped: number;
+  skipped_no_website: number;
+  errors: number;
+  error_messages: string[];
+  pages_attempted: number;
+  pages_fetched: number;
+};
+
+export type LeadBatchEnrichmentResponse = {
+  processed: number;
+  results: Array<{
+    lead_id: number;
+    business_name: string;
+    pages_attempted: number;
+    pages_fetched: number;
+    contacts_added: number;
+    contacts_added_by_type: Record<string, number>;
+    fields_updated: string[];
+    last_enriched_at: string;
+    material_profile: Record<string, unknown>;
+    skipped_reason: string | null;
+  }>;
+  summary: LeadBatchEnrichmentSummary;
+};
+
+export type LeadBatchAssignmentResponse = {
+  processed: number;
+  changed: number;
+  dry_run: boolean;
+  results: Array<{
+    lead_id: number;
+    changed_fields: string[];
+    suggestion: {
+      sales_region_id: number | null;
+      market_segment_id: number | null;
+      market_subsegment_id: number | null;
+      assigned_sales_rep_id: number | null;
+      assignment_rule_id: number | null;
+      explanation: string | null;
+      metadata: Record<string, unknown>;
+    };
+  }>;
+  summary: {
+    scope_type: string;
+    scope_label: string;
+    requested: number;
+    processed: number;
+    changed: number;
+    overwrite: boolean;
+    dry_run: boolean;
+    missing_lead_ids: number[];
+  };
 };
 
 export type LeadNamedOption = {

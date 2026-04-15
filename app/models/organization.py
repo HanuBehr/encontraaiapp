@@ -32,3 +32,7 @@ class Organization(TimestampMixin, Base):
     sales_regions: Mapped[list["SalesRegion"]] = relationship("SalesRegion", back_populates="organization")
     market_segments: Mapped[list["MarketSegment"]] = relationship("MarketSegment", back_populates="organization")
     assignment_rules: Mapped[list["AssignmentRule"]] = relationship("AssignmentRule", back_populates="organization")
+    lead_exclusion_rules: Mapped[list["LeadExclusionRule"]] = relationship(
+        "LeadExclusionRule",
+        back_populates="organization",
+    )

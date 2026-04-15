@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, SortingState } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 
+import { LeadBatchActions } from "@/components/leads/LeadBatchActions";
 import { LeadDetailPanel } from "@/components/leads/LeadDetailPanel";
 import { LeadQueueFilters } from "@/components/leads/LeadQueueFilters";
 import { LeadQueueTable } from "@/components/leads/LeadQueueTable";
@@ -52,6 +53,7 @@ export function LeadOperationsWorkspace() {
       has_email: booleanFilterValue(filters.hasEmail),
       has_whatsapp: booleanFilterValue(filters.hasWhatsapp),
       has_instagram: booleanFilterValue(filters.hasInstagram),
+      blocked: filters.blocked,
       sort_by: sortBy,
       sort_dir: sortDir,
       limit: searchMode ? SEARCH_FETCH_LIMIT : pageSize,
@@ -76,8 +78,10 @@ export function LeadOperationsWorkspace() {
   const pageItems = searchTerm
     ? searchedItems.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize)
     : searchedItems;
-  const total = searchTerm ? searchedItems.length : leadsQuery.data?.total ?? 0;
+  const currentFilteredTotal = leadsQuery.data?.total ?? 0;
+  const total = searchTerm ? searchedItems.length : currentFilteredTotal;
   const selectedCount = Object.values(rowSelection).filter(Boolean).length;
+  const selectedLeadIds = selectedLeadIdsFromSelection(rowSelection);
   const selectedLeadId = firstSelectedLeadId(rowSelection);
   const detailLeadId = activeLeadId ?? selectedLeadId;
 
@@ -143,6 +147,13 @@ export function LeadOperationsWorkspace() {
         </p>
       ) : null}
 
+      <LeadBatchActions
+        selectedLeadIds={selectedLeadIds}
+        currentFilters={queryParams}
+        currentTotal={currentFilteredTotal}
+        searchActive={Boolean(searchTerm)}
+      />
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
         <LeadQueueTable
           leads={pageItems}
@@ -175,12 +186,18 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function firstSelectedLeadId(rowSelection: RowSelectionState) {
-  const selectedId = Object.entries(rowSelection).find(([, selected]) => selected)?.[0];
+  const selectedId = selectedLeadIdsFromSelection(rowSelection)[0];
   if (!selectedId) {
     return null;
   }
-  const parsed = Number(selectedId);
-  return Number.isFinite(parsed) ? parsed : null;
+  return selectedId;
+}
+
+function selectedLeadIdsFromSelection(rowSelection: RowSelectionState) {
+  return Object.entries(rowSelection)
+    .filter(([, selected]) => selected)
+    .map(([leadId]) => Number(leadId))
+    .filter((leadId) => Number.isFinite(leadId));
 }
 
 function leadMatchesSearch(lead: LeadSummary, searchTerm: string) {
@@ -201,6 +218,8 @@ function leadMatchesSearch(lead: LeadSummary, searchTerm: string) {
     lead.market_subsegment?.name,
     lead.company_size_fit,
     lead.trade_type,
+    lead.is_blocked ? "blocked" : "unblocked",
+    lead.blocked_reason,
   ]
     .filter(Boolean)
     .join(" ")

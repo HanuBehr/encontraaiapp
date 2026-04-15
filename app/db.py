@@ -67,6 +67,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     if engine.dialect.name == "sqlite":
         _ensure_sqlite_lead_quality_columns()
+        _ensure_sqlite_lead_exclusion_columns()
 
 
 def _ensure_sqlite_lead_quality_columns() -> None:
@@ -82,6 +83,33 @@ def _ensure_sqlite_lead_quality_columns() -> None:
     indexes = {
         "ix_leads_org_company_size_fit": "organization_id, company_size_fit",
         "ix_leads_org_trade_type": "organization_id, trade_type",
+    }
+    with engine.begin() as connection:
+        existing_columns = {
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(leads)").fetchall()
+        }
+        for name, definition in columns.items():
+            if name not in existing_columns:
+                connection.exec_driver_sql(f"ALTER TABLE leads ADD COLUMN {name} {definition}")
+
+        for name, column_list in indexes.items():
+            connection.exec_driver_sql(
+                f"CREATE INDEX IF NOT EXISTS {name} ON leads ({column_list})"
+            )
+
+
+def _ensure_sqlite_lead_exclusion_columns() -> None:
+    columns = {
+        "is_blocked": "BOOLEAN NOT NULL DEFAULT 0",
+        "blocked_reason": "TEXT",
+        "blocked_rule_id": "INTEGER",
+        "blocked_at": "DATETIME",
+    }
+    indexes = {
+        "ix_leads_org_is_blocked": "organization_id, is_blocked",
+        "ix_leads_blocked_rule_id": "blocked_rule_id",
+        "ix_leads_blocked_at": "blocked_at",
     }
     with engine.begin() as connection:
         existing_columns = {

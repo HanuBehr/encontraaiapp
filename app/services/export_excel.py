@@ -91,7 +91,7 @@ class ExcelExportService:
             leads = self.lead_repository.list_all_leads(filters)
         else:
             requested_ids = list(dict.fromkeys(int(lead_id) for lead_id in lead_ids))
-            leads = self.lead_repository.list_export_leads_by_ids(requested_ids)
+            leads = self.lead_repository.list_export_leads_by_ids(requested_ids, blocked=filters.blocked)
         lead_ids = [lead.id for lead in leads]
         scope_metadata = dict(scope_metadata or {})
         if explicit_lead_ids:

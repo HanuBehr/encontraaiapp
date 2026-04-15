@@ -16,6 +16,8 @@ def _seed_lead(
     do_not_contact: bool = False,
     company_size_fit: CompanySizeFit = CompanySizeFit.UNKNOWN,
     trade_type: TradeType = TradeType.UNKNOWN,
+    is_blocked: bool = False,
+    blocked_reason: str | None = None,
 ) -> Lead:
     lead = Lead(
         business_name=business_name,
@@ -30,6 +32,8 @@ def _seed_lead(
         do_not_contact=do_not_contact,
         company_size_fit=company_size_fit.value,
         trade_type=trade_type.value,
+        is_blocked=is_blocked,
+        blocked_reason=blocked_reason,
     )
     db_session.add(lead)
     db_session.commit()
@@ -85,6 +89,33 @@ def test_list_leads_with_quality_filters(client, db_session) -> None:
     assert payload["items"][0]["business_name"] == "Casa de Tintas A"
     assert payload["items"][0]["company_size_fit"] == "ideal_sme"
     assert payload["items"][0]["trade_type"] == "varejo"
+
+
+def test_list_leads_blocked_filter_and_metadata(client, db_session) -> None:
+    _seed_lead(db_session, business_name="Loja Permitida", city="Campinas")
+    _seed_lead(
+        db_session,
+        business_name="Rede Bloqueada",
+        city="Campinas",
+        is_blocked=True,
+        blocked_reason="Known large chain",
+    )
+
+    default_response = client.get("/leads")
+    include_response = client.get("/leads", params={"blocked": "include"})
+    only_response = client.get("/leads", params={"blocked": "only"})
+
+    assert default_response.status_code == 200
+    assert default_response.json()["total"] == 1
+    assert default_response.json()["items"][0]["business_name"] == "Loja Permitida"
+    assert include_response.status_code == 200
+    assert include_response.json()["total"] == 2
+    blocked_item = next(item for item in include_response.json()["items"] if item["business_name"] == "Rede Bloqueada")
+    assert blocked_item["is_blocked"] is True
+    assert blocked_item["blocked_reason"] == "Known large chain"
+    assert only_response.status_code == 200
+    assert only_response.json()["total"] == 1
+    assert only_response.json()["items"][0]["business_name"] == "Rede Bloqueada"
 
 
 def test_get_and_update_lead(client, db_session) -> None:

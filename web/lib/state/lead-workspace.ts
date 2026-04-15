@@ -1,4 +1,4 @@
-import type { CompanySizeFit, LeadStatus, TradeType } from "@/lib/api/types";
+import type { CompanySizeFit, LeadBlockedFilter, LeadStatus, TradeType } from "@/lib/api/types";
 
 export type BooleanFilter = "any" | "yes" | "no";
 
@@ -16,6 +16,7 @@ export type QueueFilters = {
   hasEmail: BooleanFilter;
   hasWhatsapp: BooleanFilter;
   hasInstagram: BooleanFilter;
+  blocked: LeadBlockedFilter;
 };
 
 export const defaultQueueFilters: QueueFilters = {
@@ -32,6 +33,7 @@ export const defaultQueueFilters: QueueFilters = {
   hasEmail: "any",
   hasWhatsapp: "any",
   hasInstagram: "any",
+  blocked: "exclude",
 };
 
 export function booleanFilterValue(value: BooleanFilter): boolean | undefined {
