@@ -81,6 +81,11 @@ TRADE_TYPE_LABELS = {
 }
 COMPANY_SIZE_FIT_FILTER_OPTIONS = ["All"] + [item.value for item in CompanySizeFit]
 TRADE_TYPE_FILTER_OPTIONS = ["All"] + [item.value for item in TradeType]
+BLOCKED_FILTER_OPTIONS = {
+    "Hide blocked": "exclude",
+    "Include blocked": "include",
+    "Only blocked": "only",
+}
 EXPORT_SCOPE_FILTERED_QUEUE = "Current filtered queue"
 EXPORT_SCOPE_SAVED_QUEUE = "Current saved working queue"
 EXPORT_SCOPE_LATEST_BATCH = "Latest import batch"
@@ -1020,6 +1025,7 @@ def _init_session_state() -> None:
         "lead_filter_market_segment_id": None,
         "lead_filter_company_size_fit": "All",
         "lead_filter_trade_type": "All",
+        "lead_filter_blocked": "Hide blocked",
         "leads_has_assignment": "Any",
         "leads_has_email": "Any",
         "leads_has_whatsapp": "Any",
@@ -2119,6 +2125,7 @@ def _reset_queue_filters() -> None:
     st.session_state["lead_filter_market_segment_id"] = None
     st.session_state["lead_filter_company_size_fit"] = "All"
     st.session_state["lead_filter_trade_type"] = "All"
+    st.session_state["lead_filter_blocked"] = "Hide blocked"
     st.session_state["leads_has_assignment"] = "Any"
     st.session_state["leads_has_email"] = "Any"
     st.session_state["leads_has_whatsapp"] = "Any"
@@ -2170,6 +2177,7 @@ def _queue_filter_badges(
     selected_market_segment: str | None,
     selected_company_size_fit: str,
     selected_trade_type: str,
+    selected_blocked: str,
     has_email: bool | None,
     has_whatsapp: bool | None,
     has_assignment: bool | None,
@@ -2202,6 +2210,10 @@ def _queue_filter_badges(
         badges.append((f"Target fit: {_company_size_fit_label(selected_company_size_fit)}", "neutral"))
     if selected_trade_type != "All":
         badges.append((f"Trade: {_trade_type_label(selected_trade_type)}", "neutral"))
+    if selected_blocked == "Include blocked":
+        badges.append(("Including blocked leads", "warn"))
+    elif selected_blocked == "Only blocked":
+        badges.append(("Only blocked leads", "danger"))
     if has_assignment is True:
         badges.append(("Assigned leads only", "good"))
     elif has_assignment is False:
@@ -2278,6 +2290,7 @@ def _prepare_queue_display(filtered_leads: list[LeadSummary]) -> tuple[pd.DataFr
                 "Follow-up": lead.follow_up_date,
                 "Last enriched": lead.last_enriched_at,
                 "DNC": lead.do_not_contact,
+                "Blocked": lead.is_blocked,
             }
         )
 
@@ -2302,6 +2315,7 @@ def _lead_table_rows(leads: list[LeadSummary]) -> list[dict]:
             "Follow-up": lead.follow_up_date,
             "Last enriched": lead.last_enriched_at,
             "DNC": lead.do_not_contact,
+            "Blocked": lead.is_blocked,
         }
         for lead in leads
     ]
@@ -3049,6 +3063,8 @@ elif page == "Leads":
             st.session_state["lead_filter_company_size_fit"] = "All"
         if st.session_state.get("lead_filter_trade_type") not in TRADE_TYPE_FILTER_OPTIONS:
             st.session_state["lead_filter_trade_type"] = "All"
+        if st.session_state.get("lead_filter_blocked") not in BLOCKED_FILTER_OPTIONS:
+            st.session_state["lead_filter_blocked"] = "Hide blocked"
 
         with st.form("lead_queue_filters_form"):
             toolbar_col1, toolbar_col2 = st.columns([2.4, 1.1])
@@ -3135,7 +3151,7 @@ elif page == "Leads":
                         format_func=lambda item: market_segment_filter_labels.get(item, "Unknown"),
                     )
 
-                quality_col1, quality_col2 = st.columns(2)
+                quality_col1, quality_col2, quality_col3 = st.columns(3)
                 with quality_col1:
                     selected_company_size_fit = st.selectbox(
                         "Target fit",
@@ -3149,6 +3165,12 @@ elif page == "Leads":
                         TRADE_TYPE_FILTER_OPTIONS,
                         key="lead_filter_trade_type",
                         format_func=lambda item: "All" if item == "All" else _trade_type_label(item),
+                    )
+                with quality_col3:
+                    selected_blocked = st.selectbox(
+                        "Blocked leads",
+                        list(BLOCKED_FILTER_OPTIONS.keys()),
+                        key="lead_filter_blocked",
                     )
 
             action_col1, action_col2, action_col3 = st.columns([1.1, 1, 1])
@@ -3196,6 +3218,7 @@ elif page == "Leads":
             else CompanySizeFit(selected_company_size_fit)
         ),
         trade_type=None if selected_trade_type == "All" else TradeType(selected_trade_type),
+        blocked=BLOCKED_FILTER_OPTIONS[selected_blocked],
         limit=LEAD_PAGE_SIZE,
         offset=0,
     )
@@ -3234,6 +3257,7 @@ elif page == "Leads":
                 else market_segment_filter_labels.get(selected_market_segment_id),
                 selected_company_size_fit=selected_company_size_fit,
                 selected_trade_type=selected_trade_type,
+                selected_blocked=selected_blocked,
                 has_email=has_email,
                 has_whatsapp=has_whatsapp,
                 has_assignment=has_assignment,
@@ -3285,6 +3309,7 @@ elif page == "Leads":
                         "Follow-up": st.column_config.DateColumn("Follow-up"),
                         "Last enriched": st.column_config.DatetimeColumn("Last enriched"),
                         "DNC": st.column_config.CheckboxColumn("DNC"),
+                        "Blocked": st.column_config.CheckboxColumn("Blocked"),
                     },
                 )
 
@@ -3333,8 +3358,15 @@ elif page == "Leads":
                         ),
                         (f"Fit: {_company_size_fit_label(selected_lead.company_size_fit)}", "neutral"),
                         (f"Trade: {_trade_type_label(selected_lead.trade_type)}", "neutral"),
+                        ("Blocked", "danger") if selected_lead.is_blocked else ("Not blocked", "good"),
                     ]
                 )
+                if selected_lead.is_blocked:
+                    _render_notice(
+                        selected_lead.blocked_reason or "Matched an active exclusion rule.",
+                        tone="danger",
+                        title="Hard blocked",
+                    )
                 st.caption(_classification_summary(selected_lead))
                 st.caption(_lead_next_step(selected_lead))
 
@@ -3674,6 +3706,7 @@ else:
                     (f"Source: {_humanize(lead.lead_source_type)}", "neutral"),
                     (f"Priority: {lead.lead_score}", "good" if lead.lead_score >= 70 else "warn"),
                     ("Do not contact", "danger") if lead.do_not_contact else ("Contactable", "good"),
+                    ("Blocked", "danger") if lead.is_blocked else ("Not blocked", "good"),
                     (
                         f"Assigned: {_assignment_rep_name(lead)}" if _assignment_rep_name(lead) else "Unassigned",
                         "good" if _assignment_rep_name(lead) else "warn",
@@ -3691,7 +3724,13 @@ else:
                     tone="danger",
                     title="Outreach blocked",
                 )
-            else:
+            if lead.is_blocked:
+                _render_notice(
+                    lead.blocked_reason or "Matched an active exclusion rule.",
+                    tone="danger",
+                    title="Hard blocked",
+                )
+            if not lead.do_not_contact and not lead.is_blocked:
                 _render_notice(_lead_next_step(lead), tone="info", title="Next best step")
             st.caption(
                 "Use Review & Enrich for notes, status, follow-up, and public contact refreshes. "

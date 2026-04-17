@@ -5,6 +5,7 @@ from io import BytesIO
 
 from openpyxl import load_workbook
 
+from app.api.routes import leads as leads_routes
 from app.enums import ImportBatchStatus, ImportBatchType, LeadSourceType, LeadStatus
 from app.models.assignment_rule import AssignmentRule
 from app.models.import_batch import ImportBatch
@@ -14,6 +15,7 @@ from app.models.organization import Organization
 from app.models.raw_discovery_record import RawDiscoveryRecord
 from app.models.sales_region import SalesRegion
 from app.models.sales_rep import SalesRep
+from app.schemas.lead import EnrichmentRunResult, LeadBatchEnrichmentResponse, LeadBatchEnrichmentSummary
 from app.services.normalization import normalize_business_name
 
 
@@ -235,6 +237,68 @@ def test_batch_assign_wraps_existing_assignment_service(client, db_session) -> N
     assert lead.assigned_sales_rep_id == sales_rep.id
     assert lead.sales_region_id == region.id
     assert lead.market_subsegment_id == subsegment.id
+
+
+def test_batch_enrich_returns_partial_success_response(client, monkeypatch) -> None:
+    class FakeEnrichmentService:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def enrich_lead_ids(self, lead_ids, *, actor, scope_label, continue_on_error):
+            assert lead_ids == [10, 20]
+            assert actor == "api"
+            assert scope_label == "api lead ids"
+            assert continue_on_error is True
+            return LeadBatchEnrichmentResponse(
+                processed=2,
+                results=[
+                    EnrichmentRunResult(
+                        lead_id=10,
+                        business_name="Empresa Boa",
+                        pages_attempted=1,
+                        pages_fetched=1,
+                        contacts_added=1,
+                        contacts_added_by_type={"EMAIL": 1},
+                        fields_updated=["email"],
+                        last_enriched_at=datetime(2026, 1, 3, tzinfo=timezone.utc),
+                    ),
+                    EnrichmentRunResult(
+                        lead_id=20,
+                        business_name="Empresa Ruim",
+                        success=False,
+                        error_message="parser failed on public page",
+                    ),
+                ],
+                summary=LeadBatchEnrichmentSummary(
+                    scope_label="api lead ids",
+                    requested=2,
+                    processed=2,
+                    success_count=1,
+                    contacts_added=1,
+                    emails_found=1,
+                    errors=1,
+                    error_messages=["Lead 20: parser failed on public page"],
+                    failed_lead_ids=[20],
+                    pages_attempted=1,
+                    pages_fetched=1,
+                ),
+            )
+
+    monkeypatch.setattr(leads_routes, "EnrichmentService", FakeEnrichmentService)
+
+    response = client.post("/leads/batch/enrich", json={"lead_ids": [10, 20]})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processed"] == 2
+    assert payload["summary"]["requested"] == 2
+    assert payload["summary"]["processed"] == 2
+    assert payload["summary"]["success_count"] == 1
+    assert payload["summary"]["errors"] == 1
+    assert payload["summary"]["failed_lead_ids"] == [20]
+    assert payload["results"][1]["success"] is False
+    assert payload["results"][1]["business_name"] == "Empresa Ruim"
+    assert payload["results"][1]["error_message"] == "parser failed on public page"
 
 
 def test_scoped_export_accepts_lead_ids_filters_and_latest_batch(client, db_session) -> None:

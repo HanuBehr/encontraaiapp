@@ -255,6 +255,7 @@ export type LeadBatchEnrichmentSummary = {
   scope_label: string | null;
   requested: number;
   processed: number;
+  success_count: number;
   contacts_added: number;
   emails_found: number;
   instagrams_found: number;
@@ -264,6 +265,7 @@ export type LeadBatchEnrichmentSummary = {
   skipped_no_website: number;
   errors: number;
   error_messages: string[];
+  failed_lead_ids: number[];
   pages_attempted: number;
   pages_fetched: number;
 };
@@ -272,15 +274,17 @@ export type LeadBatchEnrichmentResponse = {
   processed: number;
   results: Array<{
     lead_id: number;
-    business_name: string;
+    business_name: string | null;
+    success: boolean;
     pages_attempted: number;
     pages_fetched: number;
     contacts_added: number;
     contacts_added_by_type: Record<string, number>;
     fields_updated: string[];
-    last_enriched_at: string;
+    last_enriched_at: string | null;
     material_profile: Record<string, unknown>;
     skipped_reason: string | null;
+    error_message: string | null;
   }>;
   summary: LeadBatchEnrichmentSummary;
 };

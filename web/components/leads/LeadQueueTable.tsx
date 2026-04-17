@@ -80,8 +80,10 @@ export function LeadQueueTable({
               {row.original.is_blocked ? <BlockedBadge /> : null}
             </div>
             <p className="text-xs text-neutral-500">{row.original.category ?? "No category"}</p>
-            {row.original.is_blocked && row.original.blocked_reason ? (
-              <p className="mt-1 line-clamp-2 text-xs text-rose-700">{row.original.blocked_reason}</p>
+            {row.original.is_blocked ? (
+              <p className="mt-1 line-clamp-2 text-xs text-rose-700">
+                Reason: {row.original.blocked_reason ?? "Matched an active exclusion rule."}
+              </p>
             ) : null}
           </div>
         ),

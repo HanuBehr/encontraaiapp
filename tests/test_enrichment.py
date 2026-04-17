@@ -289,6 +289,76 @@ def test_enrichment_service_batch_summary_counts_contacts_and_skips(db_session) 
     assert response.summary.errors == 0
 
 
+def test_enrichment_service_batch_continues_after_lead_exception(db_session, monkeypatch) -> None:
+    good_lead = Lead(
+        business_name="Empresa Boa",
+        normalized_business_name=normalize_business_name("Empresa Boa") or "empresa boa",
+        category="materiais para construcao",
+        city="Sao Paulo",
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+        website="https://good.example.com",
+    )
+    broken_lead = Lead(
+        business_name="Empresa Quebrada",
+        normalized_business_name=normalize_business_name("Empresa Quebrada") or "empresa quebrada",
+        category="materiais para construcao",
+        city="Sao Paulo",
+        state="SP",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+        website="https://broken.example.com",
+    )
+    db_session.add_all([good_lead, broken_lead])
+    db_session.commit()
+    db_session.refresh(good_lead)
+    db_session.refresh(broken_lead)
+
+    fake_http = FakeHTTPSession(
+        {
+            "https://good.example.com/robots.txt": FakeResponse(
+                url="https://good.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://good.example.com": FakeResponse(
+                url="https://good.example.com",
+                text='<html><body><a href="mailto:vendas@good.example.com">Email</a></body></html>',
+            ),
+        }
+    )
+
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", EXPORT_DIR="./data/exports", GOOGLE_API_KEY="")
+    service = EnrichmentService(db_session, settings, http_session=fake_http)
+    original_enrich_lead = service.enrich_lead
+
+    def flaky_enrich_lead(lead_id: int, *, actor: str = "system"):
+        if lead_id == broken_lead.id:
+            raise RuntimeError("parser failed on public page")
+        return original_enrich_lead(lead_id, actor=actor)
+
+    monkeypatch.setattr(service, "enrich_lead", flaky_enrich_lead)
+
+    response = service.enrich_lead_ids(
+        [good_lead.id, broken_lead.id],
+        actor="test",
+        scope_label="selected leads",
+        continue_on_error=True,
+    )
+
+    assert response.processed == 2
+    assert response.summary.requested == 2
+    assert response.summary.processed == 2
+    assert response.summary.success_count == 1
+    assert response.summary.errors == 1
+    assert response.summary.failed_lead_ids == [broken_lead.id]
+    assert response.results[0].success is True
+    assert response.results[1].success is False
+    assert response.results[1].business_name == "Empresa Quebrada"
+    assert response.results[1].error_message == "parser failed on public page"
+
+
 def test_enrichment_service_enriches_latest_import_batch(db_session) -> None:
     old_lead = Lead(
         business_name="Old Batch Lead",

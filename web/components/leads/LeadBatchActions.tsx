@@ -313,16 +313,19 @@ function ActionButton({
 
 function ActionResultSummary({ result }: { result: ActionResult }) {
   if (result.kind === "enrich") {
+    const hasErrors = result.summary.errors > 0;
     return (
-      <ResultBox title={`Enrichment complete - ${result.scopeLabel}`}>
+      <ResultBox title={`${hasErrors ? "Enrichment finished with errors" : "Enrichment complete"} - ${result.scopeLabel}`}>
         <ResultMetric label="Requested" value={result.requested} />
         <ResultMetric label="Processed" value={result.summary.processed} />
+        <ResultMetric label="Succeeded" value={result.summary.success_count} />
         <ResultMetric label="Emails" value={result.summary.emails_found} />
         <ResultMetric label="Instagrams" value={result.summary.instagrams_found} />
         <ResultMetric label="WhatsApps" value={result.summary.whatsapps_found} />
         <ResultMetric label="Forms" value={result.summary.contact_forms_found} />
         <ResultMetric label="Skipped" value={result.summary.skipped} />
         <ResultMetric label="Errors" value={result.summary.errors} />
+        {hasErrors ? <FailedLeadSummary summary={result.summary} /> : null}
       </ResultBox>
     );
   }
@@ -363,6 +366,26 @@ function ResultMetric({ label, value }: { label: string; value: number }) {
     <div className="rounded-md border border-emerald-100 bg-white px-3 py-2">
       <p className="text-xs font-medium text-neutral-500">{label}</p>
       <p className="mt-1 text-base font-semibold text-neutral-950">{value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function FailedLeadSummary({ summary }: { summary: LeadBatchEnrichmentResponse["summary"] }) {
+  return (
+    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
+      <p className="text-xs font-semibold uppercase text-amber-900">Failed leads</p>
+      <p className="mt-1 text-sm text-amber-950">
+        {summary.failed_lead_ids.length
+          ? `IDs: ${summary.failed_lead_ids.join(", ")}`
+          : "Some leads failed, but the backend did not return lead IDs."}
+      </p>
+      {summary.error_messages.length ? (
+        <ul className="mt-2 space-y-1 text-sm text-amber-900">
+          {summary.error_messages.slice(0, 3).map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -446,14 +469,6 @@ function downloadBlob(blob: Blob, filename: string) {
 
 function formatError(error: unknown) {
   if (error instanceof ApiError) {
-    try {
-      const parsed = JSON.parse(error.body) as { detail?: unknown };
-      if (typeof parsed.detail === "string") {
-        return parsed.detail;
-      }
-    } catch {
-      return error.body || error.message;
-    }
     return error.message;
   }
 

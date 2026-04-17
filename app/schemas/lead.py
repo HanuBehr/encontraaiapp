@@ -313,21 +313,24 @@ class LeadBatchEnrichmentRequest(BaseModel):
 
 class EnrichmentRunResult(BaseModel):
     lead_id: int
-    business_name: str
-    pages_attempted: int
-    pages_fetched: int
-    contacts_added: int
+    business_name: str | None = None
+    success: bool = True
+    pages_attempted: int = 0
+    pages_fetched: int = 0
+    contacts_added: int = 0
     contacts_added_by_type: dict[str, int] = Field(default_factory=dict)
-    fields_updated: list[str]
-    last_enriched_at: datetime
+    fields_updated: list[str] = Field(default_factory=list)
+    last_enriched_at: datetime | None = None
     material_profile: dict[str, Any] = Field(default_factory=dict)
     skipped_reason: str | None = None
+    error_message: str | None = None
 
 
 class LeadBatchEnrichmentSummary(BaseModel):
     scope_label: str | None = None
     requested: int = 0
     processed: int = 0
+    success_count: int = 0
     contacts_added: int = 0
     emails_found: int = 0
     instagrams_found: int = 0
@@ -337,6 +340,7 @@ class LeadBatchEnrichmentSummary(BaseModel):
     skipped_no_website: int = 0
     errors: int = 0
     error_messages: list[str] = Field(default_factory=list)
+    failed_lead_ids: list[int] = Field(default_factory=list)
     pages_attempted: int = 0
     pages_fetched: int = 0
 

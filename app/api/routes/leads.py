@@ -144,7 +144,7 @@ def enrich_lead_batch(
             payload.lead_ids,
             actor="api",
             scope_label="api lead ids",
-            continue_on_error=False,
+            continue_on_error=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

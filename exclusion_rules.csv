@@ -1,0 +1,15 @@
+rule_type,pattern,reason,is_active
+business_name_contains,Walmart,Large chain,true
+business_name_contains,Carrefour,Large chain,true
+business_name_contains,Assaí,Large chain,true
+business_name_contains,Atacadão,Large chain,true
+business_name_contains,Leroy Merlin,Large chain,true
+business_name_contains,Sodimac,Large chain,true
+business_name_contains,Telhanorte,Large chain,true
+domain,walmart.com.br,Large chain,true
+domain,carrefour.com.br,Large chain,true
+domain,assai.com.br,Large chain,true
+domain,atacadao.com.br,Large chain,true
+domain,leroymerlin.com.br,Large chain,true
+domain,sodimac.com.br,Large chain,true
+domain,telhanorte.com.br,Large chain,true

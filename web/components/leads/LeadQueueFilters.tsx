@@ -4,19 +4,15 @@ import type { LeadOptionsResponse } from "@/lib/api/types";
 import type { QueueFilters } from "@/lib/state/lead-workspace";
 
 type LeadQueueFiltersProps = {
-  search: string;
   filters: QueueFilters;
   options?: LeadOptionsResponse;
-  onSearchChange: (value: string) => void;
   onFiltersChange: (filters: QueueFilters) => void;
   onReset: () => void;
 };
 
 export function LeadQueueFilters({
-  search,
   filters,
   options,
-  onSearchChange,
   onFiltersChange,
   onReset,
 }: LeadQueueFiltersProps) {
@@ -27,22 +23,9 @@ export function LeadQueueFilters({
   return (
     <section className="rounded-md border border-neutral-200 bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="w-full lg:max-w-md">
-          <label className="block text-sm font-medium text-neutral-800" htmlFor="lead-search">
-            Search
-          </label>
-          <input
-            id="lead-search"
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Company, city, contact, assignment"
-            className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
-          />
-          {search ? (
-            <p className="mt-1 text-xs text-neutral-500">
-              Searching the loaded queue window for the current filters.
-            </p>
-          ) : null}
+        <div>
+          <p className="text-sm font-semibold text-neutral-950">Filters</p>
+          <p className="mt-1 text-sm text-neutral-500">Exclude blocked leads by default, or include them for review.</p>
         </div>
         <button
           type="button"
@@ -54,6 +37,13 @@ export function LeadQueueFilters({
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <SelectField
+          label="Exclusion status"
+          value={filters.blocked}
+          onChange={(value) => updateFilter("blocked", value as QueueFilters["blocked"])}
+          options={blockedOptions}
+          emptyLabel={null}
+        />
         <SelectField
           label="City"
           value={filters.city}
@@ -135,13 +125,6 @@ export function LeadQueueFilters({
           onChange={(value) => updateFilter("hasInstagram", value as QueueFilters["hasInstagram"])}
           options={booleanOptions}
         />
-        <SelectField
-          label="Blocked"
-          value={filters.blocked}
-          onChange={(value) => updateFilter("blocked", value as QueueFilters["blocked"])}
-          options={blockedOptions}
-          emptyLabel={null}
-        />
       </div>
     </section>
   );
@@ -182,7 +165,7 @@ const booleanOptions = [
 ];
 
 const blockedOptions = [
-  { value: "exclude", label: "Hide blocked" },
+  { value: "exclude", label: "Exclude blocked" },
   { value: "include", label: "Include blocked" },
   { value: "only", label: "Only blocked" },
 ];

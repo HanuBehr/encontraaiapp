@@ -530,7 +530,7 @@ class EnrichmentService:
             lead_ids,
             actor=actor,
             scope_label="lead ids",
-            continue_on_error=False,
+            continue_on_error=True,
         ).results
 
     def enrich_lead_ids(
@@ -548,11 +548,13 @@ class EnrichmentService:
         for lead_id in requested_ids:
             try:
                 results.append(self.enrich_lead(lead_id, actor=actor))
-            except ValueError as exc:
+            except Exception as exc:
                 self.db.rollback()
                 if not continue_on_error:
                     raise
-                error_messages.append(f"Lead {lead_id}: {exc}")
+                failed_result = self._failed_enrichment_result(lead_id, exc)
+                results.append(failed_result)
+                error_messages.append(f"Lead {lead_id}: {failed_result.error_message}")
 
         summary = self._build_batch_summary(
             requested_ids=requested_ids,
@@ -609,24 +611,54 @@ class EnrichmentService:
         scope_label: str,
     ) -> LeadBatchEnrichmentSummary:
         def added(contact_type: ContactType) -> int:
-            return sum(result.contacts_added_by_type.get(contact_type.value, 0) for result in results)
+            return sum(
+                result.contacts_added_by_type.get(contact_type.value, 0)
+                for result in results
+                if result.success
+            )
+
+        successful_results = [result for result in results if result.success]
+        failed_results = [result for result in results if not result.success]
 
         return LeadBatchEnrichmentSummary(
             scope_label=scope_label,
             requested=len(requested_ids),
             processed=len(results),
-            contacts_added=sum(result.contacts_added for result in results),
+            success_count=len(successful_results),
+            contacts_added=sum(result.contacts_added for result in successful_results),
             emails_found=added(ContactType.EMAIL),
             instagrams_found=added(ContactType.INSTAGRAM),
             whatsapps_found=added(ContactType.WHATSAPP),
             contact_forms_found=added(ContactType.CONTACT_FORM),
-            skipped=sum(1 for result in results if result.skipped_reason),
+            skipped=sum(1 for result in successful_results if result.skipped_reason),
             skipped_no_website=sum(1 for result in results if result.skipped_reason == "Lead has no public website."),
-            errors=len(error_messages),
+            errors=len(failed_results),
             error_messages=error_messages,
-            pages_attempted=sum(result.pages_attempted for result in results),
-            pages_fetched=sum(result.pages_fetched for result in results),
+            failed_lead_ids=[result.lead_id for result in failed_results],
+            pages_attempted=sum(result.pages_attempted for result in successful_results),
+            pages_fetched=sum(result.pages_fetched for result in successful_results),
         )
+
+    def _failed_enrichment_result(self, lead_id: int, exc: Exception) -> EnrichmentRunResult:
+        return EnrichmentRunResult(
+            lead_id=lead_id,
+            business_name=self._lookup_business_name(lead_id),
+            success=False,
+            error_message=self._short_error_message(exc),
+        )
+
+    def _lookup_business_name(self, lead_id: int) -> str | None:
+        try:
+            lead = self.repository.get_by_id(lead_id)
+        except Exception:
+            self.db.rollback()
+            return None
+        return lead.business_name if lead is not None else None
+
+    @staticmethod
+    def _short_error_message(exc: Exception) -> str:
+        message = str(exc).strip() or exc.__class__.__name__
+        return message[:240]
 
     def _build_candidate_urls(self, lead: Lead) -> list[str]:
         website_url = canonicalize_url(lead.website)

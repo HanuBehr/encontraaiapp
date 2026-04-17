@@ -6,12 +6,15 @@ type QueryParams = Record<string, QueryValue>;
 export class ApiError extends Error {
   status: number;
   body: string;
+  detail: string | null;
 
-  constructor(message: string, status: number, body: string) {
-    super(message);
+  constructor(status: number, body: string) {
+    const detail = extractErrorDetail(body);
+    super(detail ? `Backend request failed (${status}): ${detail}` : `Backend request failed (${status})`);
     this.name = "ApiError";
     this.status = status;
     this.body = body;
+    this.detail = detail;
   }
 }
 
@@ -23,8 +26,7 @@ export async function getJson<T>(path: string, params: QueryParams = {}): Promis
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new ApiError(`Request failed with ${response.status}`, response.status, body);
+    throw await apiErrorFromResponse(response);
   }
 
   return response.json() as Promise<T>;
@@ -41,8 +43,7 @@ export async function postJson<TResponse, TBody extends object>(path: string, bo
   });
 
   if (!response.ok) {
-    const responseBody = await response.text();
-    throw new ApiError(`Request failed with ${response.status}`, response.status, responseBody);
+    throw await apiErrorFromResponse(response);
   }
 
   return response.json() as Promise<TResponse>;
@@ -62,8 +63,7 @@ export async function postBlob<TBody extends object>(
   });
 
   if (!response.ok) {
-    const responseBody = await response.text();
-    throw new ApiError(`Request failed with ${response.status}`, response.status, responseBody);
+    throw await apiErrorFromResponse(response);
   }
 
   return {
@@ -94,4 +94,29 @@ function filenameFromDisposition(disposition: string | null): string | null {
   }
   const match = /filename="?([^"]+)"?/i.exec(disposition);
   return match?.[1] ?? null;
+}
+
+async function apiErrorFromResponse(response: Response): Promise<ApiError> {
+  return new ApiError(response.status, await response.text());
+}
+
+function extractErrorDetail(body: string): string | null {
+  const trimmedBody = body.trim();
+  if (!trimmedBody) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmedBody) as { detail?: unknown };
+    if (typeof parsed.detail === "string") {
+      return parsed.detail;
+    }
+    if (parsed.detail !== undefined) {
+      return JSON.stringify(parsed.detail);
+    }
+  } catch {
+    return trimmedBody;
+  }
+
+  return trimmedBody;
 }

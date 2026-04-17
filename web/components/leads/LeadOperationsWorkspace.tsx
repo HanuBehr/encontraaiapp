@@ -126,11 +126,16 @@ export function LeadOperationsWorkspace() {
         </div>
       </div>
 
+      <LeadQueueSearch
+        value={search}
+        onChange={updateSearch}
+        resultCount={total}
+        searchActive={Boolean(searchTerm)}
+      />
+
       <LeadQueueFilters
-        search={search}
         filters={filters}
         options={optionsQuery.data}
-        onSearchChange={updateSearch}
         onFiltersChange={updateFilters}
         onReset={resetFilters}
       />
@@ -182,6 +187,42 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-medium text-neutral-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-neutral-950">{value}</p>
     </div>
+  );
+}
+
+function LeadQueueSearch({
+  value,
+  onChange,
+  resultCount,
+  searchActive,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  resultCount: number;
+  searchActive: boolean;
+}) {
+  return (
+    <section className="rounded-md border border-cyan-200 bg-white p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <label className="block w-full lg:max-w-2xl" htmlFor="lead-search">
+          <span className="text-sm font-semibold text-neutral-950">Search leads</span>
+          <input
+            id="lead-search"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Company, city, contact, rep, region, segment, blocked reason"
+            className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
+          />
+        </label>
+        <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 lg:min-w-[180px]">
+          <p className="text-xs font-medium text-neutral-500">{searchActive ? "Search results" : "Visible set"}</p>
+          <p className="mt-1 text-lg font-semibold text-neutral-950">{resultCount.toLocaleString()}</p>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-neutral-500">
+        Search uses the loaded queue window for the current filters.
+      </p>
+    </section>
   );
 }
 
