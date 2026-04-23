@@ -24,6 +24,8 @@ from app.schemas.discovery import (
     DiscoveryPreviewEnrichmentSummary,
     DiscoveryPreviewItem,
     DiscoveryPreviewResponse,
+    DiscoveryPreviewWebsiteRecoveryResponse,
+    DiscoveryPreviewWebsiteRecoverySummary,
     DiscoverySearchRequest,
     DiscoverySearchResponse,
     ResolvedLocation,
@@ -486,6 +488,137 @@ class DiscoveryService:
         ]
         return preview.model_copy(update={"items": updated_items})
 
+    def recover_preview_websites(
+        self,
+        *,
+        preview: DiscoveryPreviewResponse,
+        client_result_ids: list[str],
+        skip_blocked: bool = True,
+    ) -> DiscoveryPreviewWebsiteRecoveryResponse:
+        annotated_preview = self.evaluate_preview_exclusions(preview)
+        indexed_items = {item.client_result_id: item for item in annotated_preview.items if item.client_result_id}
+        requested_ids = list(dict.fromkeys(client_result_ids))
+        missing_ids = [client_id for client_id in requested_ids if client_id not in indexed_items]
+        if missing_ids:
+            raise ValueError(f"Selected preview item(s) were not found: {', '.join(missing_ids)}")
+
+        previous_blocked = {
+            item.client_result_id: item.exclusion.is_blocked
+            for item in annotated_preview.items
+            if item.client_result_id
+        }
+        requested_id_set = set(requested_ids)
+        updated_items: list[DiscoveryPreviewItem] = []
+        processed = 0
+        recovered_count = 0
+        no_website_found = 0
+        skipped_existing_website = 0
+        skipped_missing_place_id = 0
+        skipped_blocked = 0
+        errors = 0
+        error_messages: list[str] = []
+
+        for item in annotated_preview.items:
+            client_result_id = item.client_result_id
+            if not client_result_id or client_result_id not in requested_id_set:
+                updated_items.append(item)
+                continue
+
+            if skip_blocked and item.exclusion.is_blocked:
+                skipped_blocked += 1
+                updated_items.append(item)
+                continue
+
+            if has_usable_website(item.candidate):
+                skipped_existing_website += 1
+                updated_items.append(item)
+                continue
+
+            place_id = self._preview_item_place_id(item)
+            if not place_id:
+                skipped_missing_place_id += 1
+                updated_items.append(item)
+                continue
+
+            processed += 1
+            try:
+                details_payload = self.provider.fetch_place_details(place_id)
+                recovered_candidate = self._recover_preview_candidate_contact_fields(
+                    item.candidate,
+                    raw_payload=details_payload,
+                    source_url=(details_payload.get("googleMapsUri") if isinstance(details_payload.get("googleMapsUri"), str) else None)
+                    or item.source_url,
+                )
+            except Exception as exc:
+                self.db.rollback()
+                errors += 1
+                error_message = EnrichmentService._short_error_message(exc)
+                error_messages.append(f"{item.candidate.business_name}: {error_message}")
+                logger.exception(
+                    "Discovery website recovery failed for preview item.",
+                    extra={
+                        "client_result_id": client_result_id,
+                        "business_name": item.candidate.business_name,
+                        "place_id": place_id,
+                    },
+                )
+                updated_items.append(item)
+                continue
+
+            if has_usable_website(recovered_candidate):
+                recovered_count += 1
+                updated_items.append(
+                    item.model_copy(
+                        update={
+                            "candidate": recovered_candidate,
+                            "raw_payload": _merge_payload_dicts(item.raw_payload, details_payload),
+                            "source_url": recovered_candidate.google_maps_url or item.source_url,
+                        }
+                    )
+                )
+            else:
+                no_website_found += 1
+                updated_items.append(item)
+
+        reevaluated_preview = self.evaluate_preview_exclusions(
+            annotated_preview.model_copy(update={"items": updated_items})
+        )
+        blocked_after_recovery = sum(
+            1
+            for item in reevaluated_preview.items
+            if item.client_result_id in requested_id_set
+            and not previous_blocked.get(item.client_result_id, False)
+            and item.exclusion.is_blocked
+        )
+
+        return DiscoveryPreviewWebsiteRecoveryResponse(
+            preview=reevaluated_preview,
+            summary=DiscoveryPreviewWebsiteRecoverySummary(
+                requested=len(requested_ids),
+                processed=processed,
+                recovered_count=recovered_count,
+                no_website_found=no_website_found,
+                skipped_existing_website=skipped_existing_website,
+                skipped_missing_place_id=skipped_missing_place_id,
+                skipped_blocked=skipped_blocked,
+                blocked_after_recovery=blocked_after_recovery,
+                errors=errors,
+                error_messages=error_messages,
+            ),
+        )
+
+    def _preview_item_place_id(self, item: DiscoveryPreviewItem) -> str | None:
+        candidate_place_id = (item.candidate.google_place_id or "").strip()
+        if candidate_place_id:
+            return candidate_place_id
+        provider_record_id = (item.provider_record_id or "").strip()
+        if provider_record_id:
+            return provider_record_id
+        raw_place_id = item.raw_payload.get("id")
+        if isinstance(raw_place_id, str) and raw_place_id.strip():
+            return raw_place_id.strip()
+        return None
+
     def ingest_preview(
         self,
         request: DiscoverySearchRequest,
@@ -816,6 +949,20 @@ def _is_non_business_website_domain(domain: str) -> bool:
         normalized_domain == suffix or normalized_domain.endswith(f".{suffix}")
         for suffix in _NON_BUSINESS_WEBSITE_SUFFIXES
     )
+
+
+def _merge_payload_dicts(
+    current_payload: dict[str, object],
+    incoming_payload: dict[str, object],
+) -> dict[str, object]:
+    return {
+        **current_payload,
+        **incoming_payload,
+    }
+
+
+def has_usable_website(candidate: DiscoveryLeadCandidate) -> bool:
+    return bool(candidate.website or candidate.domain)
 
 
 def _client_result_id(

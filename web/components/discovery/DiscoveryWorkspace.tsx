@@ -11,6 +11,7 @@ import {
   evaluateDiscoveryExclusions,
   importDiscoveryPreview,
   previewDiscovery,
+  recoverDiscoveryWebsites,
 } from "@/lib/api/discovery";
 import type {
   DiscoveryImportResponse,
@@ -18,6 +19,7 @@ import type {
   DiscoveryPreviewEnrichmentResponse,
   DiscoveryPreviewItem,
   DiscoveryPreviewResponse,
+  DiscoveryPreviewWebsiteRecoveryResponse,
   DiscoverySearchRequest,
   ExclusionRuleType,
   LeadBlockedFilter,
@@ -87,6 +89,7 @@ const websiteOptions: Array<{ value: WebsiteFilter; label: string }> = [
 ];
 
 const ENRICH_VISIBLE_CONFIRMATION_THRESHOLD = 10;
+const WEBSITE_RECOVERY_MAX_ROWS = 25;
 
 export function DiscoveryWorkspace() {
   const [form, setForm] = useState<DiscoveryFormState>(defaultForm);
@@ -105,12 +108,15 @@ export function DiscoveryWorkspace() {
     mutationFn: previewDiscovery,
     onSuccess: (data) => {
       const websiteReadyCount = data.items.filter((item) => hasWebsiteForCandidate(item.candidate)).length;
+      const recoverableNoWebsiteCount = data.items.filter(
+        (item) => !item.exclusion.is_blocked && !hasWebsiteForCandidate(item.candidate) && hasWebsiteRecoveryLookupId(item),
+      ).length;
       setPreview(data);
       setSelectedIds(selectAllUnblocked(data.items));
       setNewlyBlockedIds({});
       setLastImport(null);
       setActionMessage(
-        `Preview ready. ${websiteReadyCount.toLocaleString()} row(s) already have a website or domain and can be enriched.`,
+        `Preview ready. ${websiteReadyCount.toLocaleString()} row(s) already have a website or domain and can be enriched. ${recoverableNoWebsiteCount.toLocaleString()} no-website row(s) are eligible for website recovery.`,
       );
     },
   });
@@ -128,6 +134,22 @@ export function DiscoveryWorkspace() {
       setNewlyBlockedIds(collectNewlyBlockedIds(response.preview.items, previousBlocked));
       setLastImport(null);
       setActionMessage(buildEnrichmentMessage(response));
+    },
+  });
+
+  const recoverMutation = useMutation({
+    mutationFn: recoverDiscoveryWebsites,
+    onSuccess: (response) => {
+      const previousBlocked = Object.fromEntries(
+        (preview?.items ?? [])
+          .filter((item) => item.client_result_id)
+          .map((item) => [item.client_result_id as string, item.exclusion.is_blocked]),
+      );
+      setPreview(response.preview);
+      setSelectedIds((current) => pruneBlockedSelection(current, response.preview.items));
+      setNewlyBlockedIds(collectNewlyBlockedIds(response.preview.items, previousBlocked));
+      setLastImport(null);
+      setActionMessage(buildWebsiteRecoveryMessage(response));
     },
   });
 
@@ -199,6 +221,31 @@ export function DiscoveryWorkspace() {
       .map((item) => item.client_result_id as string);
   }, [preview?.items, selectedIds]);
 
+  const selectedNoWebsiteClientResultIds = useMemo(() => {
+    return (preview?.items ?? [])
+      .filter(
+        (item) =>
+          item.client_result_id &&
+          selectedIds[item.client_result_id] &&
+          !item.exclusion.is_blocked &&
+          !hasWebsiteForCandidate(item.candidate),
+      )
+      .map((item) => item.client_result_id as string);
+  }, [preview?.items, selectedIds]);
+
+  const selectedRecoverableClientResultIds = useMemo(() => {
+    return (preview?.items ?? [])
+      .filter(
+        (item) =>
+          item.client_result_id &&
+          selectedIds[item.client_result_id] &&
+          !item.exclusion.is_blocked &&
+          !hasWebsiteForCandidate(item.candidate) &&
+          hasWebsiteRecoveryLookupId(item),
+      )
+      .map((item) => item.client_result_id as string);
+  }, [preview?.items, selectedIds]);
+
   const visibleSelectableIds = visibleItems
     .filter((item) => !item.exclusion.is_blocked && item.client_result_id)
     .map((item) => item.client_result_id as string);
@@ -210,6 +257,8 @@ export function DiscoveryWorkspace() {
   const previewCount = preview?.items.length ?? 0;
   const blockedCount = preview?.items.filter((item) => item.exclusion.is_blocked).length ?? 0;
   const websiteReadyCount = preview?.items.filter((item) => hasWebsiteForCandidate(item.candidate)).length ?? 0;
+  const recoverySelectionMissingLookupCount =
+    selectedNoWebsiteClientResultIds.length - selectedRecoverableClientResultIds.length;
 
   function updateForm<Key extends keyof DiscoveryFormState>(key: Key, value: DiscoveryFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -297,6 +346,38 @@ export function DiscoveryWorkspace() {
     enrichMutation.mutate({
       preview,
       client_result_ids: selectedEnrichableClientResultIds,
+      skip_blocked: true,
+    });
+  }
+
+  function recoverSelected() {
+    if (!preview) {
+      return;
+    }
+    if (selectedNoWebsiteClientResultIds.length === 0) {
+      setActionMessage("Select at least one unblocked row without a website before running website recovery.");
+      return;
+    }
+    if (selectedRecoverableClientResultIds.length === 0) {
+      setActionMessage(
+        "The selected no-website rows do not have a recoverable Google place id. Choose different rows or save them as-is.",
+      );
+      return;
+    }
+    if (selectedRecoverableClientResultIds.length > WEBSITE_RECOVERY_MAX_ROWS) {
+      setActionMessage(
+        `Recover websites runs on up to ${WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} selected no-website row(s) at a time. Narrow the selection and retry.`,
+      );
+      return;
+    }
+    if (recoverySelectionMissingLookupCount > 0) {
+      setActionMessage(
+        `Recovering ${selectedRecoverableClientResultIds.length.toLocaleString()} selected no-website row(s). ${recoverySelectionMissingLookupCount.toLocaleString()} selected row(s) do not have a recoverable place id and will stay unchanged.`,
+      );
+    }
+    recoverMutation.mutate({
+      preview,
+      client_result_ids: selectedRecoverableClientResultIds,
       skip_blocked: true,
     });
   }
@@ -524,10 +605,20 @@ export function DiscoveryWorkspace() {
                 ))}
               </select>
             </label>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <button
                 type="button"
-                disabled={!preview || selectedEnrichableClientResultIds.length === 0 || enrichMutation.isPending}
+                disabled={!preview || selectedNoWebsiteClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
+                onClick={recoverSelected}
+                className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {recoverMutation.isPending ? "Recovering" : "Recover websites"}
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !preview || selectedEnrichableClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending
+                }
                 onClick={enrichSelected}
                 className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -535,7 +626,7 @@ export function DiscoveryWorkspace() {
               </button>
               <button
                 type="button"
-                disabled={!preview || visibleEnrichableIds.length === 0 || enrichMutation.isPending}
+                disabled={!preview || visibleEnrichableIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
                 onClick={enrichVisible}
                 className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -546,6 +637,7 @@ export function DiscoveryWorkspace() {
         </div>
 
         {actionMessage ? <InlineMessage tone="info">{actionMessage}</InlineMessage> : null}
+        {recoverMutation.isError ? <InlineMessage tone="danger">{errorMessage(recoverMutation.error)}</InlineMessage> : null}
         {enrichMutation.isError ? <InlineMessage tone="danger">{errorMessage(enrichMutation.error)}</InlineMessage> : null}
         {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error)}</InlineMessage> : null}
         {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error)}</InlineMessage> : null}
@@ -553,7 +645,9 @@ export function DiscoveryWorkspace() {
           <p className="mt-3 text-xs text-neutral-500">
             Enrichment only runs on rows with a website or domain. Selected ready:{" "}
             {selectedEnrichableClientResultIds.length.toLocaleString()}. Visible ready:{" "}
-            {visibleEnrichableIds.length.toLocaleString()}.
+            {visibleEnrichableIds.length.toLocaleString()}. Website recovery can check up to{" "}
+            {WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} selected no-website row(s) at a time. Recoverable now:{" "}
+            {selectedRecoverableClientResultIds.length.toLocaleString()}.
           </p>
         ) : null}
 
@@ -568,7 +662,7 @@ export function DiscoveryWorkspace() {
             onToggleVisibleSelection={toggleVisibleSelection}
             onBlockCompany={openCompanyBlock}
             onBlockDomain={openDomainBlock}
-            actionDisabled={blockMutation.isPending || enrichMutation.isPending}
+            actionDisabled={blockMutation.isPending || enrichMutation.isPending || recoverMutation.isPending}
           />
         ) : (
           <div className="mt-4 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center text-sm text-neutral-500">
@@ -748,7 +842,7 @@ function DiscoveryPreviewTable({
                         <OutcomeBadge tone="warning">No website to enrich</OutcomeBadge>
                       ) : null}
                       {clientResultId && newlyBlockedIds[clientResultId] ? (
-                        <OutcomeBadge tone="danger">Blocked after enrichment</OutcomeBadge>
+                        <OutcomeBadge tone="danger">Blocked after re-check</OutcomeBadge>
                       ) : null}
                     </div>
                     {item.enrichment?.error_message ? (
@@ -1188,8 +1282,40 @@ function buildEnrichmentMessage(response: DiscoveryPreviewEnrichmentResponse) {
   return message;
 }
 
+function buildWebsiteRecoveryMessage(response: DiscoveryPreviewWebsiteRecoveryResponse) {
+  let message = `Checked ${response.summary.processed.toLocaleString()} no-website preview row(s) for a recoverable website.`;
+  if (response.summary.recovered_count > 0) {
+    message += ` Recovered ${response.summary.recovered_count.toLocaleString()} website/domain pair(s).`;
+  } else if (response.summary.no_website_found > 0) {
+    message += " No public website was recovered from the provider details.";
+  } else {
+    message += " No additional website details were recovered.";
+  }
+  if (response.summary.skipped_missing_place_id > 0) {
+    message += ` ${response.summary.skipped_missing_place_id.toLocaleString()} row(s) had no recoverable place id.`;
+  }
+  if (response.summary.blocked_after_recovery > 0) {
+    message += ` ${response.summary.blocked_after_recovery.toLocaleString()} became blocked after re-checking exclusions.`;
+  }
+  if (response.summary.errors > 0) {
+    message += ` ${response.summary.errors.toLocaleString()} row(s) failed.`;
+  }
+  return message;
+}
+
 function hasWebsiteForCandidate(candidate: DiscoveryLeadCandidate) {
   return Boolean(candidate.website || domainForCandidate(candidate));
+}
+
+function hasWebsiteRecoveryLookupId(item: DiscoveryPreviewItem) {
+  if (item.candidate.google_place_id?.trim()) {
+    return true;
+  }
+  if (item.provider_record_id?.trim()) {
+    return true;
+  }
+  const rawId = item.raw_payload["id"];
+  return typeof rawId === "string" && rawId.trim().length > 0;
 }
 
 function domainForCandidate(candidate: DiscoveryLeadCandidate) {

@@ -20,6 +20,8 @@ from app.schemas.discovery import (
     DiscoveryPreviewEnrichmentResponse,
     DiscoveryPreviewEnrichmentSummary,
     DiscoveryPreviewResponse,
+    DiscoveryPreviewWebsiteRecoveryResponse,
+    DiscoveryPreviewWebsiteRecoverySummary,
 )
 from app.schemas.lead import EnrichmentRunResult, LeadBatchEnrichmentResponse, LeadBatchEnrichmentSummary
 from app.services.normalization import normalize_business_name
@@ -475,6 +477,147 @@ def test_discovery_preview_endpoint_returns_503_for_google_places_provider_error
     assert response.json() == {
         "detail": "Google Places request failed due to an upstream SSL/network error. Retry shortly."
     }
+
+
+def test_discovery_recover_websites_endpoint_returns_preview_and_summary(client, monkeypatch) -> None:
+    class FakeDiscoveryService:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+        def recover_preview_websites(self, *, preview, client_result_ids, skip_blocked):
+            return DiscoveryPreviewWebsiteRecoveryResponse(
+                preview=DiscoveryPreviewResponse.model_validate(
+                    {
+                        "provider": "google_places",
+                        "resolved_location": {
+                            "label": "Campinas, SP",
+                            "latitude": -22.9056,
+                            "longitude": -47.0608,
+                        },
+                        "total_provider_results": 1,
+                        "items": [
+                            {
+                                "client_result_id": "preview-1",
+                                "search_term": "loja de tintas",
+                                "provider_record_id": "place-preview-1",
+                                "source_url": "https://maps.google.com/?q=Preview",
+                                "raw_payload": {
+                                    "id": "place-preview-1",
+                                    "websiteUri": "https://preview.example.com",
+                                },
+                                "candidate": {
+                                    "business_name": "Preview Tintas",
+                                    "normalized_business_name": "preview tintas",
+                                    "category": "loja de tintas",
+                                    "city": "Campinas",
+                                    "state": "SP",
+                                    "website": "https://preview.example.com",
+                                    "domain": "preview.example.com",
+                                    "email": None,
+                                    "instagram": None,
+                                    "phone": None,
+                                    "whatsapp": None,
+                                    "address": None,
+                                    "neighborhood": None,
+                                    "postal_code": None,
+                                    "latitude": None,
+                                    "longitude": None,
+                                    "google_maps_url": None,
+                                    "google_place_id": "place-preview-1",
+                                    "source_provider": "google_places",
+                                    "source_url": "https://maps.google.com/?q=Preview",
+                                    "lead_source_type": "google_places",
+                                },
+                                "exclusion": {
+                                    "is_blocked": False,
+                                    "rule_id": None,
+                                    "rule_type": None,
+                                    "pattern": None,
+                                    "reason": None,
+                                },
+                                "enrichment": None,
+                            }
+                        ],
+                    }
+                ),
+                summary=DiscoveryPreviewWebsiteRecoverySummary(
+                    requested=1,
+                    processed=1,
+                    recovered_count=1,
+                    no_website_found=0,
+                    skipped_existing_website=0,
+                    skipped_missing_place_id=0,
+                    skipped_blocked=0,
+                    blocked_after_recovery=0,
+                    errors=0,
+                ),
+            )
+
+    monkeypatch.setattr(discovery_routes, "DiscoveryService", FakeDiscoveryService)
+
+    response = client.post(
+        "/discovery/recover-websites",
+        json={
+            "preview": {
+                "provider": "google_places",
+                "resolved_location": {
+                    "label": "Campinas, SP",
+                    "latitude": -22.9056,
+                    "longitude": -47.0608,
+                },
+                "total_provider_results": 1,
+                "items": [
+                    {
+                        "client_result_id": "preview-1",
+                        "search_term": "loja de tintas",
+                        "provider_record_id": "place-preview-1",
+                        "source_url": "https://maps.google.com/?q=Preview",
+                        "raw_payload": {},
+                        "candidate": {
+                            "business_name": "Preview Tintas",
+                            "normalized_business_name": "preview tintas",
+                            "category": "loja de tintas",
+                            "city": "Campinas",
+                            "state": "SP",
+                            "website": None,
+                            "domain": None,
+                            "email": None,
+                            "instagram": None,
+                            "phone": None,
+                            "whatsapp": None,
+                            "address": None,
+                            "neighborhood": None,
+                            "postal_code": None,
+                            "latitude": None,
+                            "longitude": None,
+                            "google_maps_url": None,
+                            "google_place_id": "place-preview-1",
+                            "source_provider": "google_places",
+                            "source_url": "https://maps.google.com/?q=Preview",
+                            "lead_source_type": "google_places",
+                        },
+                        "exclusion": {
+                            "is_blocked": False,
+                            "rule_id": None,
+                            "rule_type": None,
+                            "pattern": None,
+                            "reason": None,
+                        },
+                        "enrichment": None,
+                    }
+                ],
+            },
+            "client_result_ids": ["preview-1"],
+            "skip_blocked": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["requested"] == 1
+    assert payload["summary"]["recovered_count"] == 1
+    assert payload["preview"]["items"][0]["candidate"]["website"] == "https://preview.example.com"
+    assert payload["preview"]["items"][0]["candidate"]["domain"] == "preview.example.com"
 
 
 def test_discovery_enrich_preview_endpoint_enforces_max_25(client) -> None:

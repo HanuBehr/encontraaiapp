@@ -136,7 +136,7 @@ def test_google_places_provider_retries_transient_ssl_error_and_succeeds(monkeyp
             raise requests.exceptions.SSLError("UNEXPECTED_EOF_WHILE_READING")
         return _FakeGooglePlacesResponse({"places": []})
 
-    monkeypatch.setattr("app.services.providers.google_places.requests.post", fake_post)
+    monkeypatch.setattr("app.services.providers.google_places.requests.request", fake_post)
     monkeypatch.setattr("app.services.providers.google_places.time.sleep", lambda *_: None)
 
     results = provider.search(
@@ -158,7 +158,7 @@ def test_google_places_provider_raises_clean_error_after_transient_request_failu
     def fake_post(*args, **kwargs):
         raise requests.exceptions.Timeout("upstream timeout")
 
-    monkeypatch.setattr("app.services.providers.google_places.requests.post", fake_post)
+    monkeypatch.setattr("app.services.providers.google_places.requests.request", fake_post)
     monkeypatch.setattr("app.services.providers.google_places.time.sleep", lambda *_: None)
 
     try:
@@ -175,6 +175,134 @@ def test_google_places_provider_raises_clean_error_after_transient_request_failu
         assert exc.status_code == 503
     else:
         raise AssertionError("Expected GooglePlacesProviderError to be raised.")
+
+
+def test_discovery_recover_preview_websites_fetches_place_details_and_rechecks_exclusions(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    ExclusionRuleService(db_session, organization_id=service.lead_repository.organization_id).create_rule(
+        rule_type="domain",
+        pattern="blocked.com",
+        reason="Blocked after website recovery",
+    )
+
+    preview = DiscoveryPreviewResponse(
+        provider="google_places",
+        resolved_location=ResolvedLocation(
+            label="Campinas, SP",
+            latitude=-22.9056,
+            longitude=-47.0608,
+        ),
+        total_provider_results=1,
+        items=[
+            DiscoveryPreviewItem(
+                client_result_id="recover-1",
+                search_term="loja de tintas",
+                provider_record_id="place-recover-1",
+                source_url="https://maps.google.com/?q=Recuperada",
+                raw_payload={},
+                candidate=_candidate(
+                    "Recuperada",
+                    category="loja de tintas",
+                    phone="+5511999991111",
+                    city="Campinas",
+                ).model_copy(update={"website": None, "domain": None, "google_place_id": "place-recover-1"}),
+            )
+        ],
+    )
+
+    monkeypatch.setattr(
+        service.provider,
+        "fetch_place_details",
+        lambda place_id: {
+            "id": place_id,
+            "websiteUri": "blocked.com",
+            "googleMapsUri": "https://maps.google.com/?q=Recuperada",
+        },
+    )
+
+    response = service.recover_preview_websites(
+        preview=preview,
+        client_result_ids=["recover-1"],
+    )
+
+    assert response.summary.requested == 1
+    assert response.summary.processed == 1
+    assert response.summary.recovered_count == 1
+    assert response.summary.blocked_after_recovery == 1
+    assert response.summary.errors == 0
+    assert response.preview.items[0].candidate.website == "https://blocked.com"
+    assert response.preview.items[0].candidate.domain == "blocked.com"
+    assert response.preview.items[0].exclusion.is_blocked is True
+    assert response.preview.items[0].exclusion.rule_type == "domain"
+
+
+def test_discovery_recover_preview_websites_keeps_request_alive_when_one_row_fails(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    preview = DiscoveryPreviewResponse(
+        provider="google_places",
+        resolved_location=ResolvedLocation(
+            label="Campinas, SP",
+            latitude=-22.9056,
+            longitude=-47.0608,
+        ),
+        total_provider_results=2,
+        items=[
+            DiscoveryPreviewItem(
+                client_result_id="recover-good-1",
+                search_term="loja de tintas",
+                provider_record_id="place-recover-good-1",
+                source_url="https://maps.google.com/?q=Boa+Recuperada",
+                raw_payload={},
+                candidate=_candidate(
+                    "Boa Recuperada",
+                    category="loja de tintas",
+                    phone="+5511999991111",
+                    city="Campinas",
+                ).model_copy(update={"website": None, "domain": None, "google_place_id": "place-recover-good-1"}),
+            ),
+            DiscoveryPreviewItem(
+                client_result_id="recover-bad-1",
+                search_term="loja de tintas",
+                provider_record_id="place-recover-bad-1",
+                source_url="https://maps.google.com/?q=Ruim+Recuperada",
+                raw_payload={},
+                candidate=_candidate(
+                    "Ruim Recuperada",
+                    category="loja de tintas",
+                    phone="+5511999992222",
+                    city="Campinas",
+                ).model_copy(update={"website": None, "domain": None, "google_place_id": "place-recover-bad-1"}),
+            ),
+        ],
+    )
+
+    def fake_fetch_place_details(place_id: str) -> dict[str, str]:
+        if place_id == "place-recover-bad-1":
+            raise RuntimeError("detail lookup failed")
+        return {
+            "id": place_id,
+            "websiteUri": "https://boa-recuperada.example.com",
+        }
+
+    monkeypatch.setattr(service.provider, "fetch_place_details", fake_fetch_place_details)
+
+    response = service.recover_preview_websites(
+        preview=preview,
+        client_result_ids=["recover-good-1", "recover-bad-1"],
+    )
+
+    assert response.summary.requested == 2
+    assert response.summary.processed == 2
+    assert response.summary.recovered_count == 1
+    assert response.summary.errors == 1
+    assert response.summary.error_messages == ["Ruim Recuperada: detail lookup failed"]
+    by_id = {item.client_result_id: item for item in response.preview.items}
+    assert by_id["recover-good-1"].candidate.website == "https://boa-recuperada.example.com"
+    assert by_id["recover-good-1"].candidate.domain == "boa-recuperada.example.com"
+    assert by_id["recover-bad-1"].candidate.website is None
+    assert by_id["recover-bad-1"].candidate.domain is None
 
 
 def test_discovery_preview_recovers_website_from_provider_raw_payload(db_session, monkeypatch) -> None:

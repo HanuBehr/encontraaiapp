@@ -12,6 +12,8 @@ from app.schemas.discovery import (
     DiscoveryPreviewEnrichmentRequest,
     DiscoveryPreviewEnrichmentResponse,
     DiscoveryPreviewResponse,
+    DiscoveryPreviewWebsiteRecoveryRequest,
+    DiscoveryPreviewWebsiteRecoveryResponse,
     DiscoverySearchRequest,
     DiscoverySearchResponse,
 )
@@ -71,6 +73,23 @@ def enrich_discovery_preview(
     service = DiscoveryService(db=db, settings=settings)
     try:
         return service.enrich_preview(
+            preview=payload.preview,
+            client_result_ids=payload.client_result_ids,
+            skip_blocked=payload.skip_blocked,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/recover-websites", response_model=DiscoveryPreviewWebsiteRecoveryResponse)
+def recover_discovery_preview_websites(
+    payload: DiscoveryPreviewWebsiteRecoveryRequest,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> DiscoveryPreviewWebsiteRecoveryResponse:
+    service = DiscoveryService(db=db, settings=settings)
+    try:
+        return service.recover_preview_websites(
             preview=payload.preview,
             client_result_ids=payload.client_result_ids,
             skip_blocked=payload.skip_blocked,

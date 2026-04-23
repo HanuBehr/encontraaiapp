@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -23,6 +24,13 @@ class GooglePlacesProviderError(RuntimeError):
 
 class GooglePlacesProvider(DiscoveryProvider):
     TRANSIENT_RETRY_DELAYS_SECONDS = (0.25, 0.75)
+    DETAILS_FIELD_MASK = ",".join(
+        [
+            "id",
+            "websiteUri",
+            "googleMapsUri",
+        ]
+    )
     FIELD_MASK = ",".join(
         [
             "places.id",
@@ -54,98 +62,47 @@ class GooglePlacesProvider(DiscoveryProvider):
         if not self.settings.google_api_key:
             raise ValueError("GOOGLE_API_KEY is required for discovery.")
 
-        request_url = f"{self.settings.google_places_base_url}/places:searchText"
-        request_headers = {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": self.settings.google_api_key,
-            "X-Goog-FieldMask": self.FIELD_MASK,
-        }
-        request_body = {
-            "textQuery": f"{search_term} em {location_label}",
-            "languageCode": "pt-BR",
-            "regionCode": "BR",
-            "maxResultCount": max_results,
-            "locationBias": {
-                "circle": {
-                    "center": {"latitude": latitude, "longitude": longitude},
-                    "radius": float(radius_m),
-                }
+        payload = self._request_places_json(
+            method="POST",
+            url=f"{self.settings.google_places_base_url}/places:searchText",
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": self.settings.google_api_key,
+                "X-Goog-FieldMask": self.FIELD_MASK,
             },
-        }
-
-        response: requests.Response | None = None
-        for attempt_index, retry_delay in enumerate((0.0, *self.TRANSIENT_RETRY_DELAYS_SECONDS), start=1):
-            if retry_delay > 0:
-                time.sleep(retry_delay)
-            try:
-                response = requests.post(
-                    request_url,
-                    headers=request_headers,
-                    json=request_body,
-                    timeout=30,
-                )
-                response.raise_for_status()
-                break
-            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
-                logger.warning(
-                    "Google Places transient request failure for '%s' in '%s' (attempt %s/%s): %s: %s",
-                    search_term,
-                    location_label,
-                    attempt_index,
-                    len(self.TRANSIENT_RETRY_DELAYS_SECONDS) + 1,
-                    exc.__class__.__name__,
-                    exc,
-                )
-                if attempt_index == len(self.TRANSIENT_RETRY_DELAYS_SECONDS) + 1:
-                    raise GooglePlacesProviderError(
-                        "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
-                        status_code=503,
-                    ) from exc
-            except requests.exceptions.HTTPError as exc:
-                upstream_status = exc.response.status_code if exc.response is not None else None
-                logger.warning(
-                    "Google Places upstream HTTP failure for '%s' in '%s': status=%s",
-                    search_term,
-                    location_label,
-                    upstream_status,
-                )
-                raise GooglePlacesProviderError(
-                    f"Google Places request failed with upstream status {upstream_status or 'unknown'}. Retry shortly.",
-                    status_code=502,
-                ) from exc
-            except requests.exceptions.RequestException as exc:
-                logger.warning(
-                    "Google Places request failure for '%s' in '%s': %s: %s",
-                    search_term,
-                    location_label,
-                    exc.__class__.__name__,
-                    exc,
-                )
-                raise GooglePlacesProviderError(
-                    "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
-                    status_code=503,
-                ) from exc
-
-        if response is None:
-            raise GooglePlacesProviderError(
-                "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
-                status_code=503,
-            )
-
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            logger.warning(
-                "Google Places returned an invalid JSON response for '%s' in '%s'.",
-                search_term,
-                location_label,
-            )
-            raise GooglePlacesProviderError(
-                "Google Places returned an invalid upstream response. Retry shortly.",
-                status_code=502,
-            ) from exc
+            json_body={
+                "textQuery": f"{search_term} em {location_label}",
+                "languageCode": "pt-BR",
+                "regionCode": "BR",
+                "maxResultCount": max_results,
+                "locationBias": {
+                    "circle": {
+                        "center": {"latitude": latitude, "longitude": longitude},
+                        "radius": float(radius_m),
+                    }
+                },
+            },
+            operation=f"searchText '{search_term}' in '{location_label}'",
+        )
         places = payload.get("places", [])
         return [self._to_result(place) for place in places]
+
+    def fetch_place_details(self, place_id: str) -> dict[str, Any]:
+        if not self.settings.google_api_key:
+            raise ValueError("GOOGLE_API_KEY is required for discovery.")
+
+        encoded_place_id = quote(place_id, safe="")
+        payload = self._request_places_json(
+            method="GET",
+            url=f"{self.settings.google_places_base_url}/places/{encoded_place_id}",
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": self.settings.google_api_key,
+                "X-Goog-FieldMask": self.DETAILS_FIELD_MASK,
+            },
+            operation=f"placeDetails '{place_id}'",
+        )
+        return payload
 
     def _to_result(self, place: dict[str, Any]) -> ProviderLeadResult:
         business_name = ((place.get("displayName") or {}).get("text") or "").strip()
@@ -199,3 +156,80 @@ class GooglePlacesProvider(DiscoveryProvider):
             if component_types.intersection(expected_types):
                 return component.get("longText") or component.get("shortText")
         return None
+
+    def _request_places_json(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        operation: str,
+        json_body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response: requests.Response | None = None
+        for attempt_index, retry_delay in enumerate((0.0, *self.TRANSIENT_RETRY_DELAYS_SECONDS), start=1):
+            if retry_delay > 0:
+                time.sleep(retry_delay)
+            try:
+                request_kwargs: dict[str, Any] = {
+                    "headers": headers,
+                    "timeout": 30,
+                }
+                if json_body is not None:
+                    request_kwargs["json"] = json_body
+                response = requests.request(method, url, **request_kwargs)
+                response.raise_for_status()
+                break
+            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                logger.warning(
+                    "Google Places transient request failure during %s (attempt %s/%s): %s: %s",
+                    operation,
+                    attempt_index,
+                    len(self.TRANSIENT_RETRY_DELAYS_SECONDS) + 1,
+                    exc.__class__.__name__,
+                    exc,
+                )
+                if attempt_index == len(self.TRANSIENT_RETRY_DELAYS_SECONDS) + 1:
+                    raise GooglePlacesProviderError(
+                        "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
+                        status_code=503,
+                    ) from exc
+            except requests.exceptions.HTTPError as exc:
+                upstream_status = exc.response.status_code if exc.response is not None else None
+                logger.warning(
+                    "Google Places upstream HTTP failure during %s: status=%s",
+                    operation,
+                    upstream_status,
+                )
+                raise GooglePlacesProviderError(
+                    f"Google Places request failed with upstream status {upstream_status or 'unknown'}. Retry shortly.",
+                    status_code=502,
+                ) from exc
+            except requests.exceptions.RequestException as exc:
+                logger.warning(
+                    "Google Places request failure during %s: %s: %s",
+                    operation,
+                    exc.__class__.__name__,
+                    exc,
+                )
+                raise GooglePlacesProviderError(
+                    "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
+                    status_code=503,
+                ) from exc
+
+        if response is None:
+            raise GooglePlacesProviderError(
+                "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
+                status_code=503,
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            logger.warning("Google Places returned an invalid JSON response during %s.", operation)
+            raise GooglePlacesProviderError(
+                "Google Places returned an invalid upstream response. Retry shortly.",
+                status_code=502,
+            ) from exc
+
+        return payload if isinstance(payload, dict) else {}

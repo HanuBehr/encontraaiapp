@@ -136,6 +136,30 @@ class DiscoveryPreviewEnrichmentResponse(BaseModel):
     summary: DiscoveryPreviewEnrichmentSummary
 
 
+class DiscoveryPreviewWebsiteRecoveryRequest(BaseModel):
+    preview: DiscoveryPreviewResponse
+    client_result_ids: list[str] = Field(min_length=1, max_length=25)
+    skip_blocked: bool = True
+
+
+class DiscoveryPreviewWebsiteRecoverySummary(BaseModel):
+    requested: int
+    processed: int
+    recovered_count: int = 0
+    no_website_found: int = 0
+    skipped_existing_website: int = 0
+    skipped_missing_place_id: int = 0
+    skipped_blocked: int = 0
+    blocked_after_recovery: int = 0
+    errors: int = 0
+    error_messages: list[str] = Field(default_factory=list)
+
+
+class DiscoveryPreviewWebsiteRecoveryResponse(BaseModel):
+    preview: DiscoveryPreviewResponse
+    summary: DiscoveryPreviewWebsiteRecoverySummary
+
+
 class DiscoveryImportRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

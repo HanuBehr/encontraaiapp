@@ -5,6 +5,8 @@ import type {
   DiscoveryPreviewEnrichmentRequest,
   DiscoveryPreviewEnrichmentResponse,
   DiscoveryPreviewResponse,
+  DiscoveryPreviewWebsiteRecoveryRequest,
+  DiscoveryPreviewWebsiteRecoveryResponse,
   DiscoverySearchRequest,
   ExclusionRuleCreateRequest,
   ExclusionRuleCreateResponse,
@@ -28,6 +30,13 @@ export function importDiscoveryPreview(payload: DiscoveryImportRequest) {
 export function enrichDiscoveryPreview(payload: DiscoveryPreviewEnrichmentRequest) {
   return postJson<DiscoveryPreviewEnrichmentResponse, DiscoveryPreviewEnrichmentRequest>(
     "/discovery/enrich-preview",
+    payload,
+  );
+}
+
+export function recoverDiscoveryWebsites(payload: DiscoveryPreviewWebsiteRecoveryRequest) {
+  return postJson<DiscoveryPreviewWebsiteRecoveryResponse, DiscoveryPreviewWebsiteRecoveryRequest>(
+    "/discovery/recover-websites",
     payload,
   );
 }

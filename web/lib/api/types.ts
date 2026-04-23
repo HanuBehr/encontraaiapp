@@ -478,6 +478,28 @@ export type DiscoveryPreviewEnrichmentResponse = {
   };
 };
 
+export type DiscoveryPreviewWebsiteRecoveryRequest = {
+  preview: DiscoveryPreviewResponse;
+  client_result_ids: string[];
+  skip_blocked?: boolean;
+};
+
+export type DiscoveryPreviewWebsiteRecoveryResponse = {
+  preview: DiscoveryPreviewResponse;
+  summary: {
+    requested: number;
+    processed: number;
+    recovered_count: number;
+    no_website_found: number;
+    skipped_existing_website: number;
+    skipped_missing_place_id: number;
+    skipped_blocked: number;
+    blocked_after_recovery: number;
+    errors: number;
+    error_messages: string[];
+  };
+};
+
 export type DiscoveryImportRequest = {
   request: DiscoverySearchRequest;
   preview: DiscoveryPreviewResponse;
