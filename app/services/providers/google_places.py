@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
 
 import requests
@@ -10,8 +12,17 @@ from app.schemas.discovery import DiscoveryLeadCandidate
 from app.services.normalization import normalize_business_name, normalize_domain, normalize_phone_br
 from app.services.providers.discovery_base import DiscoveryProvider, ProviderLeadResult
 
+logger = logging.getLogger(__name__)
+
+
+class GooglePlacesProviderError(RuntimeError):
+    def __init__(self, message: str, *, status_code: int = 503) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class GooglePlacesProvider(DiscoveryProvider):
+    TRANSIENT_RETRY_DELAYS_SECONDS = (0.25, 0.75)
     FIELD_MASK = ",".join(
         [
             "places.id",
@@ -43,30 +54,96 @@ class GooglePlacesProvider(DiscoveryProvider):
         if not self.settings.google_api_key:
             raise ValueError("GOOGLE_API_KEY is required for discovery.")
 
-        response = requests.post(
-            f"{self.settings.google_places_base_url}/places:searchText",
-            headers={
-                "Content-Type": "application/json",
-                "X-Goog-Api-Key": self.settings.google_api_key,
-                "X-Goog-FieldMask": self.FIELD_MASK,
+        request_url = f"{self.settings.google_places_base_url}/places:searchText"
+        request_headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": self.settings.google_api_key,
+            "X-Goog-FieldMask": self.FIELD_MASK,
+        }
+        request_body = {
+            "textQuery": f"{search_term} em {location_label}",
+            "languageCode": "pt-BR",
+            "regionCode": "BR",
+            "maxResultCount": max_results,
+            "locationBias": {
+                "circle": {
+                    "center": {"latitude": latitude, "longitude": longitude},
+                    "radius": float(radius_m),
+                }
             },
-            json={
-                "textQuery": f"{search_term} em {location_label}",
-                "languageCode": "pt-BR",
-                "regionCode": "BR",
-                "maxResultCount": max_results,
-                "locationBias": {
-                    "circle": {
-                        "center": {"latitude": latitude, "longitude": longitude},
-                        "radius": float(radius_m),
-                    }
-                },
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
+        }
 
-        payload = response.json()
+        response: requests.Response | None = None
+        for attempt_index, retry_delay in enumerate((0.0, *self.TRANSIENT_RETRY_DELAYS_SECONDS), start=1):
+            if retry_delay > 0:
+                time.sleep(retry_delay)
+            try:
+                response = requests.post(
+                    request_url,
+                    headers=request_headers,
+                    json=request_body,
+                    timeout=30,
+                )
+                response.raise_for_status()
+                break
+            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                logger.warning(
+                    "Google Places transient request failure for '%s' in '%s' (attempt %s/%s): %s: %s",
+                    search_term,
+                    location_label,
+                    attempt_index,
+                    len(self.TRANSIENT_RETRY_DELAYS_SECONDS) + 1,
+                    exc.__class__.__name__,
+                    exc,
+                )
+                if attempt_index == len(self.TRANSIENT_RETRY_DELAYS_SECONDS) + 1:
+                    raise GooglePlacesProviderError(
+                        "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
+                        status_code=503,
+                    ) from exc
+            except requests.exceptions.HTTPError as exc:
+                upstream_status = exc.response.status_code if exc.response is not None else None
+                logger.warning(
+                    "Google Places upstream HTTP failure for '%s' in '%s': status=%s",
+                    search_term,
+                    location_label,
+                    upstream_status,
+                )
+                raise GooglePlacesProviderError(
+                    f"Google Places request failed with upstream status {upstream_status or 'unknown'}. Retry shortly.",
+                    status_code=502,
+                ) from exc
+            except requests.exceptions.RequestException as exc:
+                logger.warning(
+                    "Google Places request failure for '%s' in '%s': %s: %s",
+                    search_term,
+                    location_label,
+                    exc.__class__.__name__,
+                    exc,
+                )
+                raise GooglePlacesProviderError(
+                    "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
+                    status_code=503,
+                ) from exc
+
+        if response is None:
+            raise GooglePlacesProviderError(
+                "Google Places request failed due to an upstream SSL/network error. Retry shortly.",
+                status_code=503,
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            logger.warning(
+                "Google Places returned an invalid JSON response for '%s' in '%s'.",
+                search_term,
+                location_label,
+            )
+            raise GooglePlacesProviderError(
+                "Google Places returned an invalid upstream response. Retry shortly.",
+                status_code=502,
+            ) from exc
         places = payload.get("places", [])
         return [self._to_result(place) for place in places]
 

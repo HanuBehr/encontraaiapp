@@ -62,17 +62,28 @@ class LeadScopeResolver:
         )
 
     def _resolve_filters(self, filters: LeadListFilters) -> ResolvedLeadScope:
+        import_batch = None
+        scope_label = "Current filtered lead set"
         lead_ids = self.repository.list_lead_ids(filters)
+        if filters.import_batch_id is not None:
+            import_batch = self.repository.get_completed_import_batch(filters.import_batch_id)
+            if import_batch is None:
+                raise ValueError(f"Completed import batch {filters.import_batch_id} was not found.")
+            scope_label = f"Import batch #{filters.import_batch_id} filtered set"
+
         metadata = {
             "scope_type": "filters",
-            "scope_label": "Current filtered lead set",
+            "scope_label": scope_label,
             "lead_count": len(lead_ids),
         }
+        if filters.import_batch_id is not None:
+            metadata["import_batch_id"] = filters.import_batch_id
         return ResolvedLeadScope(
             scope_type="filters",
-            scope_label="Current filtered lead set",
+            scope_label=scope_label,
             lead_ids=lead_ids,
             filters=filters,
+            import_batch=import_batch,
             metadata=metadata,
         )
 

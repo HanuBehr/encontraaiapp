@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.routes.dedupe import router as dedupe_router
 from app.api.routes.discovery import router as discovery_router
+from app.api.routes.exclusion_rules import router as exclusion_rules_router
 from app.api.routes.exports import router as exports_router
 from app.api.routes.health import router as health_router
 from app.api.routes.leads import router as leads_router
@@ -19,6 +20,7 @@ settings = get_settings()
 app = FastAPI(title=settings.api_title)
 app.include_router(health_router)
 app.include_router(discovery_router)
+app.include_router(exclusion_rules_router)
 app.include_router(dedupe_router)
 app.include_router(scoring_router)
 app.include_router(outreach_router)

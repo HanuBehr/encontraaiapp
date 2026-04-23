@@ -11,6 +11,10 @@ import phonenumbers
 
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _EMAIL_RE = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
+_SPACED_EMAIL_RE = re.compile(
+    r"(?P<local>[A-Z0-9._%+\-]{2,})\s*@\s*(?P<domain>[A-Z0-9\-]+(?:\s*\.\s*[A-Z0-9\-]+)+)",
+    re.IGNORECASE,
+)
 _EMAIL_AT_TOKEN = r"(?:@|\[\s*at\s*\]|\(\s*at\s*\)|\[\s*arroba\s*\]|\(\s*arroba\s*\)|\s+at\s+|\s+arroba\s+)"
 _EMAIL_DOT_TOKEN = r"(?:\.|\[\s*dot\s*\]|\(\s*dot\s*\)|\[\s*ponto\s*\]|\(\s*ponto\s*\)|\s+dot\s+|\s+ponto\s+)"
 _EMAIL_OBFUSCATED_RE = re.compile(
@@ -30,6 +34,14 @@ _PHONE_RE = re.compile(
 WHATSAPP_HOST_KEYWORDS = ("wa.me", "whatsapp.com", "wa.link")
 INSTAGRAM_HOST_KEYWORDS = ("instagram.com", "instagr.am")
 CONTACT_URL_HINTS = ("contato", "contact", "fale", "atendimento", "suporte")
+ENRICHMENT_PAGE_HINTS = CONTACT_URL_HINTS + (
+    "sobre",
+    "about",
+    "empresa",
+    "institucional",
+    "quem somos",
+    "nossa historia",
+)
 MATERIAL_SIGNAL_KEYWORDS: dict[str, tuple[str, ...]] = {
     "catalytic_converters": (
         "catalisador",
@@ -92,9 +104,12 @@ def canonicalize_url(url: str | None, *, base_url: str | None = None) -> str | N
     candidate = url.strip()
     if not candidate:
         return None
-    if base_url:
-        candidate = urljoin(base_url, candidate)
-    parsed = urlparse(candidate if "://" in candidate else f"https://{candidate}")
+    try:
+        if base_url:
+            candidate = urljoin(base_url, candidate)
+        parsed = urlparse(candidate if "://" in candidate else f"https://{candidate}")
+    except ValueError:
+        return None
     if not parsed.netloc:
         return None
     return parsed._replace(fragment="").geturl()
@@ -147,6 +162,18 @@ def extract_emails(text: str) -> list[str]:
         for email in (clean_email(match.group(0)) for match in _EMAIL_RE.finditer(decoded_text))
         if email
     )
+
+
+def extract_spaced_emails(text: str) -> list[str]:
+    decoded_text = unquote(unescape(text or ""))
+    candidates: list[str] = []
+    for match in _SPACED_EMAIL_RE.finditer(decoded_text):
+        email = clean_email(f"{match.group('local')}@{match.group('domain')}")
+        if email and _EMAIL_RE.fullmatch(email.replace(" ", "")):
+            normalized_email = clean_email(email.replace(" ", ""))
+            if normalized_email:
+                candidates.append(normalized_email)
+    return unique_preserve_order(candidates)
 
 
 def _normalize_obfuscated_email_part(value: str) -> str:
@@ -239,9 +266,27 @@ def normalize_tags(tags: Iterable[str] | None) -> list[str]:
     return unique_preserve_order(cleaned)
 
 
-def is_contact_like_url(url: str | None) -> bool:
+def _matches_page_hints(
+    url: str | None,
+    *,
+    label: str | None = None,
+    hints: Iterable[str],
+) -> bool:
+    candidates: list[str] = []
     canonical = canonicalize_url(url)
-    if not canonical:
-        return False
-    normalized = normalize_text(canonical) or ""
-    return any(hint in normalized for hint in CONTACT_URL_HINTS)
+    if canonical:
+        normalized_url = normalize_text(canonical)
+        if normalized_url:
+            candidates.append(normalized_url)
+    normalized_label = normalize_text(label)
+    if normalized_label:
+        candidates.append(normalized_label)
+    return any(hint in candidate for candidate in candidates for hint in hints)
+
+
+def is_contact_like_url(url: str | None, *, label: str | None = None) -> bool:
+    return _matches_page_hints(url, label=label, hints=CONTACT_URL_HINTS)
+
+
+def is_enrichment_candidate_url(url: str | None, *, label: str | None = None) -> bool:
+    return _matches_page_hints(url, label=label, hints=ENRICHMENT_PAGE_HINTS)

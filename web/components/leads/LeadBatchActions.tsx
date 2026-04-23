@@ -314,11 +314,19 @@ function ActionButton({
 function ActionResultSummary({ result }: { result: ActionResult }) {
   if (result.kind === "enrich") {
     const hasErrors = result.summary.errors > 0;
+    const newPublicChannelCount =
+      result.summary.emails_found +
+      result.summary.instagrams_found +
+      result.summary.whatsapps_found +
+      result.summary.contact_forms_found;
     return (
       <ResultBox title={`${hasErrors ? "Enrichment finished with errors" : "Enrichment complete"} - ${result.scopeLabel}`}>
+        <ResultNarrative text={buildEnrichmentNarrative(result.summary)} />
         <ResultMetric label="Requested" value={result.requested} />
         <ResultMetric label="Processed" value={result.summary.processed} />
-        <ResultMetric label="Succeeded" value={result.summary.success_count} />
+        <ResultMetric label="Successful runs" value={result.summary.success_count} />
+        <ResultMetric label="New contacts found" value={result.summary.contacts_added} />
+        <ResultMetric label="Public channels" value={newPublicChannelCount} />
         <ResultMetric label="Emails" value={result.summary.emails_found} />
         <ResultMetric label="Instagrams" value={result.summary.instagrams_found} />
         <ResultMetric label="WhatsApps" value={result.summary.whatsapps_found} />
@@ -357,6 +365,14 @@ function ResultBox({ title, children }: { title: string; children: React.ReactNo
     <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
       <p className="text-sm font-semibold text-emerald-900">{title}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+    </div>
+  );
+}
+
+function ResultNarrative({ text }: { text: string }) {
+  return (
+    <div className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm text-neutral-800 sm:col-span-2 lg:col-span-4">
+      {text}
     </div>
   );
 }
@@ -477,4 +493,22 @@ function formatError(error: unknown) {
   }
 
   return "The action could not be completed.";
+}
+
+function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"]) {
+  const newPublicChannelCount =
+    summary.emails_found +
+    summary.instagrams_found +
+    summary.whatsapps_found +
+    summary.contact_forms_found;
+
+  if (summary.success_count === 0) {
+    return `Processed ${summary.processed.toLocaleString()} leads, but none completed enrichment successfully.`;
+  }
+
+  if (newPublicChannelCount === 0) {
+    return `Processed ${summary.processed.toLocaleString()} leads. ${summary.success_count.toLocaleString()} completed successfully, but no additional public contact channels were found.`;
+  }
+
+  return `Processed ${summary.processed.toLocaleString()} leads and found ${summary.contacts_added.toLocaleString()} new contact records across ${newPublicChannelCount.toLocaleString()} public contact channels.`;
 }

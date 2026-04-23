@@ -209,6 +209,46 @@ def test_import_exclusion_rules_script_imports_csv_and_reapplies(monkeypatch, db
     assert lead.blocked_reason == "Known large chain"
 
 
+def test_create_exclusion_rule_endpoint_reapplies_existing_leads(client, db_session) -> None:
+    organization = _organization("default")
+    lead = _lead("Inline Block Loja", organization=organization)
+    db_session.add_all([organization, lead])
+    db_session.commit()
+
+    response = client.post(
+        "/exclusion-rules",
+        json={
+            "rule_type": "exact_name",
+            "pattern": "Inline Block Loja",
+            "reason": "Blocked during discovery",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["rule"]["rule_type"] == "exact_name"
+    assert payload["rule"]["pattern"] == "Inline Block Loja"
+    assert payload["rule"]["reason"] == "Blocked during discovery"
+    assert payload["reapply_summary"]["evaluated"] == 1
+    assert payload["reapply_summary"]["blocked"] == 1
+    db_session.refresh(lead)
+    assert lead.is_blocked is True
+    assert lead.blocked_reason == "Blocked during discovery"
+
+
+def test_create_exclusion_rule_endpoint_is_inline_only(client) -> None:
+    response = client.post(
+        "/exclusion-rules",
+        json={
+            "rule_type": "provider_category",
+            "pattern": "hipermercado",
+            "reason": "Not exposed in inline flow",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def _exported_names(payload: bytes) -> list[str]:
     workbook = load_workbook(BytesIO(payload))
     return [

@@ -12,10 +12,19 @@ from app.models.base import Base
 
 
 settings = get_settings()
+SQLITE_TIMEOUT_SECONDS = 30
+SQLITE_BUSY_TIMEOUT_MS = SQLITE_TIMEOUT_SECONDS * 1000
+
+sqlite_connect_args = {}
+if settings.database_url.startswith("sqlite"):
+    sqlite_connect_args = {
+        "check_same_thread": False,
+        "timeout": SQLITE_TIMEOUT_SECONDS,
+    }
 
 engine = create_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+    connect_args=sqlite_connect_args,
     future=True,
 )
 
@@ -30,7 +39,7 @@ if settings.database_url.startswith("sqlite"):
         cursor = dbapi_connection.cursor()
         cursor.execute(f"PRAGMA journal_mode={sqlite_journal_mode}")
         cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
         cursor.close()
 
 SessionLocal = sessionmaker(

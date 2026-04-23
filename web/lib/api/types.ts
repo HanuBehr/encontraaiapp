@@ -36,6 +36,7 @@ export type LeadSortBy =
 
 export type LeadSortDir = "asc" | "desc";
 export type LeadBlockedFilter = "exclude" | "include" | "only";
+export type ExclusionRuleType = "exact_name" | "business_name_contains" | "domain";
 
 export type SalesRegionRead = {
   id: number;
@@ -197,6 +198,7 @@ export type LeadListParams = {
   has_assignment?: boolean;
   company_size_fit?: CompanySizeFit;
   trade_type?: TradeType;
+  import_batch_id?: number;
   blocked?: LeadBlockedFilter;
   sort_by?: LeadSortBy;
   sort_dir?: LeadSortDir;
@@ -270,6 +272,27 @@ export type LeadBatchEnrichmentSummary = {
   pages_fetched: number;
 };
 
+export type EnrichmentAttemptedPage = {
+  url: string;
+  page_type: string | null;
+  discovered_from_url: string | null;
+  fetched: boolean;
+  http_status: number | null;
+  robots_allowed: boolean;
+  note: string | null;
+};
+
+export type EnrichmentExtractedContact = {
+  contact_type: string;
+  raw_value: string;
+  normalized_value: string | null;
+  source_url: string;
+  confidence: number;
+  label: string | null;
+  note: string | null;
+  added_to_lead: boolean;
+};
+
 export type LeadBatchEnrichmentResponse = {
   processed: number;
   results: Array<{
@@ -278,12 +301,16 @@ export type LeadBatchEnrichmentResponse = {
     success: boolean;
     pages_attempted: number;
     pages_fetched: number;
+    attempted_pages: EnrichmentAttemptedPage[];
+    fetched_page_urls: string[];
+    extracted_contacts: EnrichmentExtractedContact[];
     contacts_added: number;
     contacts_added_by_type: Record<string, number>;
     fields_updated: string[];
     last_enriched_at: string | null;
     material_profile: Record<string, unknown>;
     skipped_reason: string | null;
+    no_email_found: boolean;
     error_message: string | null;
   }>;
   summary: LeadBatchEnrichmentSummary;
@@ -348,4 +375,173 @@ export type LeadOptionsResponse = {
   market_subsegments: LeadMarketSubsegmentOption[];
   target_fit_values: CompanySizeFit[];
   trade_type_values: TradeType[];
+};
+
+export type ResolvedLocation = {
+  label: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type DiscoveryLeadCandidate = {
+  business_name: string;
+  normalized_business_name: string;
+  category: string | null;
+  address: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  website: string | null;
+  domain: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  instagram: string | null;
+  google_maps_url: string | null;
+  google_place_id: string | null;
+  source_provider: string;
+  source_url: string | null;
+  lead_source_type: LeadSourceType;
+};
+
+export type DiscoverySearchRequest = {
+  search_terms: string[];
+  location_query?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  radius_m: number;
+  max_results_per_term: number;
+};
+
+export type DiscoveryExclusionMetadata = {
+  is_blocked: boolean;
+  rule_id: number | null;
+  rule_type: string | null;
+  pattern: string | null;
+  reason: string | null;
+};
+
+export type DiscoveryPreviewItem = {
+  client_result_id: string | null;
+  search_term: string;
+  provider_record_id: string | null;
+  source_url: string | null;
+  raw_payload: Record<string, unknown>;
+  candidate: DiscoveryLeadCandidate;
+  exclusion: DiscoveryExclusionMetadata;
+  enrichment: DiscoveryPreviewEnrichmentMetadata | null;
+};
+
+export type DiscoveryPreviewResponse = {
+  provider: string;
+  resolved_location: ResolvedLocation;
+  total_provider_results: number;
+  items: DiscoveryPreviewItem[];
+};
+
+export type DiscoveryPreviewEnrichmentMetadata = {
+  success: boolean;
+  attempted_pages: EnrichmentAttemptedPage[];
+  fetched_page_urls: string[];
+  extracted_contacts: EnrichmentExtractedContact[];
+  email_found: boolean;
+  instagram_found: boolean;
+  contact_form_found: boolean;
+  no_email_found: boolean;
+  skipped_reason: string | null;
+  error_message: string | null;
+};
+
+export type DiscoveryPreviewEnrichmentRequest = {
+  preview: DiscoveryPreviewResponse;
+  client_result_ids: string[];
+  skip_blocked?: boolean;
+};
+
+export type DiscoveryPreviewEnrichmentResponse = {
+  preview: DiscoveryPreviewResponse;
+  summary: {
+    requested: number;
+    processed: number;
+    success_count: number;
+    emails_found: number;
+    instagrams_found: number;
+    contact_forms_found: number;
+    no_email_found: number;
+    skipped_no_website: number;
+    blocked_after_enrichment: number;
+    errors: number;
+    error_messages: string[];
+  };
+};
+
+export type DiscoveryImportRequest = {
+  request: DiscoverySearchRequest;
+  preview: DiscoveryPreviewResponse;
+  selected_client_result_ids: string[];
+  skip_blocked?: boolean;
+};
+
+export type DiscoveryImportResponse = {
+  batch: {
+    id: number;
+    status: string;
+    source_provider: string | null;
+    source_query: string | null;
+    location_label: string | null;
+    record_count: number;
+    lead_count: number;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  batch_id: number;
+  provider: string;
+  resolved_location: ResolvedLocation;
+  total_preview_items: number;
+  selected_items: number;
+  saved_items: number;
+  skipped_blocked: number;
+  created_leads: number;
+  updated_leads: number;
+  saved_lead_ids: number[];
+  leads: LeadSummary[];
+  skipped_items: Array<{
+    client_result_id: string;
+    business_name: string;
+    reason: string;
+    exclusion: DiscoveryExclusionMetadata;
+  }>;
+};
+
+export type ExclusionRuleCreateRequest = {
+  rule_type: ExclusionRuleType;
+  pattern: string;
+  reason?: string | null;
+  is_active?: boolean;
+  reapply_existing_leads?: boolean;
+};
+
+export type ExclusionRuleCreateResponse = {
+  rule: {
+    id: number;
+    organization_id: number;
+    rule_type: string;
+    pattern: string;
+    normalized_pattern: string;
+    reason: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  reapply_summary: {
+    evaluated: number;
+    blocked: number;
+    unblocked: number;
+    unchanged: number;
+  } | null;
 };

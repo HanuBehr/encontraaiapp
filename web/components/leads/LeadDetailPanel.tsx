@@ -3,7 +3,12 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getLeadDetail } from "@/lib/api/leads";
-import type { LeadContactRead, LeadDetail } from "@/lib/api/types";
+import type {
+  EnrichmentAttemptedPage,
+  EnrichmentExtractedContact,
+  LeadContactRead,
+  LeadDetail,
+} from "@/lib/api/types";
 
 type LeadDetailPanelProps = {
   leadId: number | null;
@@ -44,6 +49,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
 
   const lead = detailQuery.data;
   const latestEnrichment = lead.enrichments[0];
+  const latestEnrichmentAudit = getLatestEnrichmentAudit(lead);
 
   return (
     <aside className="rounded-md border border-neutral-200 bg-white">
@@ -121,6 +127,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
           {latestEnrichment?.source_url ? (
             <p className="mt-3 break-words text-sm text-neutral-600">{latestEnrichment.source_url}</p>
           ) : null}
+          <EnrichmentAudit audit={latestEnrichmentAudit} />
         </DetailSection>
 
         <DetailSection title="Notes">
@@ -228,6 +235,95 @@ function ContactEvidence({ contacts }: { contacts: LeadContactRead[] }) {
   );
 }
 
+function EnrichmentAudit({ audit }: { audit: EnrichmentAuditData | null }) {
+  if (!audit) {
+    return <p className="mt-4 text-sm text-neutral-500">No enrichment audit recorded yet.</p>;
+  }
+
+  return (
+    <div className="mt-4 space-y-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <div className={`rounded-md px-3 py-2 text-sm ${audit.noEmailFound ? "border border-amber-200 bg-amber-50 text-amber-950" : "border border-emerald-200 bg-emerald-50 text-emerald-950"}`}>
+        <p className="font-medium">{audit.noEmailFound ? "Latest run finished without finding a public email." : "Latest run captured public contact evidence."}</p>
+        <p className="mt-1 text-xs opacity-80">{formatDateTime(audit.createdAt) ?? "Audit time unavailable"}</p>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <AuditList
+          title="Attempted pages"
+          emptyMessage="No attempted pages were recorded."
+          items={audit.attemptedPages.map((page) => ({
+            key: `${page.url}-${page.page_type ?? "page"}`,
+            title: labelToken(page.page_type) ?? "Page",
+            value: page.url,
+            meta: compact([
+              page.fetched ? `Fetched${page.http_status ? ` (${page.http_status})` : ""}` : "Not fetched",
+              page.discovered_from_url ? `From ${page.discovered_from_url}` : null,
+              page.note,
+            ]),
+          }))}
+        />
+        <AuditList
+          title="Fetched pages"
+          emptyMessage="No fetched pages were recorded."
+          items={audit.fetchedPageUrls.map((url) => ({
+            key: url,
+            title: "Fetched",
+            value: url,
+            meta: null,
+          }))}
+        />
+      </div>
+
+      <AuditList
+        title="Extracted contacts"
+        emptyMessage="No extracted contacts were recorded for the latest run."
+        items={audit.extractedContacts.map((contact, index) => ({
+          key: `${contact.source_url}-${contact.normalized_value ?? contact.raw_value}-${index}`,
+          title: `${labelToken(contact.contact_type) ?? "Contact"}: ${contact.normalized_value || contact.raw_value}`,
+          value: contact.source_url,
+          meta: compact([
+            `Confidence ${Math.round(contact.confidence * 100)}%`,
+            contact.addedToLead ? "Added to lead" : "Already known",
+            contact.note,
+          ]),
+        }))}
+      />
+    </div>
+  );
+}
+
+function AuditList({
+  title,
+  items,
+  emptyMessage,
+}: {
+  title: string;
+  items: Array<{ key: string; title: string; value: string; meta: string | null }>;
+  emptyMessage: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase text-neutral-500">{title}</p>
+      {items.length ? (
+        <div className="mt-2 space-y-2">
+          {items.slice(0, 6).map((item) => (
+            <div key={item.key} className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm">
+              <p className="font-medium text-neutral-900">{item.title}</p>
+              <p className="mt-1 break-all text-xs text-neutral-600">{item.value}</p>
+              {item.meta ? <p className="mt-1 text-xs text-neutral-500">{item.meta}</p> : null}
+            </div>
+          ))}
+          {items.length > 6 ? (
+            <p className="text-xs text-neutral-500">{items.length - 6} more not shown.</p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-neutral-500">{emptyMessage}</p>
+      )}
+    </div>
+  );
+}
+
 function compact(values: Array<string | null | undefined>) {
   const text = values.filter(Boolean).join(" - ");
   return text || null;
@@ -255,4 +351,102 @@ function formatDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+type EnrichmentAuditData = {
+  attemptedPages: EnrichmentAttemptedPage[];
+  fetchedPageUrls: string[];
+  extractedContacts: Array<EnrichmentExtractedContact & { addedToLead: boolean }>;
+  noEmailFound: boolean;
+  createdAt: string | null;
+};
+
+function getLatestEnrichmentAudit(lead: LeadDetail): EnrichmentAuditData | null {
+  const activity = lead.activity_logs.find((item) => item.action === "enriched");
+  if (!activity) {
+    return null;
+  }
+
+  const metadata = asRecord(activity.metadata_json);
+  if (!metadata) {
+    return null;
+  }
+  const attemptedPages = parseAttemptedPages(metadata.attempted_pages);
+  const fetchedPageUrls = parseStringArray(metadata.fetched_page_urls);
+  const extractedContacts = parseExtractedContacts(metadata.extracted_contacts);
+
+  return {
+    attemptedPages,
+    fetchedPageUrls,
+    extractedContacts,
+    noEmailFound: Boolean(metadata.no_email_found),
+    createdAt: activity.created_at,
+  };
+}
+
+function parseAttemptedPages(value: unknown): EnrichmentAttemptedPage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null && typeof item.url === "string")
+    .map((item) => ({
+      url: String(item.url),
+      page_type: asNullableString(item.page_type),
+      discovered_from_url: asNullableString(item.discovered_from_url),
+      fetched: Boolean(item.fetched),
+      http_status: asNullableNumber(item.http_status),
+      robots_allowed: item.robots_allowed !== false,
+      note: asNullableString(item.note),
+    }));
+}
+
+function parseExtractedContacts(
+  value: unknown,
+): Array<EnrichmentExtractedContact & { addedToLead: boolean }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => asRecord(item))
+    .filter(
+      (item): item is Record<string, unknown> =>
+        item !== null && typeof item.contact_type === "string" && typeof item.source_url === "string",
+    )
+    .map((item) => ({
+      contact_type: String(item.contact_type),
+      raw_value: asNullableString(item.raw_value) ?? "",
+      normalized_value: asNullableString(item.normalized_value),
+      source_url: String(item.source_url),
+      confidence: typeof item.confidence === "number" ? item.confidence : 0,
+      label: asNullableString(item.label),
+      note: asNullableString(item.note),
+      added_to_lead: Boolean(item.added_to_lead),
+      addedToLead: Boolean(item.added_to_lead),
+    }));
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asNullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
 }

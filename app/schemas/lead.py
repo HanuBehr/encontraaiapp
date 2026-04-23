@@ -207,6 +207,7 @@ class LeadListFilters(BaseModel):
     has_assignment: bool | None = None
     company_size_fit: CompanySizeFit | None = None
     trade_type: TradeType | None = None
+    import_batch_id: int | None = Field(default=None, ge=1)
     blocked: LeadBlockedFilter = "exclude"
     sort_by: LeadSortBy = "updated_at"
     sort_dir: LeadSortDir = "desc"
@@ -311,18 +312,43 @@ class LeadBatchEnrichmentRequest(BaseModel):
     lead_ids: list[int] = Field(min_length=1)
 
 
+class EnrichmentAttemptedPage(BaseModel):
+    url: str
+    page_type: str | None = None
+    discovered_from_url: str | None = None
+    fetched: bool = False
+    http_status: int | None = None
+    robots_allowed: bool = True
+    note: str | None = None
+
+
+class EnrichmentExtractedContact(BaseModel):
+    contact_type: ContactType
+    raw_value: str
+    normalized_value: str | None = None
+    source_url: str
+    confidence: float
+    label: str | None = None
+    note: str | None = None
+    added_to_lead: bool = False
+
+
 class EnrichmentRunResult(BaseModel):
     lead_id: int
     business_name: str | None = None
     success: bool = True
     pages_attempted: int = 0
     pages_fetched: int = 0
+    attempted_pages: list[EnrichmentAttemptedPage] = Field(default_factory=list)
+    fetched_page_urls: list[str] = Field(default_factory=list)
+    extracted_contacts: list[EnrichmentExtractedContact] = Field(default_factory=list)
     contacts_added: int = 0
     contacts_added_by_type: dict[str, int] = Field(default_factory=dict)
     fields_updated: list[str] = Field(default_factory=list)
     last_enriched_at: datetime | None = None
     material_profile: dict[str, Any] = Field(default_factory=dict)
     skipped_reason: str | None = None
+    no_email_found: bool = False
     error_message: str | None = None
 
 

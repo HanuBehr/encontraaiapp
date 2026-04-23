@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, SortingState } from "@tanstack/react-table";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { LeadBatchActions } from "@/components/leads/LeadBatchActions";
@@ -19,7 +20,12 @@ import {
 
 const SEARCH_FETCH_LIMIT = 500;
 
-export function LeadOperationsWorkspace() {
+type LeadOperationsWorkspaceProps = {
+  initialImportBatchId?: number | null;
+};
+
+export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOperationsWorkspaceProps) {
+  const importBatchId = initialImportBatchId;
   const [filters, setFilters] = useState<QueueFilters>(defaultQueueFilters);
   const [search, setSearch] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
@@ -53,13 +59,14 @@ export function LeadOperationsWorkspace() {
       has_email: booleanFilterValue(filters.hasEmail),
       has_whatsapp: booleanFilterValue(filters.hasWhatsapp),
       has_instagram: booleanFilterValue(filters.hasInstagram),
+      import_batch_id: importBatchId ?? undefined,
       blocked: filters.blocked,
       sort_by: sortBy,
       sort_dir: sortDir,
       limit: searchMode ? SEARCH_FETCH_LIMIT : pageSize,
       offset: searchMode ? 0 : pageIndex * pageSize,
     };
-  }, [filters, pageIndex, pageSize, search, sorting]);
+  }, [filters, importBatchId, pageIndex, pageSize, search, sorting]);
 
   const leadsQuery = useQuery({
     queryKey: ["leads", queryParams],
@@ -125,6 +132,23 @@ export function LeadOperationsWorkspace() {
           <Metric label="Page size" value={String(pageSize)} />
         </div>
       </div>
+
+      {importBatchId ? (
+        <section className="flex flex-col gap-3 rounded-md border border-cyan-200 bg-cyan-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-cyan-950">Viewing discovery batch {importBatchId}</p>
+            <p className="mt-1 text-sm text-cyan-900">
+              Enrich, assign, or export this saved discovery batch from the normal leads workspace.
+            </p>
+          </div>
+          <Link
+            href="/leads"
+            className="rounded-md border border-cyan-900 bg-white px-3 py-2 text-center text-sm font-medium text-cyan-950"
+          >
+            Clear batch scope
+          </Link>
+        </section>
+      ) : null}
 
       <LeadQueueSearch
         value={search}

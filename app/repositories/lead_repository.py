@@ -204,6 +204,13 @@ class LeadRepository:
         batches = self.list_recent_import_batches(limit=1, blocked=blocked)
         return batches[0] if batches else None
 
+    def get_completed_import_batch(self, batch_id: int) -> ImportBatch | None:
+        query = select(ImportBatch).where(
+            ImportBatch.id == batch_id,
+            ImportBatch.status == ImportBatchStatus.COMPLETED,
+        )
+        return self.db.execute(query).scalar_one_or_none()
+
     def list_lead_ids_for_import_batch(
         self,
         batch_id: int,
@@ -576,6 +583,15 @@ class LeadRepository:
             conditions.append(Lead.company_size_fit == filters.company_size_fit.value)
         if filters.trade_type is not None:
             conditions.append(Lead.trade_type == filters.trade_type.value)
+        if filters.import_batch_id is not None:
+            conditions.append(
+                Lead.id.in_(
+                    select(RawDiscoveryRecord.lead_id).where(
+                        RawDiscoveryRecord.import_batch_id == filters.import_batch_id,
+                        RawDiscoveryRecord.lead_id.is_not(None),
+                    )
+                )
+            )
         conditions.extend(self._blocked_conditions(filters.blocked))
 
         return conditions

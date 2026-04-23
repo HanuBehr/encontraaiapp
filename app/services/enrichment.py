@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -16,16 +18,25 @@ from app.models.base import utcnow
 from app.models.lead import Lead
 from app.models.lead_enrichment_record import LeadEnrichmentRecord
 from app.repositories.lead_repository import LeadRepository
-from app.schemas.lead import EnrichmentRunResult, LeadBatchEnrichmentResponse, LeadBatchEnrichmentSummary
+from app.schemas.discovery import DiscoveryLeadCandidate, DiscoveryPreviewEnrichmentMetadata
+from app.schemas.lead import (
+    EnrichmentAttemptedPage,
+    EnrichmentExtractedContact,
+    EnrichmentRunResult,
+    LeadBatchEnrichmentResponse,
+    LeadBatchEnrichmentSummary,
+)
 from app.services.normalization import (
     canonicalize_url,
     clean_email,
     extract_emails,
+    extract_spaced_emails,
     extract_instagram_links,
     extract_obfuscated_emails,
     extract_phone_candidates,
     extract_whatsapp_from_url,
     infer_material_signals,
+    is_enrichment_candidate_url,
     is_contact_like_url,
     normalize_domain,
     normalize_phone_br,
@@ -63,6 +74,35 @@ class PageExtractionResult:
     confidence_scores: dict[str, float]
     material_signals: dict[str, dict[str, Any]]
     candidate_page_urls: list[str]
+
+
+@dataclass(slots=True)
+class CandidatePage:
+    url: str
+    discovered_from_url: str | None = None
+
+
+@dataclass(slots=True)
+class CrawledPageResult:
+    source_url: str
+    page_type: str
+    http_status: int | None
+    robots_allowed: bool
+    extracted_fields: dict[str, Any]
+    confidence_scores: dict[str, Any]
+    material_signals: dict[str, Any]
+    evidences: list[ExtractedEvidence]
+    note: str | None = None
+
+
+@dataclass(slots=True)
+class PublicWebsiteCrawlResult:
+    pages_attempted: int
+    pages_fetched: int
+    attempted_pages: list[EnrichmentAttemptedPage]
+    page_results: list[CrawledPageResult]
+    material_signals: dict[str, dict[str, Any]]
+    skipped_reason: str | None = None
 
 
 def _decode_cloudflare_email(encoded_value: str | None) -> str | None:
@@ -150,6 +190,12 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
             continue
         anchor_hrefs.append(canonical_href)
 
+        if (
+            is_enrichment_candidate_url(canonical_href, label=anchor_text)
+            and urlparse(canonical_href).netloc.lower() == source_host
+        ):
+            candidate_page_urls.append(canonical_href)
+
         whatsapp_match = extract_whatsapp_from_url(canonical_href)
         if whatsapp_match:
             raw_value, normalized_value = whatsapp_match
@@ -164,9 +210,7 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
                 )
             )
 
-        if is_contact_like_url(canonical_href):
-            if urlparse(canonical_href).netloc.lower() == source_host:
-                candidate_page_urls.append(canonical_href)
+        if is_contact_like_url(canonical_href, label=anchor_text):
             add_evidence(
                 ExtractedEvidence(
                     contact_type=ContactType.CONTACT_FORM,
@@ -203,6 +247,18 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
             )
         )
 
+    for email in extract_spaced_emails(text):
+        add_evidence(
+            ExtractedEvidence(
+                contact_type=ContactType.EMAIL,
+                raw_value=email,
+                normalized_value=email,
+                confidence=0.9,
+                source_url=source_url,
+                label="spaced_email_text",
+            )
+        )
+
     for email in extract_emails(html):
         add_evidence(
             ExtractedEvidence(
@@ -212,6 +268,18 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
                 confidence=0.88,
                 source_url=source_url,
                 label="html_source",
+            )
+        )
+
+    for email in extract_spaced_emails(html):
+        add_evidence(
+            ExtractedEvidence(
+                contact_type=ContactType.EMAIL,
+                raw_value=email,
+                normalized_value=email,
+                confidence=0.86,
+                source_url=source_url,
+                label="spaced_email_html",
             )
         )
 
@@ -309,19 +377,25 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
 
 class EnrichmentService:
     USER_AGENT = "reverse-logistics-mvp/0.1"
+    SQLITE_LOCK_RETRY_DELAYS_SECONDS = (0.2, 0.5)
     PAGE_PATHS = (
         "/",
         "/contato",
         "/contact",
         "/atendimento",
         "/sac",
+        "/contatos",
         "/fale-conosco",
         "/faleconosco",
+        "/fale-com-a-gente",
         "/sobre",
+        "/sobre-nos",
         "/about",
         "/empresa",
         "/institucional",
         "/quem-somos",
+        "/quem_somos",
+        "/nossa-historia",
     )
     MAX_DISCOVERED_CONTACT_PAGES = 4
 
@@ -338,24 +412,41 @@ class EnrichmentService:
         self.robot_cache: dict[str, RobotFileParser | None] = {}
 
     def enrich_lead(self, lead_id: int, *, actor: str = "system") -> EnrichmentRunResult:
+        retry_delays = (0.0, *self.SQLITE_LOCK_RETRY_DELAYS_SECONDS)
+        for attempt_index, retry_delay in enumerate(retry_delays):
+            if retry_delay > 0:
+                time.sleep(retry_delay)
+            try:
+                return self._enrich_lead_once(lead_id, actor=actor)
+            except OperationalError as exc:
+                self.db.rollback()
+                if not self._is_sqlite_lock_error(exc) or attempt_index == len(retry_delays) - 1:
+                    raise
+
+        raise RuntimeError("SQLite retry loop exited without returning a result.")
+
+    def _enrich_lead_once(self, lead_id: int, *, actor: str = "system") -> EnrichmentRunResult:
         lead = self.repository.get_by_id(lead_id)
         if lead is None:
             raise ValueError(f"Lead {lead_id} not found.")
 
-        pages_attempted = 0
-        pages_fetched = 0
         contacts_added = 0
         contacts_added_by_type: dict[str, int] = {}
-        aggregated_signals: dict[str, dict[str, Any]] = {}
-        skipped_reason: str | None = None
+        extracted_contacts: list[EnrichmentExtractedContact] = []
 
         website_url = canonicalize_url(lead.website)
         if website_url and lead.website != website_url:
             lead.website = website_url
             lead.domain = normalize_domain(website_url)
 
-        candidate_urls = self._build_candidate_urls(lead)
-        if not candidate_urls:
+        crawl_result = self._crawl_public_website(lead.website)
+        pages_attempted = crawl_result.pages_attempted
+        pages_fetched = crawl_result.pages_fetched
+        aggregated_signals = crawl_result.material_signals
+        page_audit = crawl_result.attempted_pages
+        skipped_reason: str | None = None
+
+        if crawl_result.skipped_reason:
             skipped_reason = "Lead has no public website."
             self._create_enrichment_record(
                 lead=lead,
@@ -369,80 +460,20 @@ class EnrichmentService:
                 note=skipped_reason,
             )
         else:
-            seen_candidate_urls = set(candidate_urls)
-            discovered_contact_pages = 0
-            page_index = 0
-            while page_index < len(candidate_urls):
-                page_url = candidate_urls[page_index]
-                page_index += 1
-                pages_attempted += 1
-                page_type = self._classify_page(page_url, website_url or page_url)
-                robots_allowed = self._can_fetch(page_url)
-                if not robots_allowed:
-                    self._create_enrichment_record(
-                        lead=lead,
-                        source_url=page_url,
-                        page_type=page_type,
-                        http_status=None,
-                        robots_allowed=False,
-                        extracted_fields={},
-                        confidence_scores={},
-                        material_signals={},
-                        note="Blocked by robots.txt",
-                    )
-                    continue
-
-                try:
-                    response = self.http.get(
-                        page_url,
-                        headers={"User-Agent": self.USER_AGENT},
-                        timeout=20,
-                        allow_redirects=True,
-                    )
-                except requests.RequestException as exc:
-                    self._create_enrichment_record(
-                        lead=lead,
-                        source_url=page_url,
-                        page_type=page_type,
-                        http_status=None,
-                        robots_allowed=True,
-                        extracted_fields={},
-                        confidence_scores={},
-                        material_signals={},
-                        note=f"Request failed: {exc}",
-                    )
-                    continue
-
-                content_type = (response.headers.get("content-type") or "").lower()
-                if response.status_code >= 400 or "html" not in content_type:
-                    self._create_enrichment_record(
-                        lead=lead,
-                        source_url=response.url,
-                        page_type=page_type,
-                        http_status=response.status_code,
-                        robots_allowed=True,
-                        extracted_fields={},
-                        confidence_scores={},
-                        material_signals={},
-                        note=f"Skipped content type: {content_type or 'unknown'}",
-                    )
-                    continue
-
-                pages_fetched += 1
-                extraction = extract_public_page_data(response.text, response.url)
+            for page_result in crawl_result.page_results:
                 record = self._create_enrichment_record(
                     lead=lead,
-                    source_url=response.url,
-                    page_type=page_type,
-                    http_status=response.status_code,
-                    robots_allowed=True,
-                    extracted_fields=extraction.extracted_fields,
-                    confidence_scores=extraction.confidence_scores,
-                    material_signals=extraction.material_signals,
-                    note=None,
+                    source_url=page_result.source_url,
+                    page_type=page_result.page_type,
+                    http_status=page_result.http_status,
+                    robots_allowed=page_result.robots_allowed,
+                    extracted_fields=page_result.extracted_fields,
+                    confidence_scores=page_result.confidence_scores,
+                    material_signals=page_result.material_signals,
+                    note=page_result.note,
                 )
 
-                for evidence in extraction.evidences:
+                for evidence in page_result.evidences:
                     contact = self.repository.add_contact_if_missing(
                         lead_id=lead.id,
                         contact_type=evidence.contact_type,
@@ -456,22 +487,22 @@ class EnrichmentService:
                         label=evidence.label,
                         note=evidence.note,
                     )
+                    extracted_contacts.append(
+                        EnrichmentExtractedContact(
+                            contact_type=evidence.contact_type,
+                            raw_value=evidence.raw_value,
+                            normalized_value=evidence.normalized_value,
+                            source_url=evidence.source_url,
+                            confidence=evidence.confidence,
+                            label=evidence.label,
+                            note=evidence.note,
+                            added_to_lead=contact is not None,
+                        )
+                    )
                     if contact is not None:
                         contacts_added += 1
                         contact_type_key = evidence.contact_type.value
                         contacts_added_by_type[contact_type_key] = contacts_added_by_type.get(contact_type_key, 0) + 1
-
-                aggregated_signals = self._merge_material_signals(aggregated_signals, extraction.material_signals)
-                for discovered_url in extraction.candidate_page_urls:
-                    if discovered_contact_pages >= self.MAX_DISCOVERED_CONTACT_PAGES:
-                        break
-                    if discovered_url in seen_candidate_urls:
-                        continue
-                    if not self._is_same_host(discovered_url, website_url or page_url):
-                        continue
-                    candidate_urls.append(discovered_url)
-                    seen_candidate_urls.add(discovered_url)
-                    discovered_contact_pages += 1
 
         fields_updated = self.repository.sync_canonical_contacts(lead)
         if lead.website and not lead.domain:
@@ -489,6 +520,17 @@ class EnrichmentService:
             fields_updated.append("last_enriched_at")
 
         scoring_result = ScoringService(self.db).score_lead_instance(lead)
+        fetched_page_urls = unique_preserve_order(
+            attempted_page.url
+            for attempted_page in page_audit
+            if attempted_page.fetched
+        )
+        no_email_found = not bool(lead.email)
+        email_source_urls = unique_preserve_order(
+            contact.source_url
+            for contact in extracted_contacts
+            if contact.contact_type == ContactType.EMAIL
+        )
 
         self.db.add(
             ActivityLog(
@@ -506,6 +548,11 @@ class EnrichmentService:
                     "fields_updated": fields_updated,
                     "lead_score": scoring_result.lead_score,
                     "skipped_reason": skipped_reason,
+                    "attempted_pages": [attempted_page.model_dump(mode="json") for attempted_page in page_audit],
+                    "fetched_page_urls": fetched_page_urls,
+                    "extracted_contacts": [contact.model_dump(mode="json") for contact in extracted_contacts],
+                    "email_source_urls": email_source_urls,
+                    "no_email_found": no_email_found,
                 },
             )
         )
@@ -517,12 +564,218 @@ class EnrichmentService:
             business_name=lead.business_name,
             pages_attempted=pages_attempted,
             pages_fetched=pages_fetched,
+            attempted_pages=page_audit,
+            fetched_page_urls=fetched_page_urls,
+            extracted_contacts=extracted_contacts,
             contacts_added=contacts_added,
             contacts_added_by_type=contacts_added_by_type,
             fields_updated=unique_preserve_order(fields_updated),
             last_enriched_at=lead.last_enriched_at or utcnow(),
             material_profile=lead.material_profile or {},
             skipped_reason=skipped_reason,
+            no_email_found=no_email_found,
+        )
+
+    def enrich_preview_candidate(
+        self,
+        candidate: DiscoveryLeadCandidate,
+    ) -> tuple[DiscoveryLeadCandidate, DiscoveryPreviewEnrichmentMetadata]:
+        updated_candidate = candidate.model_copy(deep=True)
+        website_url = canonicalize_url(updated_candidate.website)
+        if website_url:
+            updated_candidate.website = website_url
+            normalized_domain = normalize_domain(website_url)
+            if normalized_domain:
+                updated_candidate.domain = normalized_domain
+        else:
+            updated_candidate.website = None
+
+        crawl_result = self._crawl_public_website(updated_candidate.website)
+        extracted_contacts: list[EnrichmentExtractedContact] = []
+        for page_result in crawl_result.page_results:
+            for evidence in page_result.evidences:
+                extracted_contacts.append(
+                    EnrichmentExtractedContact(
+                        contact_type=evidence.contact_type,
+                        raw_value=evidence.raw_value,
+                        normalized_value=evidence.normalized_value,
+                        source_url=evidence.source_url,
+                        confidence=evidence.confidence,
+                        label=evidence.label,
+                        note=evidence.note,
+                        added_to_lead=False,
+                    )
+                )
+
+        email_contact = self._best_extracted_contact(extracted_contacts, ContactType.EMAIL)
+        instagram_contact = self._best_extracted_contact(extracted_contacts, ContactType.INSTAGRAM)
+        if email_contact is not None and not updated_candidate.email:
+            updated_candidate.email = email_contact.normalized_value or email_contact.raw_value
+        if instagram_contact is not None and not updated_candidate.instagram:
+            updated_candidate.instagram = instagram_contact.normalized_value or instagram_contact.raw_value
+
+        fetched_page_urls = unique_preserve_order(
+            attempted_page.url
+            for attempted_page in crawl_result.attempted_pages
+            if attempted_page.fetched
+        )
+        no_email_found = (
+            crawl_result.pages_fetched > 0
+            and email_contact is None
+            and not bool(updated_candidate.email)
+            and crawl_result.skipped_reason is None
+        )
+
+        metadata = DiscoveryPreviewEnrichmentMetadata(
+            success=True,
+            attempted_pages=crawl_result.attempted_pages,
+            fetched_page_urls=fetched_page_urls,
+            extracted_contacts=extracted_contacts,
+            email_found=email_contact is not None,
+            instagram_found=instagram_contact is not None,
+            contact_form_found=any(
+                contact.contact_type == ContactType.CONTACT_FORM for contact in extracted_contacts
+            ),
+            no_email_found=no_email_found,
+            skipped_reason=crawl_result.skipped_reason,
+        )
+        return updated_candidate, metadata
+
+    def _crawl_public_website(self, website_url: str | None) -> PublicWebsiteCrawlResult:
+        candidate_pages = self._build_candidate_urls_from_website(website_url)
+        if not candidate_pages:
+            return PublicWebsiteCrawlResult(
+                pages_attempted=0,
+                pages_fetched=0,
+                attempted_pages=[],
+                page_results=[],
+                material_signals={},
+                skipped_reason="No public website.",
+            )
+
+        pages_attempted = 0
+        pages_fetched = 0
+        attempted_pages: list[EnrichmentAttemptedPage] = []
+        page_results: list[CrawledPageResult] = []
+        aggregated_signals: dict[str, dict[str, Any]] = {}
+        seen_candidate_urls = {candidate.url for candidate in candidate_pages}
+        discovered_contact_pages = 0
+        page_index = 0
+        base_website_url = candidate_pages[0].url
+
+        while page_index < len(candidate_pages):
+            candidate_page = candidate_pages[page_index]
+            page_url = candidate_page.url
+            page_index += 1
+            pages_attempted += 1
+            page_type = self._classify_page(page_url, base_website_url)
+            robots_allowed = self._can_fetch(page_url)
+            attempted_page = EnrichmentAttemptedPage(
+                url=page_url,
+                page_type=page_type,
+                discovered_from_url=candidate_page.discovered_from_url,
+                robots_allowed=robots_allowed,
+            )
+            attempted_pages.append(attempted_page)
+            if not robots_allowed:
+                note = "Blocked by robots.txt"
+                attempted_page.note = note
+                page_results.append(
+                    CrawledPageResult(
+                        source_url=page_url,
+                        page_type=page_type,
+                        http_status=None,
+                        robots_allowed=False,
+                        extracted_fields={},
+                        confidence_scores={},
+                        material_signals={},
+                        evidences=[],
+                        note=note,
+                    )
+                )
+                continue
+
+            try:
+                response = self.http.get(
+                    page_url,
+                    headers={"User-Agent": self.USER_AGENT},
+                    timeout=20,
+                    allow_redirects=True,
+                )
+            except requests.RequestException as exc:
+                note = f"Request failed: {exc}"
+                attempted_page.note = note
+                page_results.append(
+                    CrawledPageResult(
+                        source_url=page_url,
+                        page_type=page_type,
+                        http_status=None,
+                        robots_allowed=True,
+                        extracted_fields={},
+                        confidence_scores={},
+                        material_signals={},
+                        evidences=[],
+                        note=note,
+                    )
+                )
+                continue
+
+            pages_fetched += 1
+            attempted_page.fetched = True
+            attempted_page.http_status = response.status_code
+            content_type = (response.headers.get("content-type") or "").lower()
+            if response.status_code >= 400 or "html" not in content_type:
+                note = f"Skipped content type: {content_type or 'unknown'}"
+                attempted_page.note = note
+                page_results.append(
+                    CrawledPageResult(
+                        source_url=response.url,
+                        page_type=page_type,
+                        http_status=response.status_code,
+                        robots_allowed=True,
+                        extracted_fields={},
+                        confidence_scores={},
+                        material_signals={},
+                        evidences=[],
+                        note=note,
+                    )
+                )
+                continue
+
+            extraction = extract_public_page_data(response.text, response.url)
+            page_results.append(
+                CrawledPageResult(
+                    source_url=response.url,
+                    page_type=page_type,
+                    http_status=response.status_code,
+                    robots_allowed=True,
+                    extracted_fields=extraction.extracted_fields,
+                    confidence_scores=extraction.confidence_scores,
+                    material_signals=extraction.material_signals,
+                    evidences=extraction.evidences,
+                    note=None,
+                )
+            )
+            aggregated_signals = self._merge_material_signals(aggregated_signals, extraction.material_signals)
+            for discovered_url in extraction.candidate_page_urls:
+                if discovered_contact_pages >= self.MAX_DISCOVERED_CONTACT_PAGES:
+                    break
+                if discovered_url in seen_candidate_urls:
+                    continue
+                if not self._is_same_host(discovered_url, website_url or page_url):
+                    continue
+                candidate_pages.append(
+                    CandidatePage(url=discovered_url, discovered_from_url=response.url)
+                )
+                seen_candidate_urls.add(discovered_url)
+                discovered_contact_pages += 1
+
+        return PublicWebsiteCrawlResult(
+            pages_attempted=pages_attempted,
+            pages_fetched=pages_fetched,
+            attempted_pages=attempted_pages,
+            page_results=page_results,
+            material_signals=aggregated_signals,
         )
 
     def enrich_batch(self, lead_ids: list[int], *, actor: str = "system") -> list[EnrichmentRunResult]:
@@ -657,11 +910,46 @@ class EnrichmentService:
 
     @staticmethod
     def _short_error_message(exc: Exception) -> str:
+        if EnrichmentService._is_sqlite_lock_error(exc):
+            return "SQLite write contention: database is locked. This lead was skipped for now; retry the batch."
         message = str(exc).strip() or exc.__class__.__name__
         return message[:240]
 
-    def _build_candidate_urls(self, lead: Lead) -> list[str]:
-        website_url = canonicalize_url(lead.website)
+    @staticmethod
+    def _is_sqlite_lock_error(exc: BaseException) -> bool:
+        current: BaseException | None = exc
+        seen_objects: set[int] = set()
+        while current is not None and id(current) not in seen_objects:
+            seen_objects.add(id(current))
+            message = str(current).lower()
+            if "database is locked" in message or "database table is locked" in message:
+                return True
+            origin = getattr(current, "orig", None)
+            current = origin if isinstance(origin, BaseException) else None
+        return False
+
+    @staticmethod
+    def _best_extracted_contact(
+        contacts: list[EnrichmentExtractedContact],
+        contact_type: ContactType,
+    ) -> EnrichmentExtractedContact | None:
+        typed_contacts = [contact for contact in contacts if contact.contact_type == contact_type]
+        if not typed_contacts:
+            return None
+        return max(
+            typed_contacts,
+            key=lambda contact: (
+                contact.confidence,
+                len(contact.normalized_value or contact.raw_value),
+                contact.source_url,
+            ),
+        )
+
+    def _build_candidate_urls(self, lead: Lead) -> list[CandidatePage]:
+        return self._build_candidate_urls_from_website(lead.website)
+
+    def _build_candidate_urls_from_website(self, website_url: str | None) -> list[CandidatePage]:
+        website_url = canonicalize_url(website_url)
         if not website_url:
             return []
 
@@ -674,7 +962,7 @@ class EnrichmentService:
             for candidate in unique_preserve_order(urls)
             if urlparse(candidate).netloc.lower() == parsed.netloc.lower()
         ]
-        return same_host_urls
+        return [CandidatePage(url=candidate) for candidate in same_host_urls]
 
     @staticmethod
     def _is_same_host(candidate_url: str, base_url: str) -> bool:
@@ -740,9 +1028,15 @@ class EnrichmentService:
         normalized_path = urlparse(page_url).path.rstrip("/") or "/"
         if page_url.rstrip("/") == base_url.rstrip("/"):
             return "homepage"
-        if "contato" in normalized_path or "contact" in normalized_path or "fale" in normalized_path:
+        if any(
+            hint in normalized_path
+            for hint in ("contato", "contact", "fale", "atendimento", "suporte", "sac")
+        ):
             return "contact"
-        if "sobre" in normalized_path or "about" in normalized_path or "empresa" in normalized_path:
+        if any(
+            hint in normalized_path
+            for hint in ("sobre", "about", "empresa", "institucional", "quem", "historia")
+        ):
             return "about"
         return "website_page"
 
