@@ -18,6 +18,7 @@ from app.models.sales_rep import SalesRep
 from app.repositories.organization_repository import get_or_create_default_organization
 from app.schemas.discovery import DiscoveryLeadCandidate
 from app.schemas.lead import LeadBlockedFilter, LeadListFilters
+from app.services.normalization import normalize_brazilian_state
 
 
 CONTACT_FIELD_MAP: dict[ContactType, str] = {
@@ -354,6 +355,7 @@ class LeadRepository:
     def upsert_from_discovery(self, candidate: DiscoveryLeadCandidate) -> tuple[Lead, bool]:
         lead = self._find_existing(candidate)
         created = lead is None
+        normalized_state = normalize_brazilian_state(candidate.state) or candidate.state
 
         if lead is None:
             lead = Lead(
@@ -363,7 +365,7 @@ class LeadRepository:
                 address=candidate.address,
                 neighborhood=candidate.neighborhood,
                 city=candidate.city,
-                state=candidate.state,
+                state=normalized_state,
                 postal_code=candidate.postal_code,
                 latitude=candidate.latitude,
                 longitude=candidate.longitude,
@@ -391,7 +393,7 @@ class LeadRepository:
         self._fill_if_missing(lead, "address", candidate.address)
         self._fill_if_missing(lead, "neighborhood", candidate.neighborhood)
         self._fill_if_missing(lead, "city", candidate.city)
-        self._fill_if_missing(lead, "state", candidate.state)
+        self._fill_if_missing(lead, "state", normalized_state)
         self._fill_if_missing(lead, "postal_code", candidate.postal_code)
         self._fill_if_missing(lead, "latitude", candidate.latitude)
         self._fill_if_missing(lead, "longitude", candidate.longitude)

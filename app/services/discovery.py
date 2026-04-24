@@ -33,7 +33,7 @@ from app.schemas.discovery import (
 from app.schemas.lead import LeadSummary
 from app.services.enrichment import EnrichmentService
 from app.services.exclusion_rules import ExclusionRuleService
-from app.services.normalization import canonicalize_url, normalize_domain
+from app.services.normalization import canonicalize_url, is_non_business_website_domain, normalize_domain
 from app.services.providers.geocoding import GeocodedLocation, GoogleGeocodingClient
 from app.services.providers.google_places import GooglePlacesProvider
 
@@ -49,14 +49,6 @@ _RAW_WEBSITE_PATHS = (
     ("metadata", "websiteUri"),
     ("metadata", "website"),
 )
-_NON_BUSINESS_WEBSITE_SUFFIXES = (
-    "google.com",
-    "google.com.br",
-    "g.page",
-    "goo.gl",
-)
-
-
 class DiscoveryService:
     def __init__(self, db: Session, settings: Settings) -> None:
         self.db = db
@@ -216,7 +208,7 @@ class DiscoveryService:
         if not canonical:
             return None
         domain = normalize_domain(canonical)
-        if not domain or _is_non_business_website_domain(domain):
+        if not domain or is_non_business_website_domain(domain):
             return None
         return canonical
 
@@ -941,16 +933,6 @@ def _nested_payload_value(payload: object, path: tuple[str, ...]) -> object | No
             return None
         current = current.get(key)
     return current
-
-
-def _is_non_business_website_domain(domain: str) -> bool:
-    normalized_domain = domain.lower().strip()
-    return any(
-        normalized_domain == suffix or normalized_domain.endswith(f".{suffix}")
-        for suffix in _NON_BUSINESS_WEBSITE_SUFFIXES
-    )
-
-
 def _merge_payload_dicts(
     current_payload: dict[str, object],
     incoming_payload: dict[str, object],

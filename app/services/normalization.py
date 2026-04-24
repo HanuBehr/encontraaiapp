@@ -30,9 +30,24 @@ _PHONE_RE = re.compile(
     r"(?:(?:\+?55)\s*)?(?:\(?\d{2}\)?\s*)?(?:9?\d{4})[\s\-]?\d{4}",
     re.IGNORECASE,
 )
+_ADDRESS_LABEL_PREFIX_RE = re.compile(r"^(?:(?:endereco|endere\u00e7o|logradouro)\s*[:\-]\s*)+", re.IGNORECASE)
+_ADDRESS_TRAILING_GARBAGE_RE = re.compile(
+    r"(?:,\s*|\s+-\s*)(?:\d{5}-?\d{3}|\+?\d[\d().\s-]{7,})\s*$",
+    re.IGNORECASE,
+)
+_ADDRESS_NUMERIC_PREFIX_GARBAGE_RE = re.compile(
+    r"^(?:\d{2,6}\s*)+(?=(?:r\.?|rua|av\.?|avenida|al\.?|alameda|trav\.?|travessa|rod\.?|rodovia|estr\.?|estrada|pc\.?|praca|pra\u00e7a)\b)",
+    re.IGNORECASE,
+)
+_ADDRESS_COMPLEX_COMPONENT_RE = re.compile(
+    r"(?:,\s*|\s+-\s*|\s+)(?:quadra|lote|bloco|apartamento|apto|fundos|andar)\b.*$",
+    re.IGNORECASE,
+)
+_STREET_NUMBER_RE = re.compile(r"^\d{1,6}(?:[A-Za-z]{1,2}|(?:[-/][A-Za-z0-9]{1,4}))?$")
 
 WHATSAPP_HOST_KEYWORDS = ("wa.me", "whatsapp.com", "wa.link")
 INSTAGRAM_HOST_KEYWORDS = ("instagram.com", "instagr.am")
+POSTAL_CODE_RE = re.compile(r"\b\d{5}-?\d{3}\b")
 CONTACT_URL_HINTS = ("contato", "contact", "fale", "atendimento", "suporte")
 ENRICHMENT_PAGE_HINTS = CONTACT_URL_HINTS + (
     "sobre",
@@ -82,6 +97,87 @@ MATERIAL_SIGNAL_KEYWORDS: dict[str, tuple[str, ...]] = {
         "logística reversa",
     ),
 }
+BRAZILIAN_STATE_UFS = {
+    "acre": "AC",
+    "alagoas": "AL",
+    "amapa": "AP",
+    "amazonas": "AM",
+    "bahia": "BA",
+    "ceara": "CE",
+    "distrito federal": "DF",
+    "espirito santo": "ES",
+    "goias": "GO",
+    "maranhao": "MA",
+    "mato grosso": "MT",
+    "mato grosso do sul": "MS",
+    "minas gerais": "MG",
+    "para": "PA",
+    "paraiba": "PB",
+    "parana": "PR",
+    "pernambuco": "PE",
+    "piaui": "PI",
+    "rio de janeiro": "RJ",
+    "rio grande do norte": "RN",
+    "rio grande do sul": "RS",
+    "rondonia": "RO",
+    "roraima": "RR",
+    "santa catarina": "SC",
+    "sao paulo": "SP",
+    "sergipe": "SE",
+    "tocantins": "TO",
+}
+BRAZILIAN_UFS = set(BRAZILIAN_STATE_UFS.values())
+NON_BUSINESS_WEBSITE_SUFFIXES = (
+    "google.com",
+    "google.com.br",
+    "g.page",
+    "goo.gl",
+    "instagram.com",
+    "instagr.am",
+    "facebook.com",
+    "fb.com",
+    "m.facebook.com",
+    "linkedin.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "youtu.be",
+    "tiktok.com",
+    "wa.me",
+    "whatsapp.com",
+    "wa.link",
+)
+CLIENT_FACING_EMAIL_BLOCKLIST = {
+    "meu@email.com.br",
+    "email@email.com",
+    "email@email.com.br",
+    "test@test.com",
+    "teste@teste.com",
+    "example@example.com",
+    "exemplo@exemplo.com",
+    "exemplo@exemplo.com.br",
+}
+CLIENT_FACING_EMAIL_BLOCKED_DOMAINS = {
+    "example.com",
+    "example.com.br",
+    "email.com",
+    "email.com.br",
+    "teste.com",
+    "test.com",
+    "exemplo.com",
+    "exemplo.com.br",
+    "invalid",
+    "localhost",
+}
+AMBIGUOUS_STREET_COMPONENT_MARKERS = (
+    "quadra",
+    "lote",
+    "bloco",
+    "apartamento",
+    "apto",
+    "fundos",
+    "andar",
+)
 
 
 def normalize_text(value: str | None) -> str | None:
@@ -124,6 +220,137 @@ def normalize_domain(url: str | None) -> str | None:
     if host.startswith("www."):
         host = host[4:]
     return host or None
+
+
+def normalize_brazilian_state(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    upper = text.upper()
+    if upper in BRAZILIAN_UFS:
+        return upper
+    normalized = normalize_text(text)
+    if not normalized:
+        return text or None
+    return BRAZILIAN_STATE_UFS.get(normalized, text)
+
+
+def format_street_address(street: str | None, number: str | None = None) -> str | None:
+    street_name = _clean_address_text(street)
+    street_number = _clean_address_text(number)
+    if not street_name:
+        return None
+    if street_number:
+        return f"{street_name}, {street_number}"
+    return street_name
+
+
+def split_street_and_number(
+    address: str | None,
+    *,
+    neighborhood: str | None = None,
+    city: str | None = None,
+    state: str | None = None,
+    postal_code: str | None = None,
+) -> tuple[str | None, str | None]:
+    cleaned = _clean_address_text(address)
+    if not cleaned:
+        return None, None
+    cleaned = _ADDRESS_LABEL_PREFIX_RE.sub("", cleaned)
+
+    cleaned = re.sub(r"(?:,\s*)?(?:brasil|brazil)\s*$", "", cleaned, flags=re.IGNORECASE).strip(" ,-")
+    if postal_code:
+        cleaned = re.sub(
+            rf"(?:,\s*|\s+-\s*)?{re.escape(postal_code.strip())}\s*$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip(" ,-")
+    cleaned = POSTAL_CODE_RE.sub("", cleaned).strip(" ,-")
+
+    state_values = [value for value in unique_preserve_order([state, normalize_brazilian_state(state)]) if value]
+    city_value = _clean_address_text(city)
+    if city_value:
+        for state_value in state_values:
+            cleaned = re.sub(
+                rf"(?:,\s*|\s+-\s*){re.escape(city_value)}\s*(?:-\s*|,\s*){re.escape(state_value)}\s*$",
+                "",
+                cleaned,
+                flags=re.IGNORECASE,
+            ).strip(" ,-")
+        cleaned = re.sub(
+            rf"(?:,\s*|\s+-\s*){re.escape(city_value)}\s*$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip(" ,-")
+    for state_value in state_values:
+        cleaned = re.sub(
+            rf"(?:,\s*|\s+-\s*){re.escape(state_value)}\s*$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip(" ,-")
+    neighborhood_value = _clean_address_text(neighborhood)
+    if neighborhood_value:
+        cleaned = re.sub(
+            rf"(?:,\s*|\s+-\s*){re.escape(neighborhood_value)}\s*$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip(" ,-")
+
+    if not cleaned:
+        return None, None
+
+    sn_match = re.match(r"^(?P<street>.+?)(?:,\s*|\s+-\s*)(?:s\/n|sn)\s*$", cleaned, flags=re.IGNORECASE)
+    if sn_match:
+        return _cleanup_street_candidate(sn_match.group("street")), None
+
+    street_candidate = cleaned
+    street_number: str | None = None
+    number_match = re.match(r"^(?P<street>.+?)(?:,\s*|\s+-\s*)(?P<number>[^,]+?)\s*$", cleaned, flags=re.IGNORECASE)
+    if number_match:
+        candidate_street = _cleanup_street_candidate(number_match.group("street"))
+        candidate_number = _clean_address_text(number_match.group("number"))
+        if _looks_like_street_number(candidate_number, street_candidate=candidate_street):
+            street_candidate = candidate_street or cleaned
+            street_number = candidate_number
+        else:
+            street_candidate = cleaned
+
+    return _cleanup_street_candidate(street_candidate), street_number
+
+
+def is_probable_business_website(url: str | None) -> bool:
+    domain = normalize_domain(url)
+    return bool(domain and not is_non_business_website_domain(domain))
+
+
+def is_non_business_website_domain(domain: str | None) -> bool:
+    host = (domain or "").strip().lower()
+    if not host:
+        return True
+    return any(host == suffix or host.endswith(f".{suffix}") for suffix in NON_BUSINESS_WEBSITE_SUFFIXES)
+
+
+def is_probable_client_facing_email(value: str | None) -> bool:
+    email = clean_email(value)
+    if not email or not _EMAIL_RE.fullmatch(email):
+        return False
+    if email in CLIENT_FACING_EMAIL_BLOCKLIST:
+        return False
+    local_part, domain = email.rsplit("@", 1)
+    domain = domain.lower().strip()
+    if domain in CLIENT_FACING_EMAIL_BLOCKED_DOMAINS or domain.endswith(".example.com"):
+        return False
+    if domain.endswith("wixpress.com"):
+        return False
+    if "sentry" in local_part or "sentry" in domain:
+        return False
+    return True
 
 
 def normalize_phone_br(value: str | None) -> str | None:
@@ -290,3 +517,45 @@ def is_contact_like_url(url: str | None, *, label: str | None = None) -> bool:
 
 def is_enrichment_candidate_url(url: str | None, *, label: str | None = None) -> bool:
     return _matches_page_hints(url, label=label, hints=ENRICHMENT_PAGE_HINTS)
+
+
+def _clean_address_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = re.sub(r"\s+", " ", value).strip(" ,;-")
+    return cleaned or None
+
+
+def _cleanup_street_candidate(value: str | None) -> str | None:
+    cleaned = _clean_address_text(value)
+    if not cleaned:
+        return None
+    cleaned = _ADDRESS_LABEL_PREFIX_RE.sub("", cleaned)
+    cleaned = _ADDRESS_NUMERIC_PREFIX_GARBAGE_RE.sub("", cleaned).strip(" ,-")
+    cleaned = _ADDRESS_COMPLEX_COMPONENT_RE.sub("", cleaned).strip(" ,-")
+    while True:
+        next_value = _ADDRESS_TRAILING_GARBAGE_RE.sub("", cleaned).strip(" ,-")
+        if next_value == cleaned:
+            break
+        cleaned = next_value
+    return _clean_address_text(cleaned)
+
+
+def _looks_like_street_number(value: str | None, *, street_candidate: str | None = None) -> bool:
+    candidate = _clean_address_text(value)
+    if not candidate:
+        return False
+    normalized_candidate = candidate.lower()
+    if normalized_candidate in {"sn", "s/n"} or " " in candidate:
+        return False
+    if POSTAL_CODE_RE.fullmatch(candidate):
+        return False
+    digits = re.sub(r"\D", "", candidate)
+    if not digits or len(digits) > 6:
+        return False
+    if not _STREET_NUMBER_RE.fullmatch(candidate):
+        return False
+    normalized_street = normalize_text(street_candidate) or ""
+    if any(marker in normalized_street for marker in AMBIGUOUS_STREET_COMPONENT_MARKERS):
+        return False
+    return True

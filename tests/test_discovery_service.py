@@ -177,6 +177,37 @@ def test_google_places_provider_raises_clean_error_after_transient_request_failu
         raise AssertionError("Expected GooglePlacesProviderError to be raised.")
 
 
+def test_google_places_provider_maps_address_to_street_plus_number_and_state_uf() -> None:
+    provider = GooglePlacesProvider(Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key"))
+
+    result = provider._to_result(
+        {
+            "id": "place-casa-paulista",
+            "displayName": {"text": "Casa Paulista"},
+            "formattedAddress": "Avenida Paulista, 1578 - Bela Vista, Sao Paulo - Sao Paulo, 01310-200, Brasil",
+            "addressComponents": [
+                {"longText": "1578", "shortText": "1578", "types": ["street_number"]},
+                {"longText": "Avenida Paulista", "shortText": "Av. Paulista", "types": ["route"]},
+                {"longText": "Bela Vista", "shortText": "Bela Vista", "types": ["sublocality_level_1", "sublocality"]},
+                {"longText": "Sao Paulo", "shortText": "Sao Paulo", "types": ["locality"]},
+                {"longText": "Sao Paulo", "shortText": "SP", "types": ["administrative_area_level_1"]},
+                {"longText": "01310-200", "shortText": "01310-200", "types": ["postal_code"]},
+            ],
+            "location": {"latitude": -23.5614, "longitude": -46.6565},
+            "websiteUri": "https://casapaulista.com.br",
+            "googleMapsUri": "https://maps.google.com/?q=Casa+Paulista",
+            "nationalPhoneNumber": "(11) 3333-4444",
+            "primaryTypeDisplayName": {"text": "Materiais de construcao"},
+        }
+    )
+
+    assert result.candidate.address == "Avenida Paulista, 1578"
+    assert result.candidate.neighborhood == "Bela Vista"
+    assert result.candidate.city == "Sao Paulo"
+    assert result.candidate.state == "SP"
+    assert result.candidate.postal_code == "01310-200"
+
+
 def test_discovery_recover_preview_websites_fetches_place_details_and_rechecks_exclusions(db_session, monkeypatch) -> None:
     settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
     service = DiscoveryService(db_session, settings)

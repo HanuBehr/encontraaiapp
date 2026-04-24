@@ -196,9 +196,158 @@ def test_excel_export_matches_empresas_template(db_session) -> None:
     assert lead_row["País"] == "Brasil"
     assert lead_row["Estado"] == "SP"
     assert lead_row["Cidade"] == "Sao Paulo"
-    assert lead_row["Rua"] == "Rua das Tintas, 100"
+    assert lead_row["Rua"] == "Rua das Tintas"
+    assert lead_row["Número"] == "100"
     assert lead_row["Instagram"] == "https://instagram.com/export"
     assert lead_row["Ranking"] == 0
+
+
+def test_excel_export_normalizes_client_facing_address_fields_and_filters_social_website(db_session) -> None:
+    organization = Organization(slug="default", name="Default Organization", display_name="Default Organization")
+    lead = Lead(
+        organization=organization,
+        business_name="Casa Paulista",
+        normalized_business_name=normalize_business_name("Casa Paulista") or "casa paulista",
+        category="materiais de construcao",
+        address="Avenida Paulista, 1578 - Bela Vista, Sao Paulo - Sao Paulo, 01310-200, Brasil",
+        neighborhood="Bela Vista",
+        city="Sao Paulo",
+        state="Sao Paulo",
+        postal_code="01310-200",
+        website="https://instagram.com/casapaulista",
+        instagram="https://instagram.com/casapaulista",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+    )
+    db_session.add_all([organization, lead])
+    db_session.commit()
+
+    service = ExcelExportService(db_session)
+    _, payload = service.build_workbook(LeadListFilters())
+
+    workbook = load_workbook(BytesIO(payload))
+    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
+    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_row = dict(zip(lead_headers, lead_values, strict=False))
+
+    assert lead_row["Estado"] == "SP"
+    assert lead_row["Cidade"] == "Sao Paulo"
+    assert lead_row["Bairro"] == "Bela Vista"
+    assert lead_row["Rua"] == "Avenida Paulista"
+    assert lead_row["Número"] == "1578"
+    assert lead_row["CEP"] == "01310-200"
+    assert lead_row["Website"] is None
+    assert lead_row["Instagram"] == "https://instagram.com/casapaulista"
+
+
+def test_excel_export_prefers_plausible_email_and_blanks_ambiguous_number(db_session) -> None:
+    organization = Organization(slug="default", name="Default Organization", display_name="Default Organization")
+    lead = Lead(
+        organization=organization,
+        business_name="Rua Limpa",
+        normalized_business_name=normalize_business_name("Rua Limpa") or "rua limpa",
+        category="materiais de construcao",
+        address="Endereco: Rua Alfa, 11334455 - Centro, Campinas - SP, 13010-123, Brasil",
+        neighborhood="Centro",
+        city="Campinas",
+        state="Sao Paulo",
+        postal_code="13010-123",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+    )
+    db_session.add_all([organization, lead])
+    db_session.flush()
+    db_session.add_all(
+        [
+            LeadContact(
+                organization=organization,
+                lead=lead,
+                contact_type=ContactType.EMAIL,
+                raw_value="alerts@sentry-next.wixpress.com",
+                normalized_value="alerts@sentry-next.wixpress.com",
+                confidence=0.99,
+                is_primary=True,
+            ),
+            LeadContact(
+                organization=organization,
+                lead=lead,
+                contact_type=ContactType.EMAIL,
+                raw_value="comercial@rualimpa.com.br",
+                normalized_value="comercial@rualimpa.com.br",
+                confidence=0.8,
+                is_primary=False,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    service = ExcelExportService(db_session)
+    _, payload = service.build_workbook(LeadListFilters())
+
+    workbook = load_workbook(BytesIO(payload))
+    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
+    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_row = dict(zip(lead_headers, lead_values, strict=False))
+
+    assert lead_row["Rua"] == "Rua Alfa"
+    assert lead_row["Número"] is None
+    assert lead_row["E-mail"] == "comercial@rualimpa.com.br"
+
+
+def test_excel_export_blanks_placeholder_email_when_no_plausible_option_exists(db_session) -> None:
+    organization = Organization(slug="default", name="Default Organization", display_name="Default Organization")
+    lead = Lead(
+        organization=organization,
+        business_name="Email Placeholder",
+        normalized_business_name=normalize_business_name("Email Placeholder") or "email placeholder",
+        category="materiais de construcao",
+        email="meu@email.com.br",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+    )
+    db_session.add_all([organization, lead])
+    db_session.commit()
+
+    service = ExcelExportService(db_session)
+    _, payload = service.build_workbook(LeadListFilters())
+
+    workbook = load_workbook(BytesIO(payload))
+    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
+    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_row = dict(zip(lead_headers, lead_values, strict=False))
+
+    assert lead_row["E-mail"] is None
+
+
+def test_excel_export_strips_prefixed_numeric_garbage_from_street(db_session) -> None:
+    organization = Organization(slug="default", name="Default Organization", display_name="Default Organization")
+    lead = Lead(
+        organization=organization,
+        business_name="Casa da Pintura",
+        normalized_business_name=normalize_business_name("Casa da Pintura") or "casa da pintura",
+        category="materiais de construcao",
+        address="8665R. Bento Goncalves, 112 - Centro, Porto Alegre - RS, 90650-001, Brasil",
+        neighborhood="Centro",
+        city="Porto Alegre",
+        state="Rio Grande do Sul",
+        postal_code="90650-001",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+        status=LeadStatus.NEW,
+    )
+    db_session.add_all([organization, lead])
+    db_session.commit()
+
+    service = ExcelExportService(db_session)
+    _, payload = service.build_workbook(LeadListFilters())
+
+    workbook = load_workbook(BytesIO(payload))
+    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
+    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_row = dict(zip(lead_headers, lead_values, strict=False))
+
+    assert lead_row["Rua"] == "R. Bento Goncalves"
+    assert lead_row["Número"] == "112"
+    assert lead_row["Estado"] == "RS"
 
 
 def test_excel_export_with_explicit_lead_ids_preserves_scope_and_order(db_session) -> None:

@@ -14,6 +14,13 @@ from sqlalchemy.orm import Session
 from app.enums import ContactType
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.lead import LeadListFilters
+from app.services.normalization import (
+    canonicalize_url,
+    is_probable_business_website,
+    is_probable_client_facing_email,
+    normalize_brazilian_state,
+    split_street_and_number,
+)
 
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
@@ -161,10 +168,17 @@ class ExcelExportService:
                 )
 
     def _lead_row(self, lead) -> dict[str, object]:
-        email = self._best_contact_value(lead, ContactType.EMAIL, lead.email)
+        email = self._best_export_email(lead)
         phone = self._best_contact_value(lead, ContactType.PHONE, lead.phone)
         whatsapp = self._best_contact_value(lead, ContactType.WHATSAPP, lead.whatsapp)
         instagram = self._best_contact_value(lead, ContactType.INSTAGRAM, lead.instagram)
+        street_name, street_number = split_street_and_number(
+            lead.address,
+            neighborhood=lead.neighborhood,
+            city=lead.city,
+            state=lead.state,
+            postal_code=lead.postal_code,
+        )
         return {
             "Nome": lead.business_name,
             "CNPJ": None,
@@ -180,14 +194,14 @@ class ExcelExportService:
             "Celular": None,
             "Fax": None,
             "Ramal": None,
-            "Website": lead.website,
+            "Website": self._client_facing_website(lead.website),
             "CEP": lead.postal_code,
             "País": self._country_label(lead),
-            "Estado": lead.state,
+            "Estado": normalize_brazilian_state(lead.state),
             "Cidade": lead.city,
             "Bairro": lead.neighborhood,
-            "Rua": lead.address,
-            "Número": None,
+            "Rua": street_name,
+            "Número": street_number,
             "Complemento": None,
             "Produto": None,
             "Facebook": None,
@@ -200,14 +214,30 @@ class ExcelExportService:
 
     @classmethod
     def _best_contact_value(cls, lead, contact_type: ContactType, fallback: str | None) -> str | None:
+        contacts = cls._ranked_contacts(lead, contact_type)
+        if not contacts:
+            return fallback
+        best = contacts[0]
+        return cls._contact_value(best) or fallback
+
+    @classmethod
+    def _best_export_email(cls, lead) -> str | None:
+        for contact in cls._ranked_contacts(lead, ContactType.EMAIL):
+            value = cls._contact_value(contact)
+            if is_probable_client_facing_email(value):
+                return value
+        if is_probable_client_facing_email(lead.email):
+            return lead.email
+        return None
+
+    @classmethod
+    def _ranked_contacts(cls, lead, contact_type: ContactType) -> list:
         contacts = [
             contact
             for contact in lead.contacts
             if cls._contact_type_matches(contact.contact_type, contact_type) and cls._contact_value(contact)
         ]
-        if not contacts:
-            return fallback
-        best = max(
+        return sorted(
             contacts,
             key=lambda contact: (
                 1 if contact.is_primary else 0,
@@ -215,8 +245,8 @@ class ExcelExportService:
                 contact.updated_at.timestamp() if contact.updated_at else 0,
                 contact.id or 0,
             ),
+            reverse=True,
         )
-        return cls._contact_value(best) or fallback
 
     @staticmethod
     def _contact_value(contact) -> str | None:
@@ -260,6 +290,12 @@ class ExcelExportService:
         if any([lead.postal_code, lead.state, lead.city, lead.neighborhood, lead.address]):
             return "Brasil"
         return None
+
+    @staticmethod
+    def _client_facing_website(value: str | None) -> str | None:
+        if not is_probable_business_website(value):
+            return None
+        return canonicalize_url(value)
 
     @staticmethod
     def _label(labels: dict[str, str], value: object | None) -> str | None:

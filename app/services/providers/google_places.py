@@ -10,7 +10,14 @@ import requests
 from app.config import Settings
 from app.enums import LeadSourceType
 from app.schemas.discovery import DiscoveryLeadCandidate
-from app.services.normalization import normalize_business_name, normalize_domain, normalize_phone_br
+from app.services.normalization import (
+    format_street_address,
+    normalize_brazilian_state,
+    normalize_business_name,
+    normalize_domain,
+    normalize_phone_br,
+    split_street_and_number,
+)
 from app.services.providers.discovery_base import DiscoveryProvider, ProviderLeadResult
 
 logger = logging.getLogger(__name__)
@@ -110,16 +117,33 @@ class GooglePlacesProvider(DiscoveryProvider):
         phone = normalize_phone_br(place.get("nationalPhoneNumber"))
         website = place.get("websiteUri")
         google_maps_url = place.get("googleMapsUri")
+        neighborhood = self._extract_component(
+            address_components,
+            {"sublocality", "sublocality_level_1", "neighborhood"},
+        )
+        city = self._extract_component(address_components, {"locality", "administrative_area_level_2"})
+        state = self._extract_state(address_components)
+        postal_code = self._extract_component(address_components, {"postal_code"})
+        route = self._extract_component(address_components, {"route"})
+        street_number = self._extract_component(address_components, {"street_number"})
+        fallback_street, fallback_number = split_street_and_number(
+            place.get("formattedAddress"),
+            neighborhood=neighborhood,
+            city=city,
+            state=state,
+            postal_code=postal_code,
+        )
+        address = format_street_address(route or fallback_street, street_number or fallback_number)
 
         candidate = DiscoveryLeadCandidate(
             business_name=business_name,
             normalized_business_name=normalize_business_name(business_name) or business_name.lower(),
             category=self._extract_category(place),
-            address=place.get("formattedAddress"),
-            neighborhood=self._extract_component(address_components, {"sublocality", "sublocality_level_1", "neighborhood"}),
-            city=self._extract_component(address_components, {"locality", "administrative_area_level_2"}),
-            state=self._extract_component(address_components, {"administrative_area_level_1"}),
-            postal_code=self._extract_component(address_components, {"postal_code"}),
+            address=address,
+            neighborhood=neighborhood,
+            city=city,
+            state=state,
+            postal_code=postal_code,
             latitude=((place.get("location") or {}).get("latitude")),
             longitude=((place.get("location") or {}).get("longitude")),
             website=website,
@@ -155,6 +179,14 @@ class GooglePlacesProvider(DiscoveryProvider):
             component_types = set(component.get("types") or [])
             if component_types.intersection(expected_types):
                 return component.get("longText") or component.get("shortText")
+        return None
+
+    @staticmethod
+    def _extract_state(components: list[dict[str, Any]]) -> str | None:
+        for component in components:
+            component_types = set(component.get("types") or [])
+            if "administrative_area_level_1" in component_types:
+                return normalize_brazilian_state(component.get("shortText") or component.get("longText"))
         return None
 
     def _request_places_json(
