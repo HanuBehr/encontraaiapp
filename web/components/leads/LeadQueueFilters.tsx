@@ -1,5 +1,6 @@
 "use client";
 
+import { formatLeadLabel } from "@/lib/format/lead-labels";
 import type { LeadOptionsResponse } from "@/lib/api/types";
 import type { QueueFilters } from "@/lib/state/lead-workspace";
 
@@ -24,21 +25,23 @@ export function LeadQueueFilters({
     <section className="rounded-md border border-neutral-200 bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-neutral-950">Filters</p>
-          <p className="mt-1 text-sm text-neutral-500">Exclude blocked leads by default, or include them for review.</p>
+          <p className="text-sm font-semibold text-neutral-950">Filtros</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            Leads bloqueados ficam ocultos por padrão, mas você pode incluí-los para revisão.
+          </p>
         </div>
         <button
           type="button"
           onClick={onReset}
           className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 hover:border-neutral-500 lg:w-auto"
         >
-          Clear filters
+          Limpar filtros
         </button>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <SelectField
-          label="Exclusion status"
+          label="Status de bloqueio"
           value={filters.blocked}
           onChange={(value) => updateFilter("blocked", value as QueueFilters["blocked"])}
           options={blockedOptions}
@@ -60,28 +63,28 @@ export function LeadQueueFilters({
           label="Status"
           value={filters.status}
           onChange={(value) => updateFilter("status", value as QueueFilters["status"])}
-          options={(options?.statuses ?? []).map((value) => ({ value, label: labelToken(value) }))}
+          options={(options?.statuses ?? []).map((value) => ({ value, label: formatLeadLabel(value) ?? value }))}
         />
         <SelectField
-          label="Assigned rep"
+          label="Responsável"
           value={filters.assignedSalesRepId}
           onChange={(value) => updateFilter("assignedSalesRepId", value)}
           options={(options?.assigned_reps ?? []).map((rep) => ({ value: String(rep.id), label: rep.name }))}
         />
         <SelectField
-          label="Sales region"
+          label="Região"
           value={filters.salesRegionId}
           onChange={(value) => updateFilter("salesRegionId", value)}
           options={(options?.sales_regions ?? []).map((region) => ({ value: String(region.id), label: region.name }))}
         />
         <SelectField
-          label="Market segment"
+          label="Segmento"
           value={filters.marketSegmentId}
           onChange={(value) => updateFilter("marketSegmentId", value)}
           options={(options?.market_segments ?? []).map((segment) => ({ value: String(segment.id), label: segment.name }))}
         />
         <SelectField
-          label="Subsegment"
+          label="Subsegmento"
           value={filters.marketSubsegmentId}
           onChange={(value) => updateFilter("marketSubsegmentId", value)}
           options={(options?.market_subsegments ?? []).map((subsegment) => ({
@@ -90,37 +93,43 @@ export function LeadQueueFilters({
           }))}
         />
         <SelectField
-          label="Target fit"
+          label="Perfil"
           value={filters.companySizeFit}
           onChange={(value) => updateFilter("companySizeFit", value as QueueFilters["companySizeFit"])}
-          options={(options?.target_fit_values ?? []).map((value) => ({ value, label: labelToken(value) }))}
+          options={(options?.target_fit_values ?? []).map((value) => ({
+            value,
+            label: formatLeadLabel(value) ?? value,
+          }))}
         />
         <SelectField
-          label="Trade type"
+          label="Operação"
           value={filters.tradeType}
           onChange={(value) => updateFilter("tradeType", value as QueueFilters["tradeType"])}
-          options={(options?.trade_type_values ?? []).map((value) => ({ value, label: labelToken(value) }))}
+          options={(options?.trade_type_values ?? []).map((value) => ({
+            value,
+            label: formatLeadLabel(value) ?? value,
+          }))}
         />
         <SelectField
-          label="Has assignment"
+          label="Com responsável"
           value={filters.hasAssignment}
           onChange={(value) => updateFilter("hasAssignment", value as QueueFilters["hasAssignment"])}
           options={booleanOptions}
         />
         <SelectField
-          label="Has email"
+          label="Com email"
           value={filters.hasEmail}
           onChange={(value) => updateFilter("hasEmail", value as QueueFilters["hasEmail"])}
           options={booleanOptions}
         />
         <SelectField
-          label="Has WhatsApp"
+          label="Com WhatsApp"
           value={filters.hasWhatsapp}
           onChange={(value) => updateFilter("hasWhatsapp", value as QueueFilters["hasWhatsapp"])}
           options={booleanOptions}
         />
         <SelectField
-          label="Has Instagram"
+          label="Com Instagram"
           value={filters.hasInstagram}
           onChange={(value) => updateFilter("hasInstagram", value as QueueFilters["hasInstagram"])}
           options={booleanOptions}
@@ -138,7 +147,7 @@ type SelectFieldProps = {
   emptyLabel?: string | null;
 };
 
-function SelectField({ label, value, options, onChange, emptyLabel = "Any" }: SelectFieldProps) {
+function SelectField({ label, value, options, onChange, emptyLabel = "Todos" }: SelectFieldProps) {
   return (
     <label className="block">
       <span className="text-xs font-medium text-neutral-600">{label}</span>
@@ -159,17 +168,13 @@ function SelectField({ label, value, options, onChange, emptyLabel = "Any" }: Se
 }
 
 const booleanOptions = [
-  { value: "any", label: "Any" },
-  { value: "yes", label: "Yes" },
-  { value: "no", label: "No" },
+  { value: "any", label: "Todos" },
+  { value: "yes", label: "Sim" },
+  { value: "no", label: "Não" },
 ];
 
 const blockedOptions = [
-  { value: "exclude", label: "Exclude blocked" },
-  { value: "include", label: "Include blocked" },
-  { value: "only", label: "Only blocked" },
+  { value: "exclude", label: "Ocultar bloqueados" },
+  { value: "include", label: "Incluir bloqueados" },
+  { value: "only", label: "Somente bloqueados" },
 ];
-
-function labelToken(value: string) {
-  return value.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
-}

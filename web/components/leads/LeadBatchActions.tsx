@@ -3,7 +3,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ApiError } from "@/lib/api/client";
 import {
   assignLeadBatch,
   enrichLeadBatch,
@@ -17,6 +16,7 @@ import type {
   LeadListParams,
   LeadScopeRequest,
 } from "@/lib/api/types";
+import { formatUserFacingError, sanitizeUserFacingMessage } from "@/lib/ui/messages";
 
 type ActionScope = "selected" | "current" | "latest";
 type ActionKind = "enrich" | "assign" | "export";
@@ -97,7 +97,7 @@ export function LeadBatchActions({
 
       if (kind === "enrich") {
         if (resolvedScope.leadIds.length === 0) {
-          throw new Error("No leads were found for this scope.");
+          throw new Error("Nenhum lead encontrado nesse escopo.");
         }
         const response = await enrichLeadBatch(resolvedScope.leadIds);
         return {
@@ -110,7 +110,7 @@ export function LeadBatchActions({
 
       if (kind === "assign") {
         if (scopeAtClick === "latest") {
-          throw new Error("Assignment is available for selected leads or the current filtered set.");
+          throw new Error("A atribuição está disponível apenas para leads selecionados ou para a lista filtrada.");
         }
         const response = await assignLeadBatch(resolvedScope.request);
         return {
@@ -122,7 +122,7 @@ export function LeadBatchActions({
       }
 
       if (resolvedScope.leadIds.length === 0) {
-        throw new Error("No leads were found for this scope.");
+        throw new Error("Nenhum lead encontrado nesse escopo.");
       }
       const exported = await exportExcelForScope(resolvedScope.request);
       downloadBlob(exported.blob, exported.filename);
@@ -163,21 +163,24 @@ export function LeadBatchActions({
     <section className="rounded-md border border-neutral-200 bg-white p-4">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-cyan-700">Batch actions</p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">Run batch actions</h2>
+          <p className="text-xs font-semibold uppercase text-cyan-700">Ações em lote</p>
+          <h2 className="mt-1 text-base font-semibold text-neutral-950">Enriquecer e exportar</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Choose a scope, then enrich, assign, or export without leaving the lead queue.
+            Escolha um escopo para enriquecer, atribuir ou exportar os leads sem sair da lista.
+          </p>
+          <p className="mt-1 text-xs text-neutral-500">
+            O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
           </p>
           {searchActive ? (
             <p className="mt-2 text-xs text-neutral-500">
-              Search is local to the loaded table. Current filtered set uses the filters above.
+              A busca rápida atua só sobre a tabela carregada. A lista filtrada usa os filtros acima.
             </p>
           ) : null}
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[220px_150px_minmax(0,1fr)] xl:min-w-[780px]">
           <label className="block">
-            <span className="text-xs font-medium text-neutral-600">Scope</span>
+            <span className="text-xs font-medium text-neutral-600">Escopo</span>
             <select
               value={scope}
               onChange={(event) => {
@@ -186,14 +189,16 @@ export function LeadBatchActions({
               }}
               className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm text-neutral-950"
             >
-              <option value="selected">Selected leads ({selectedLeadIds.length})</option>
-              <option value="current">Current filtered set ({currentTotal})</option>
-              <option value="latest">Latest import batch{latestBatchQuery.data ? ` (${latestBatchQuery.data.lead_count})` : ""}</option>
+              <option value="selected">Leads selecionados ({selectedLeadIds.length})</option>
+              <option value="current">Lista filtrada ({currentTotal})</option>
+              <option value="latest">
+                Última importação{latestBatchQuery.data ? ` (${latestBatchQuery.data.lead_count})` : ""}
+              </option>
             </select>
           </label>
 
           <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
-            <p className="text-xs font-medium text-neutral-500">Action count</p>
+            <p className="text-xs font-medium text-neutral-500">Total no escopo</p>
             <p className="mt-1 text-xl font-semibold text-neutral-950">
               {actionCount === null ? "..." : actionCount.toLocaleString()}
             </p>
@@ -201,13 +206,13 @@ export function LeadBatchActions({
 
           <div className="grid gap-2 sm:grid-cols-3">
             <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
-              Enrich
+              Enriquecer
             </ActionButton>
             <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
-              Assign
+              Atribuir
             </ActionButton>
             <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("export")}>
-              Export
+              Exportar Excel
             </ActionButton>
           </div>
         </div>
@@ -215,25 +220,26 @@ export function LeadBatchActions({
 
       {selectedDisabled ? (
         <p className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
-          Select one or more rows to run actions on selected leads, or choose Current filtered set deliberately.
+          Selecione um ou mais leads para agir sobre os itens marcados ou mude o escopo para a lista filtrada.
         </p>
       ) : null}
 
       {scope === "latest" ? (
         <p className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
-          Latest import batch is available for enrichment and export. Assignment stays scoped to selected/current leads.
-          {latestBatchQuery.isLoading ? " Loading latest batch count." : ""}
-          {latestBatchQuery.isError ? " Latest batch count is unavailable." : ""}
+          A última importação pode ser enriquecida e exportada. A atribuição continua restrita aos leads selecionados
+          ou à lista filtrada.
+          {latestBatchQuery.isLoading ? " Carregando a contagem do lote." : ""}
+          {latestBatchQuery.isError ? " Não foi possível carregar a contagem do lote." : ""}
         </p>
       ) : null}
 
       {confirmation ? (
         <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
           <p className="text-sm font-semibold text-amber-950">
-            You are about to {confirmation.label.toLowerCase()} {confirmation.count.toLocaleString()} leads.
+            Você está prestes a {confirmation.label.toLowerCase()} {confirmation.count.toLocaleString()} leads.
           </p>
           <p className="mt-1 text-sm text-amber-900">
-            Confirm this broad {confirmation.scope === "latest" ? "latest-batch" : "filtered-set"} action before it runs.
+            Confirme esta ação em massa antes de continuar.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button
@@ -245,14 +251,14 @@ export function LeadBatchActions({
               }}
               className="rounded-md border border-amber-900 bg-amber-900 px-3 py-2 text-sm font-medium text-white"
             >
-              Confirm {confirmation.label}
+              Confirmar {confirmation.label.toLowerCase()}
             </button>
             <button
               type="button"
               onClick={() => setConfirmation(null)}
               className="rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-950"
             >
-              Cancel
+              Cancelar
             </button>
           </div>
         </div>
@@ -260,7 +266,7 @@ export function LeadBatchActions({
 
       {actionMutation.isPending ? (
         <p className="mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-800">
-          Running action. Larger enrichment scopes can take a moment.
+          Processando sua ação. Escopos maiores podem levar alguns instantes.
         </p>
       ) : null}
 
@@ -320,19 +326,21 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
       result.summary.whatsapps_found +
       result.summary.contact_forms_found;
     return (
-      <ResultBox title={`${hasErrors ? "Enrichment finished with errors" : "Enrichment complete"} - ${result.scopeLabel}`}>
+      <ResultBox
+        title={`${hasErrors ? "Enriquecimento concluído com alertas" : "Enriquecimento concluído"} - ${formatScopeLabel(result.scopeLabel)}`}
+      >
         <ResultNarrative text={buildEnrichmentNarrative(result.summary)} />
-        <ResultMetric label="Requested" value={result.requested} />
-        <ResultMetric label="Processed" value={result.summary.processed} />
-        <ResultMetric label="Successful runs" value={result.summary.success_count} />
-        <ResultMetric label="New contacts found" value={result.summary.contacts_added} />
-        <ResultMetric label="Public channels" value={newPublicChannelCount} />
+        <ResultMetric label="Solicitados" value={result.requested} />
+        <ResultMetric label="Processados" value={result.summary.processed} />
+        <ResultMetric label="Concluídos" value={result.summary.success_count} />
+        <ResultMetric label="Novos contatos" value={result.summary.contacts_added} />
+        <ResultMetric label="Canais públicos" value={newPublicChannelCount} />
         <ResultMetric label="Emails" value={result.summary.emails_found} />
         <ResultMetric label="Instagrams" value={result.summary.instagrams_found} />
         <ResultMetric label="WhatsApps" value={result.summary.whatsapps_found} />
-        <ResultMetric label="Forms" value={result.summary.contact_forms_found} />
-        <ResultMetric label="Skipped" value={result.summary.skipped} />
-        <ResultMetric label="Errors" value={result.summary.errors} />
+        <ResultMetric label="Formulários" value={result.summary.contact_forms_found} />
+        <ResultMetric label="Ignorados" value={result.summary.skipped} />
+        <ResultMetric label="Erros" value={result.summary.errors} />
         {hasErrors ? <FailedLeadSummary summary={result.summary} /> : null}
       </ResultBox>
     );
@@ -340,20 +348,21 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
 
   if (result.kind === "assign") {
     return (
-      <ResultBox title={`Assignment complete - ${result.scopeLabel}`}>
-        <ResultMetric label="Requested" value={result.requested} />
-        <ResultMetric label="Processed" value={result.summary.processed} />
-        <ResultMetric label="Changed" value={result.summary.changed} />
-        <ResultMetric label="Missing IDs" value={result.summary.missing_lead_ids.length} />
+      <ResultBox title={`Atribuição concluída - ${formatScopeLabel(result.scopeLabel)}`}>
+        <ResultMetric label="Solicitados" value={result.requested} />
+        <ResultMetric label="Processados" value={result.summary.processed} />
+        <ResultMetric label="Atualizados" value={result.summary.changed} />
+        <ResultMetric label="IDs ausentes" value={result.summary.missing_lead_ids.length} />
       </ResultBox>
     );
   }
 
   return (
-    <ResultBox title={`Export ready - ${result.scopeLabel}`}>
+    <ResultBox title={`Planilha baixada - ${formatScopeLabel(result.scopeLabel)}`}>
+      <ResultNarrative text="Exportação pronta para prospecção. O arquivo Excel já foi baixado no seu navegador." />
       <ResultMetric label="Leads" value={result.requested} />
       <div className="rounded-md border border-neutral-200 bg-white px-3 py-2">
-        <p className="text-xs font-medium text-neutral-500">File</p>
+        <p className="text-xs font-medium text-neutral-500">Arquivo</p>
         <p className="mt-1 break-all text-sm font-semibold text-neutral-950">{result.filename}</p>
       </div>
     </ResultBox>
@@ -389,16 +398,16 @@ function ResultMetric({ label, value }: { label: string; value: number }) {
 function FailedLeadSummary({ summary }: { summary: LeadBatchEnrichmentResponse["summary"] }) {
   return (
     <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
-      <p className="text-xs font-semibold uppercase text-amber-900">Failed leads</p>
+      <p className="text-xs font-semibold uppercase text-amber-900">Leads com falha</p>
       <p className="mt-1 text-sm text-amber-950">
         {summary.failed_lead_ids.length
           ? `IDs: ${summary.failed_lead_ids.join(", ")}`
-          : "Some leads failed, but the backend did not return lead IDs."}
+          : "Alguns leads falharam, mas a API não retornou os IDs."}
       </p>
       {summary.error_messages.length ? (
         <ul className="mt-2 space-y-1 text-sm text-amber-900">
           {summary.error_messages.slice(0, 3).map((message) => (
-            <li key={message}>{message}</li>
+            <li key={message}>{sanitizeUserFacingMessage(message, "Falha ao enriquecer parte do lote.")}</li>
           ))}
         </ul>
       ) : null}
@@ -409,7 +418,7 @@ function FailedLeadSummary({ summary }: { summary: LeadBatchEnrichmentResponse["
 function buildScopeRequest(scope: ActionScope, selectedLeadIds: number[], currentFilters: LeadListParams): LeadScopeRequest {
   if (scope === "selected") {
     if (selectedLeadIds.length === 0) {
-      throw new Error("Select at least one lead first.");
+      throw new Error("Selecione pelo menos um lead.");
     }
     return { lead_ids: selectedLeadIds };
   }
@@ -427,12 +436,12 @@ function requiresConfirmation(scope: ActionScope, count: number) {
 
 function actionLabel(kind: ActionKind) {
   if (kind === "enrich") {
-    return "Enrich";
+    return "Enriquecer";
   }
   if (kind === "assign") {
-    return "Assign";
+    return "Atribuir";
   }
-  return "Export";
+  return "Exportar";
 }
 
 async function resolveActionScope(
@@ -454,7 +463,7 @@ async function resolveActionScope(
       request,
       leadIds: resolved.lead_ids,
       requested: resolved.total || latestBatch.lead_count,
-      scopeLabel: resolved.scope_label || `Latest import batch #${latestBatch.id}`,
+      scopeLabel: resolved.scope_label || `Última importação #${latestBatch.id}`,
     };
   }
 
@@ -484,15 +493,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function formatError(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "The action could not be completed.";
+  return formatUserFacingError(error, "Não foi possível concluir a ação em lote.");
 }
 
 function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"]) {
@@ -503,12 +504,20 @@ function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"
     summary.contact_forms_found;
 
   if (summary.success_count === 0) {
-    return `Processed ${summary.processed.toLocaleString()} leads, but none completed enrichment successfully.`;
+    return `Processamos ${summary.processed.toLocaleString()} leads, mas nenhum concluiu o enriquecimento com sucesso.`;
   }
 
   if (newPublicChannelCount === 0) {
-    return `Processed ${summary.processed.toLocaleString()} leads. ${summary.success_count.toLocaleString()} completed successfully, but no additional public contact channels were found.`;
+    return `Processamos ${summary.processed.toLocaleString()} leads. ${summary.success_count.toLocaleString()} concluíram com sucesso, mas nenhum novo canal público foi encontrado.`;
   }
 
-  return `Processed ${summary.processed.toLocaleString()} leads and found ${summary.contacts_added.toLocaleString()} new contact records across ${newPublicChannelCount.toLocaleString()} public contact channels.`;
+  return `Processamos ${summary.processed.toLocaleString()} leads e encontramos ${summary.contacts_added.toLocaleString()} novos contatos em ${newPublicChannelCount.toLocaleString()} canais públicos.`;
+}
+
+function formatScopeLabel(scopeLabel: string) {
+  return scopeLabel
+    .replace(/^Selected leads$/i, "Leads selecionados")
+    .replace(/^Current filtered set$/i, "Lista filtrada")
+    .replace(/^Latest import batch$/i, "Última importação")
+    .replace(/^Latest import batch #/i, "Última importação #");
 }

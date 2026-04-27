@@ -5,8 +5,8 @@ import { Providers } from "@/app/providers";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "Encontra.ai Lead Workspace",
-  description: "Lead discovery and operations workspace for Encontra.ai teams.",
+  title: "Encontra.ai | Descoberta de leads",
+  description: "Busque empresas por nicho e cidade, enriqueça contatos, salve leads e exporte planilhas prontas.",
 };
 
 type RootLayoutProps = {
@@ -15,7 +15,7 @@ type RootLayoutProps = {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body>
         <Providers>
           <AppShell>{children}</AppShell>

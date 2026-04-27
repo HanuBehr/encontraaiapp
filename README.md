@@ -1,52 +1,25 @@
-# Encontra.ai Lead Discovery and Operations
+# Encontra.ai
 
-Encontra.ai is a lead discovery and operations platform for researching public businesses, enriching contact data, reviewing lead quality, and managing assignment workflows.
+Encontra.ai é um MVP de descoberta de leads para buscar empresas públicas por nicho e cidade, revisar a prévia, enriquecer contatos, salvar leads e exportar uma planilha pronta para prospecção.
 
-## Architecture
+## Fluxo principal
 
-- `web/` is the primary V2 product: a Next.js 15 / React 19 workspace for discovery and lead operations.
-- `app/` contains the FastAPI backend, SQLAlchemy models, repositories, and services.
-- `streamlit_app.py` remains available as a legacy internal workspace, but it is not the main UI.
+`search -> preview -> enrich/recover -> save -> leads -> export`
 
-## What is implemented
+- `search`: digite buscas como `dentistas em São Paulo` ou `restaurantes em Campinas`
+- `preview`: revise a prévia antes de salvar qualquer lead
+- `enrich/recover`: enriqueça contatos públicos e tente recuperar sites ausentes
+- `save`: salve apenas os resultados selecionados
+- `leads`: revise, filtre e selecione os leads salvos
+- `export`: baixe a planilha Excel pronta para prospecção
 
-- Google Places discovery ingestion with `ImportBatch` tracking
-- append-only raw discovery history
-- public-site enrichment with provenance-preserving contact evidence
-- V2 discovery and lead operations workspaces in Next.js
-- lead review API and legacy internal Streamlit workspace
-- deduplication and canonical merge logic
-- lead scoring with stored reasoning
-- assignment regions, market taxonomy, and validation tooling
-- Excel export with generic `Leads` and `Metadata` sheets
-- pytest coverage for normalization, enrichment, dedupe, scoring, assignment, export, and API contracts
+## Arquitetura real
 
-## Stack
+- `web/` é a interface principal V2 em Next.js
+- `app/` é o backend FastAPI
+- `streamlit_app.py` continua no repo apenas como workspace legado/interno
 
-- Python 3.11+
-- FastAPI
-- Next.js 15
-- React 19
-- TypeScript
-- SQLAlchemy 2.0
-- SQLite by default, with a clean PostgreSQL upgrade path
-- requests + BeautifulSoup
-- pandas + openpyxl
-
-## Local setup
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-cd web
-npm install
-Copy-Item .env.example .env.local
-cd ..
-```
-
-## Start the backend
+## Subir o backend
 
 ```powershell
 cd "C:\Users\hanub\OneDrive\Documentos\Work\Encontra.ai\encontraaiapp"
@@ -56,74 +29,125 @@ python .\scripts\init_local_db.py
 uvicorn app.api.main:app --host 127.0.0.1 --port 8000 --log-level debug
 ```
 
-Default API URLs:
+URLs padrão:
 
 - [http://127.0.0.1:8000](http://127.0.0.1:8000)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-## Start the V2 web app
+## Subir o frontend
 
 ```powershell
-cd web
+cd "C:\Users\hanub\OneDrive\Documentos\Work\Encontra.ai\encontraaiapp\web"
+npm install
 npm run dev
 ```
 
-Default web URL:
+URL padrão:
 
-- [http://127.0.0.1:3000](http://127.0.0.1:3000)
+- [http://localhost:3000](http://localhost:3000)
 
-The Next.js backend proxy reads `API_BASE_URL` from `web/.env.local` and defaults to `http://127.0.0.1:8000`.
+## Variáveis de ambiente
 
-## Optional example configuration
+Backend em `.env`:
+
+- `GOOGLE_API_KEY`
+  Obrigatória para descoberta por localização, geocoding e Google Places
+- `DATABASE_URL`
+  Padrão local: `sqlite:///./data/app.db`
+- `SQLITE_JOURNAL_MODE`
+  Padrão: `TRUNCATE`
+
+Frontend em `web/.env.local`:
+
+- `API_BASE_URL`
+  Deve apontar para o backend FastAPI
+  Valor local esperado: `http://127.0.0.1:8000`
+
+Exemplos:
+
+- [`.env.example`](C:/Users/hanub/OneDrive/Documentos/Work/Encontra.ai/encontraaiapp/.env.example)
+- [`web/.env.example`](C:/Users/hanub/OneDrive/Documentos/Work/Encontra.ai/encontraaiapp/web/.env.example)
+
+## Quickstart local
 
 ```powershell
-python .\scripts\bootstrap_default_assignment_configuration.py
+cd "C:\Users\hanub\OneDrive\Documentos\Work\Encontra.ai\encontraaiapp"
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+python .\scripts\init_local_db.py
+
+cd web
+npm install
+Copy-Item .env.example .env.local
 ```
 
-This seeds an example São Paulo-centric assignment model for internal demos and validation. It is optional and not required for generic discovery or lead review.
+Depois disso:
 
-Optional demo data:
+1. Suba o backend na porta `8000`
+2. Suba o frontend na porta `3000`
+3. Abra [http://localhost:3000/discovery](http://localhost:3000/discovery)
 
-```powershell
-python .\scripts\seed_demo.py
-```
+## Exportação
 
-## Legacy Streamlit workspace
+- O Excel é o formato principal de exportação
+- A exportação baixa uma planilha limpa com os leads selecionados
+- O fluxo esperado é salvar em `/leads` e exportar dali
+
+## Troubleshooting
+
+`502` no proxy do Next.js:
+
+- Normalmente significa backend indisponível ou `API_BASE_URL` incorreto
+- Confirme que a API está rodando em `http://127.0.0.1:8000`
+- Confirme `web/.env.local` com `API_BASE_URL=http://127.0.0.1:8000`
+
+`GOOGLE_API_KEY` ausente:
+
+- A descoberta por localização fica indisponível
+- A UI deve mostrar: `Configure GOOGLE_API_KEY no backend para usar a busca por localização.`
+
+Banco local não inicializado:
+
+- Rode `python .\scripts\init_local_db.py` antes de subir a API
+
+Frontend sobe, mas a lista não carrega:
+
+- Verifique backend em `8000`
+- Verifique o proxy do Next.js em `web/app/api/backend/[...path]/route.ts`
+
+## Legado Streamlit
 
 ```powershell
 streamlit run streamlit_app.py
 ```
 
-Default Streamlit URL:
+Use Streamlit apenas como workspace legado/interno. O produto principal é a aplicação Next.js em `web/`.
 
-- [http://127.0.0.1:8501](http://127.0.0.1:8501)
+## Exemplo de configuração opcional
 
-Use Streamlit only as a legacy internal workspace. The primary product UI is the Next.js app in `web/`.
+```powershell
+python .\scripts\bootstrap_default_assignment_configuration.py
+```
 
-## Run checks
+Esse script semeia uma configuração de atribuição de exemplo para demos internas. Não é necessário para a descoberta genérica por nicho + cidade.
+
+## Preparação para limites SaaS futuros
+
+Ainda não há autenticação, billing ou créditos implementados. Mesmo assim, o projeto já está organizado para acomodar limites futuros em torno de:
+
+- buscas executadas
+- leads salvos
+- exportações geradas
+- créditos consumidos por enriquecimento ou descoberta
+
+Hoje isso é apenas preparação de nomenclatura e fluxo. Não existe Stripe, cobrança nem controle de uso em produção neste momento.
+
+## Checks
 
 ```powershell
 python -m pytest -q
 cd web
 npm run typecheck
 ```
-
-## Key environment variables
-
-- `DATABASE_URL`
-  Default is `sqlite:///./data/app.db`
-- `SQLITE_JOURNAL_MODE`
-  Default is `TRUNCATE`. This is a practical default for Windows/OneDrive-style paths where SQLite `WAL` or default journaling can cause `disk I/O error`.
-- `GOOGLE_API_KEY`
-  Required for live Google discovery and geocoding.
-- `API_BASE_URL`
-  Optional backend override for the Next.js proxy in `web/`.
-- `SENDING_ENABLED`
-  Keep disabled for review-first mode.
-
-## Notes
-
-- Sending remains disabled by default.
-- WhatsApp support is draft-only unless the official WhatsApp Cloud API is configured later.
-- Raw discovery, enrichment, and contact evidence stay append-only.
-- Canonical lead fields live on `Lead`, while provenance remains in `LeadContact`, `LeadEnrichmentRecord`, and `RawDiscoveryRecord`.

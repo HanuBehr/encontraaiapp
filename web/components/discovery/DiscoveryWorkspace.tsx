@@ -4,7 +4,6 @@ import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { ApiError } from "@/lib/api/client";
 import {
   createExclusionRule,
   enrichDiscoveryPreview,
@@ -28,6 +27,11 @@ import {
   parseNaturalLanguageDiscoveryQuery,
   type ParsedDiscoveryQuery,
 } from "@/lib/discovery/query-parser";
+import {
+  formatUserFacingError,
+  NO_DISCOVERY_RESULTS_UI_MESSAGE,
+  sanitizeUserFacingMessage,
+} from "@/lib/ui/messages";
 
 type LocationMode = "area" | "coordinates";
 type WebsiteFilter = "all" | "has_website" | "no_website";
@@ -82,19 +86,21 @@ const searchTermOptions = [
   "escritórios de contabilidade",
   "clínicas veterinárias",
 ];
-
-const MISSING_GOOGLE_API_KEY_DETAIL = "GOOGLE_API_KEY must be configured to use location-based discovery.";
-const MISSING_GOOGLE_API_KEY_UI_MESSAGE = "Configure GOOGLE_API_KEY no backend para usar a busca por localização.";
+const discoveryExampleQueries = [
+  "dentistas em São Paulo",
+  "restaurantes em Campinas",
+  "clínicas de estética no Rio de Janeiro",
+];
 
 const blockedOptions: Array<{ value: LeadBlockedFilter; label: string }> = [
-  { value: "exclude", label: "Exclude blocked" },
-  { value: "include", label: "Include blocked" },
-  { value: "only", label: "Only blocked" },
+  { value: "exclude", label: "Ocultar bloqueados" },
+  { value: "include", label: "Incluir bloqueados" },
+  { value: "only", label: "Somente bloqueados" },
 ];
 const websiteOptions: Array<{ value: WebsiteFilter; label: string }> = [
-  { value: "all", label: "All rows" },
-  { value: "has_website", label: "Has website" },
-  { value: "no_website", label: "No website" },
+  { value: "all", label: "Todas" },
+  { value: "has_website", label: "Com site" },
+  { value: "no_website", label: "Sem site" },
 ];
 
 const ENRICH_VISIBLE_CONFIRMATION_THRESHOLD = 10;
@@ -125,7 +131,9 @@ export function DiscoveryWorkspace() {
       setNewlyBlockedIds({});
       setLastImport(null);
       setActionMessage(
-        `Preview ready. ${websiteReadyCount.toLocaleString()} row(s) already have a website or domain and can be enriched. ${recoverableNoWebsiteCount.toLocaleString()} no-website row(s) are eligible for website recovery.`,
+        data.items.length === 0
+          ? NO_DISCOVERY_RESULTS_UI_MESSAGE
+          : `Prévia pronta. ${websiteReadyCount.toLocaleString()} empresa(s) já têm site ou domínio para enriquecimento, e ${recoverableNoWebsiteCount.toLocaleString()} empresa(s) sem site podem passar por recuperação.`,
       );
     },
   });
@@ -179,7 +187,7 @@ export function DiscoveryWorkspace() {
       setNewlyBlockedIds({});
       setBlockDraft(null);
       const blockedCount = response.reapply_summary?.blocked ?? 0;
-      setActionMessage(`Rule saved. ${blockedCount.toLocaleString()} existing lead(s) newly blocked.`);
+      setActionMessage(`Regra salva. ${blockedCount.toLocaleString()} lead(s) existente(s) foram bloqueados agora.`);
     },
   });
 
@@ -188,7 +196,7 @@ export function DiscoveryWorkspace() {
     onSuccess: (response) => {
       setLastImport(response);
       setActionMessage(
-        `Saved batch ${response.batch_id}. Created ${response.created_leads}, updated ${response.updated_leads}, skipped ${response.skipped_blocked}.`,
+        `Lote ${response.batch_id} salvo. ${response.created_leads} lead(s) criados, ${response.updated_leads} atualizados e ${response.skipped_blocked} ignorados por bloqueio.`,
       );
       setSelectedIds({});
     },
@@ -321,7 +329,7 @@ export function DiscoveryWorkspace() {
       mode: "company",
       ruleType: "exact_name",
       pattern: item.candidate.business_name,
-      reason: "Blocked during discovery",
+      reason: "Bloqueado durante a descoberta",
     });
   }
 
@@ -335,7 +343,7 @@ export function DiscoveryWorkspace() {
       mode: "domain",
       ruleType: "domain",
       pattern: domain,
-      reason: "Blocked during discovery",
+      reason: "Bloqueado durante a descoberta",
     });
   }
 
@@ -353,7 +361,7 @@ export function DiscoveryWorkspace() {
     const skippedNoWebsite = selectedClientResultIds.length - selectedEnrichableClientResultIds.length;
     if (skippedNoWebsite > 0) {
       setActionMessage(
-        `Enriching ${selectedEnrichableClientResultIds.length.toLocaleString()} selected row(s) with a website. ${skippedNoWebsite.toLocaleString()} selected row(s) still have no website or domain.`,
+        `Enriquecendo ${selectedEnrichableClientResultIds.length.toLocaleString()} empresa(s) selecionadas com site. ${skippedNoWebsite.toLocaleString()} selecionada(s) ainda não têm site ou domínio.`,
       );
     }
     enrichMutation.mutate({
@@ -368,24 +376,24 @@ export function DiscoveryWorkspace() {
       return;
     }
     if (selectedNoWebsiteClientResultIds.length === 0) {
-      setActionMessage("Select at least one unblocked row without a website before running website recovery.");
+      setActionMessage("Selecione pelo menos uma empresa sem site para tentar a recuperação.");
       return;
     }
     if (selectedRecoverableClientResultIds.length === 0) {
       setActionMessage(
-        "The selected no-website rows do not have a recoverable Google place id. Choose different rows or save them as-is.",
+        "As empresas selecionadas sem site não têm um Google place id recuperável. Escolha outras linhas ou salve assim mesmo.",
       );
       return;
     }
     if (selectedRecoverableClientResultIds.length > WEBSITE_RECOVERY_MAX_ROWS) {
       setActionMessage(
-        `Recover websites runs on up to ${WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} selected no-website row(s) at a time. Narrow the selection and retry.`,
+        `A recuperação de sites funciona em até ${WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} empresas sem site por vez. Reduza a seleção e tente novamente.`,
       );
       return;
     }
     if (recoverySelectionMissingLookupCount > 0) {
       setActionMessage(
-        `Recovering ${selectedRecoverableClientResultIds.length.toLocaleString()} selected no-website row(s). ${recoverySelectionMissingLookupCount.toLocaleString()} selected row(s) do not have a recoverable place id and will stay unchanged.`,
+        `Recuperando site de ${selectedRecoverableClientResultIds.length.toLocaleString()} empresa(s) selecionadas. ${recoverySelectionMissingLookupCount.toLocaleString()} linha(s) seguem sem place id recuperável e não serão alteradas.`,
       );
     }
     recoverMutation.mutate({
@@ -403,14 +411,14 @@ export function DiscoveryWorkspace() {
     if (
       visibleEnrichableIds.length >= ENRICH_VISIBLE_CONFIRMATION_THRESHOLD &&
       !window.confirm(
-        `Enrich ${visibleEnrichableIds.length.toLocaleString()} visible preview row(s) with a website? This can take a moment.`,
+        `Enriquecer ${visibleEnrichableIds.length.toLocaleString()} empresa(s) visíveis com site? Isso pode levar alguns instantes.`,
       )
     ) {
       return;
     }
     if (skippedNoWebsite > 0) {
       setActionMessage(
-        `Enriching ${visibleEnrichableIds.length.toLocaleString()} visible row(s) with a website. ${skippedNoWebsite.toLocaleString()} visible row(s) still have no website or domain.`,
+        `Enriquecendo ${visibleEnrichableIds.length.toLocaleString()} empresa(s) visíveis com site. ${skippedNoWebsite.toLocaleString()} linha(s) visíveis ainda não têm site ou domínio.`,
       );
     }
     enrichMutation.mutate({
@@ -437,26 +445,26 @@ export function DiscoveryWorkspace() {
     <div className="space-y-4">
       <section className="flex flex-col gap-3 rounded-md border border-neutral-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-cyan-700">Discovery Workspace</p>
-          <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Discovery</h1>
+          <p className="text-xs font-semibold uppercase text-cyan-700">Descoberta</p>
+          <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Buscar empresas</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Search public businesses, suppress blocked brands, and save the useful results into your workspace.
+            Pesquise empresas públicas por nicho e cidade, revise a prévia e salve apenas os leads que fazem sentido.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center sm:min-w-[480px] sm:grid-cols-4">
-          <Metric label="Preview" value={previewCount.toLocaleString()} />
-          <Metric label="Website-ready" value={websiteReadyCount.toLocaleString()} />
-          <Metric label="Blocked" value={blockedCount.toLocaleString()} />
-          <Metric label="Selected" value={selectedClientResultIds.length.toLocaleString()} />
+          <Metric label="Prévia" value={previewCount.toLocaleString()} />
+          <Metric label="Com site" value={websiteReadyCount.toLocaleString()} />
+          <Metric label="Bloqueadas" value={blockedCount.toLocaleString()} />
+          <Metric label="Selecionadas" value={selectedClientResultIds.length.toLocaleString()} />
         </div>
       </section>
 
       <form onSubmit={runPreview} className="rounded-md border border-neutral-200 bg-white p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-neutral-950">Search setup</p>
+            <p className="text-sm font-semibold text-neutral-950">Configurar busca</p>
             <p className="mt-1 text-sm text-neutral-500">
-              Preview first. Leads are only created when selected results are saved.
+              Primeiro veja a prévia. Os leads só são criados quando você salva os resultados selecionados.
             </p>
           </div>
           <button
@@ -464,14 +472,14 @@ export function DiscoveryWorkspace() {
             disabled={previewMutation.isPending}
             className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {previewMutation.isPending ? "Searching" : "Run preview"}
+            {previewMutation.isPending ? "Buscando..." : "Gerar prévia"}
           </button>
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-4">
             <label className="block">
-              <span className="text-xs font-medium text-neutral-600">Search query</span>
+              <span className="text-xs font-medium text-neutral-600">O que você quer buscar</span>
               <input
                 value={form.naturalLanguageQuery}
                 onChange={(event) => updateForm("naturalLanguageQuery", event.target.value)}
@@ -479,39 +487,39 @@ export function DiscoveryWorkspace() {
                 className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
               />
               <p className="mt-1 text-xs text-neutral-500">
-                Use a natural-language query like &quot;restaurantes em Campinas&quot; or leave it blank and use the
-                advanced fields below.
+                Use uma busca natural como &quot;restaurantes em Campinas&quot; ou deixe em branco e preencha os campos
+                abaixo.
               </p>
             </label>
 
             {form.naturalLanguageQuery.trim() ? (
               <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm text-cyan-950">
-                <p className="text-xs font-semibold uppercase text-cyan-800">Parsed query</p>
+                <p className="text-xs font-semibold uppercase text-cyan-800">Busca interpretada</p>
                 <p className="mt-1">
-                  <span className="font-medium">Category:</span>{" "}
-                  {parsedNaturalLanguageQuery?.category ?? "Could not parse"}
+                  <span className="font-medium">Nicho:</span>{" "}
+                  {parsedNaturalLanguageQuery?.category ?? "Não foi possível identificar"}
                 </p>
                 <p className="mt-1">
-                  <span className="font-medium">Location:</span>{" "}
-                  {parsedNaturalLanguageQuery?.locationQuery ?? "Add a city in the query or below"}
+                  <span className="font-medium">Local:</span>{" "}
+                  {parsedNaturalLanguageQuery?.locationQuery ?? "Adicione uma cidade na busca ou nos campos abaixo"}
                 </p>
               </div>
             ) : null}
 
             <div>
-              <span className="text-xs font-medium text-neutral-600">Location mode</span>
+              <span className="text-xs font-medium text-neutral-600">Modo de localização</span>
               <div className="mt-2 flex flex-wrap gap-2">
                 <ToggleButton
                   active={form.locationMode === "area"}
                   onClick={() => updateForm("locationMode", "area")}
                 >
-                  City / area
+                  Cidade / região
                 </ToggleButton>
                 <ToggleButton
                   active={form.locationMode === "coordinates"}
                   onClick={() => updateForm("locationMode", "coordinates")}
                 >
-                  Coordinates
+                  Coordenadas
                 </ToggleButton>
               </div>
             </div>
@@ -519,22 +527,22 @@ export function DiscoveryWorkspace() {
             {form.locationMode === "area" ? (
               <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_0.9fr]">
                 <TextField
-                  label="City"
+                  label="Cidade"
                   value={form.city}
                   onChange={(value) => updateForm("city", value)}
                   placeholder="Campinas, SP"
                 />
                 <TextField
-                  label="Neighborhood"
+                  label="Bairro"
                   value={form.neighborhood}
                   onChange={(value) => updateForm("neighborhood", value)}
-                  placeholder="Optional"
+                  placeholder="Opcional"
                 />
                 <TextField
                   label="CEP"
                   value={form.postalCode}
                   onChange={(value) => updateForm("postalCode", value)}
-                  placeholder="Optional"
+                  placeholder="Opcional"
                 />
               </div>
             ) : (
@@ -552,24 +560,24 @@ export function DiscoveryWorkspace() {
                   placeholder="-47.0608"
                 />
                 <TextField
-                  label="Location label"
+                  label="Rótulo do local"
                   value={form.locationLabel}
                   onChange={(value) => updateForm("locationLabel", value)}
-                  placeholder="Optional"
+                  placeholder="Opcional"
                 />
               </div>
             )}
 
             <div className="grid gap-3 sm:grid-cols-2">
               <NumberField
-                label="Radius meters"
+                label="Raio em metros"
                 min={100}
                 max={50000}
                 value={form.radiusM}
                 onChange={(value) => updateForm("radiusM", value)}
               />
               <NumberField
-                label="Max results per term"
+                label="Máximo por termo"
                 min={1}
                 max={20}
                 value={form.maxResultsPerTerm}
@@ -579,9 +587,9 @@ export function DiscoveryWorkspace() {
           </div>
 
           <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
-            <p className="text-sm font-semibold text-neutral-950">Extra search terms</p>
+            <p className="text-sm font-semibold text-neutral-950">Termos extras</p>
             <p className="mt-1 text-xs text-neutral-500">
-              Optional. Add more niche terms if you want the same city search to fan out across multiple categories.
+              Opcional. Use mais termos se quiser abrir a mesma cidade em vários nichos relacionados.
             </p>
             <div className="mt-3 grid gap-2">
               {searchTermOptions.map((term) => (
@@ -597,11 +605,11 @@ export function DiscoveryWorkspace() {
               ))}
             </div>
             <label className="mt-3 block">
-              <span className="text-xs font-medium text-neutral-600">Extra terms</span>
+              <span className="text-xs font-medium text-neutral-600">Termos livres</span>
               <textarea
                 value={form.customTerms}
                 onChange={(event) => updateForm("customTerms", event.target.value)}
-                placeholder="One per line, or comma-separated"
+                placeholder="Um por linha ou separados por vírgula"
                 className="mt-1 min-h-20 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
               />
             </label>
@@ -615,14 +623,14 @@ export function DiscoveryWorkspace() {
       <section className="rounded-md border border-neutral-200 bg-white p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-neutral-950">Preview results</p>
+            <p className="text-sm font-semibold text-neutral-950">Prévia da busca</p>
             <p className="mt-1 text-sm text-neutral-500">
-              Blocked results are hidden by default. Save writes only selected unblocked rows.
+              Resultados bloqueados ficam ocultos por padrão. Só os itens selecionados serão salvos em Leads.
             </p>
           </div>
           <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-end">
             <label className="block w-full lg:w-44">
-              <span className="text-xs font-medium text-neutral-600">Blocked filter</span>
+              <span className="text-xs font-medium text-neutral-600">Filtro de bloqueio</span>
               <select
                 value={blockedFilter}
                 onChange={(event) => setBlockedFilter(event.target.value as LeadBlockedFilter)}
@@ -636,7 +644,7 @@ export function DiscoveryWorkspace() {
                 </select>
             </label>
             <label className="block w-full lg:w-44">
-              <span className="text-xs font-medium text-neutral-600">Website filter</span>
+              <span className="text-xs font-medium text-neutral-600">Filtro de site</span>
               <select
                 value={websiteFilter}
                 onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
@@ -656,7 +664,7 @@ export function DiscoveryWorkspace() {
                 onClick={recoverSelected}
                 className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {recoverMutation.isPending ? "Recovering" : "Recover websites"}
+                {recoverMutation.isPending ? "Recuperando..." : "Recuperar sites"}
               </button>
               <button
                 type="button"
@@ -666,7 +674,7 @@ export function DiscoveryWorkspace() {
                 onClick={enrichSelected}
                 className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {enrichMutation.isPending ? "Enriching" : "Enrich selected"}
+                {enrichMutation.isPending ? "Enriquecendo..." : "Enriquecer selecionadas"}
               </button>
               <button
                 type="button"
@@ -674,7 +682,7 @@ export function DiscoveryWorkspace() {
                 onClick={enrichVisible}
                 className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Enrich visible
+                Enriquecer visíveis
               </button>
             </div>
           </div>
@@ -687,10 +695,10 @@ export function DiscoveryWorkspace() {
         {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error)}</InlineMessage> : null}
         {preview ? (
           <p className="mt-3 text-xs text-neutral-500">
-            Enrichment only runs on rows with a website or domain. Selected ready:{" "}
-            {selectedEnrichableClientResultIds.length.toLocaleString()}. Visible ready:{" "}
-            {visibleEnrichableIds.length.toLocaleString()}. Website recovery can check up to{" "}
-            {WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} selected no-website row(s) at a time. Recoverable now:{" "}
+            O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas:{" "}
+            {selectedEnrichableClientResultIds.length.toLocaleString()}. Visíveis prontas:{" "}
+            {visibleEnrichableIds.length.toLocaleString()}. A recuperação de sites verifica até{" "}
+            {WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} empresas sem site por vez. Recuperáveis agora:{" "}
             {selectedRecoverableClientResultIds.length.toLocaleString()}.
           </p>
         ) : null}
@@ -698,6 +706,11 @@ export function DiscoveryWorkspace() {
         {preview ? (
           <DiscoveryPreviewTable
             items={visibleItems}
+            emptyMessage={
+              (preview.items?.length ?? 0) === 0
+                ? NO_DISCOVERY_RESULTS_UI_MESSAGE
+                : "Nenhuma empresa corresponde aos filtros atuais de bloqueio e site."
+            }
             selectedIds={selectedIds}
             newlyBlockedIds={newlyBlockedIds}
             allVisibleSelected={allVisibleSelected}
@@ -710,7 +723,22 @@ export function DiscoveryWorkspace() {
           />
         ) : (
           <div className="mt-4 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center text-sm text-neutral-500">
-            Run a preview to inspect companies before saving them as leads.
+            <p className="font-medium text-neutral-800">Busque por nicho + cidade para montar sua prévia.</p>
+            <p className="mt-2">
+              Exemplos: dentistas em São Paulo, restaurantes em Campinas ou clínicas de estética no Rio de Janeiro.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {discoveryExampleQueries.map((query) => (
+                <button
+                  key={query}
+                  type="button"
+                  onClick={() => updateForm("naturalLanguageQuery", query)}
+                  className="rounded-full border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-800 hover:border-neutral-500"
+                >
+                  {query}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </section>
@@ -738,6 +766,7 @@ export function DiscoveryWorkspace() {
 
 function DiscoveryPreviewTable({
   items,
+  emptyMessage,
   selectedIds,
   newlyBlockedIds,
   allVisibleSelected,
@@ -749,6 +778,7 @@ function DiscoveryPreviewTable({
   onBlockDomain,
 }: {
   items: DiscoveryPreviewItem[];
+  emptyMessage: string;
   selectedIds: Record<string, boolean>;
   newlyBlockedIds: Record<string, boolean>;
   allVisibleSelected: boolean;
@@ -767,18 +797,18 @@ function DiscoveryPreviewTable({
             <th className="border-b border-neutral-200 px-3 py-3">
               <input
                 type="checkbox"
-                aria-label="Select visible unblocked rows"
+                aria-label="Selecionar empresas visíveis"
                 checked={allVisibleSelected}
                 disabled={visibleSelectableCount === 0}
                 onChange={(event) => onToggleVisibleSelection(event.target.checked)}
                 className="h-4 w-4 rounded border-neutral-300 disabled:cursor-not-allowed"
               />
             </th>
-            <th className="border-b border-neutral-200 px-3 py-3">Company</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Location</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Contact</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Exclusion</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Actions</th>
+            <th className="border-b border-neutral-200 px-3 py-3">Empresa</th>
+            <th className="border-b border-neutral-200 px-3 py-3">Localização</th>
+            <th className="border-b border-neutral-200 px-3 py-3">Contato</th>
+            <th className="border-b border-neutral-200 px-3 py-3">Exclusão</th>
+            <th className="border-b border-neutral-200 px-3 py-3">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -806,13 +836,13 @@ function DiscoveryPreviewTable({
                       <p className="font-medium text-neutral-950">{item.candidate.business_name}</p>
                       {blocked ? <BlockedBadge /> : null}
                       {hasWebsite ? (
-                        <OutcomeBadge tone="info">Has website</OutcomeBadge>
+                        <OutcomeBadge tone="info">Com site</OutcomeBadge>
                       ) : (
-                        <OutcomeBadge tone="muted">No website</OutcomeBadge>
+                        <OutcomeBadge tone="muted">Sem site</OutcomeBadge>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-neutral-500">{item.candidate.category ?? "No category"}</p>
-                    <p className="mt-1 text-xs text-neutral-500">Term: {item.search_term}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{item.candidate.category ?? "Sem categoria"}</p>
+                    <p className="mt-1 text-xs text-neutral-500">Busca: {item.search_term}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {item.candidate.website ? (
                         <a
@@ -821,7 +851,7 @@ function DiscoveryPreviewTable({
                           rel="noreferrer"
                           className="text-xs font-medium text-cyan-700 hover:text-cyan-900"
                         >
-                          Website
+                          Site
                         </a>
                       ) : null}
                       {item.candidate.google_maps_url || item.source_url ? (
@@ -831,18 +861,18 @@ function DiscoveryPreviewTable({
                           rel="noreferrer"
                           className="text-xs font-medium text-cyan-700 hover:text-cyan-900"
                         >
-                          Maps
+                          Google Maps
                         </a>
                       ) : null}
                     </div>
                   </td>
                   <td className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-800">
-                    <p>{[item.candidate.city, item.candidate.state].filter(Boolean).join(", ") || "Unknown"}</p>
+                    <p>{[item.candidate.city, item.candidate.state].filter(Boolean).join(", ") || "Não informado"}</p>
                     <p className="mt-1 text-xs text-neutral-500">{item.candidate.neighborhood ?? item.candidate.address ?? ""}</p>
                   </td>
                   <td className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-800">
-                    <p>{item.candidate.whatsapp ?? item.candidate.phone ?? "No phone"}</p>
-                    <p className="mt-1 text-xs text-neutral-500">{domain ?? "No domain"}</p>
+                    <p>{item.candidate.whatsapp ?? item.candidate.phone ?? "Sem telefone"}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{domain ?? "Sem domínio"}</p>
                     {item.candidate.email ? (
                       <a
                         href={`mailto:${item.candidate.email}`}
@@ -869,41 +899,45 @@ function DiscoveryPreviewTable({
                           rel="noreferrer"
                           className="text-xs font-medium text-cyan-700 hover:text-cyan-900"
                         >
-                          Contact form
+                          Formulário
                         </a>
                       ) : null}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {item.enrichment?.email_found ? <OutcomeBadge tone="info">Email found</OutcomeBadge> : null}
+                      {item.enrichment?.email_found ? <OutcomeBadge tone="info">Email encontrado</OutcomeBadge> : null}
                       {item.enrichment?.instagram_found ? (
-                        <OutcomeBadge tone="info">Instagram found</OutcomeBadge>
+                        <OutcomeBadge tone="info">Instagram encontrado</OutcomeBadge>
                       ) : null}
-                      {item.enrichment?.contact_form_found ? <OutcomeBadge tone="info">Form found</OutcomeBadge> : null}
+                      {item.enrichment?.contact_form_found ? (
+                        <OutcomeBadge tone="info">Formulário encontrado</OutcomeBadge>
+                      ) : null}
                       {item.enrichment?.no_email_found ? (
-                        <OutcomeBadge tone="muted">No public email found</OutcomeBadge>
+                        <OutcomeBadge tone="muted">Sem email público</OutcomeBadge>
                       ) : null}
                       {item.enrichment?.skipped_reason === "No public website." ? (
-                        <OutcomeBadge tone="warning">No website to enrich</OutcomeBadge>
+                        <OutcomeBadge tone="warning">Sem site para enriquecer</OutcomeBadge>
                       ) : null}
                       {clientResultId && newlyBlockedIds[clientResultId] ? (
-                        <OutcomeBadge tone="danger">Blocked after re-check</OutcomeBadge>
+                        <OutcomeBadge tone="danger">Bloqueada após nova checagem</OutcomeBadge>
                       ) : null}
                     </div>
                     {item.enrichment?.error_message ? (
-                      <p className="mt-2 max-w-xs text-xs text-rose-700">{item.enrichment.error_message}</p>
+                      <p className="mt-2 max-w-xs text-xs text-rose-700">
+                        {sanitizeUserFacingMessage(item.enrichment.error_message, "Falha ao enriquecer esta empresa.")}
+                      </p>
                     ) : null}
                   </td>
                   <td className="border-b border-neutral-100 px-3 py-3 align-top">
                     {blocked ? (
                       <div>
-                        <p className="font-medium text-rose-800">Blocked</p>
+                        <p className="font-medium text-rose-800">Bloqueada</p>
                         <p className="mt-1 max-w-xs text-xs text-rose-700">
-                          {item.exclusion.reason ?? "Matched an active exclusion rule."}
+                          {item.exclusion.reason ?? "Corresponde a uma regra de exclusão ativa."}
                         </p>
                       </div>
                     ) : (
                       <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
-                        Eligible
+                        Pronta para salvar
                       </span>
                     )}
                   </td>
@@ -915,7 +949,7 @@ function DiscoveryPreviewTable({
                         onClick={() => onBlockCompany(item)}
                         className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-800 hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Block company
+                        Bloquear empresa
                       </button>
                       <button
                         type="button"
@@ -923,7 +957,7 @@ function DiscoveryPreviewTable({
                         onClick={() => onBlockDomain(item)}
                         className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-800 hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Block domain
+                        Bloquear domínio
                       </button>
                     </div>
                   </td>
@@ -933,7 +967,7 @@ function DiscoveryPreviewTable({
           ) : (
             <tr>
               <td colSpan={6} className="px-4 py-10 text-center text-sm text-neutral-500">
-                No preview rows match the current blocked and website filters.
+                {emptyMessage}
               </td>
             </tr>
           )}
@@ -960,15 +994,15 @@ function SaveBar({
     <section className="rounded-md border border-neutral-200 bg-white p-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-cyan-700">Save and handoff</p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">Save selected results</h2>
+          <p className="text-xs font-semibold uppercase text-cyan-700">Salvar em leads</p>
+          <h2 className="mt-1 text-base font-semibold text-neutral-950">Salvar leads selecionados</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Selected blocked rows are skipped by the backend. The saved batch opens directly in Leads.
+            Linhas bloqueadas são ignoradas automaticamente. Depois de salvar, o lote abre direto em Leads.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-[140px_180px]">
           <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-center">
-            <p className="text-xs font-medium text-neutral-500">Selected</p>
+            <p className="text-xs font-medium text-neutral-500">Selecionadas</p>
             <p className="mt-1 text-lg font-semibold text-neutral-950">{selectedCount.toLocaleString()}</p>
           </div>
           <button
@@ -977,7 +1011,7 @@ function SaveBar({
             onClick={onSave}
             className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSaving ? "Saving" : "Save selected"}
+            {isSaving ? "Salvando..." : "Salvar selecionadas"}
           </button>
         </div>
       </div>
@@ -985,16 +1019,16 @@ function SaveBar({
       {lastImport ? (
         <div className="mt-4 flex flex-col gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-emerald-950">Batch {lastImport.batch_id} saved</p>
+            <p className="text-sm font-semibold text-emerald-950">Lote {lastImport.batch_id} salvo</p>
             <p className="mt-1 text-sm text-emerald-800">
-              Created {lastImport.created_leads}, updated {lastImport.updated_leads}, skipped {lastImport.skipped_blocked}.
+              {lastImport.created_leads} criado(s), {lastImport.updated_leads} atualizado(s) e {lastImport.skipped_blocked} ignorado(s).
             </p>
           </div>
           <Link
             href={`/leads?import_batch_id=${lastImport.batch_id}`}
             className="rounded-md border border-emerald-900 bg-emerald-900 px-4 py-2 text-center text-sm font-medium text-white"
           >
-            Open saved batch
+            Abrir lote salvo
           </Link>
         </div>
       ) : null}
@@ -1021,17 +1055,17 @@ function BlockRuleDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/40 px-4 py-6">
       <div className="w-full max-w-lg rounded-md border border-neutral-200 bg-white p-4 shadow-lg">
         <p className="text-xs font-semibold uppercase text-cyan-700">
-          {isCompany ? "Block company" : "Block domain"}
+          {isCompany ? "Bloquear empresa" : "Bloquear domínio"}
         </p>
         <h2 className="mt-1 text-lg font-semibold text-neutral-950">{draft.item.candidate.business_name}</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          Save an active exclusion rule and re-check the current preview.
+          Salve uma regra de exclusão ativa e aplique a checagem novamente nesta prévia.
         </p>
 
         <div className="mt-4 space-y-3">
           {isCompany ? (
             <label className="block">
-              <span className="text-xs font-medium text-neutral-600">Rule type</span>
+              <span className="text-xs font-medium text-neutral-600">Tipo de regra</span>
               <select
                 value={draft.ruleType}
                 onChange={(event) =>
@@ -1039,23 +1073,23 @@ function BlockRuleDialog({
                 }
                 className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm text-neutral-950"
               >
-                <option value="exact_name">Exact company name</option>
-                <option value="business_name_contains">Company name contains</option>
+                <option value="exact_name">Nome exato da empresa</option>
+                <option value="business_name_contains">Nome da empresa contém</option>
               </select>
             </label>
           ) : (
             <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-              Domain rule
+              Regra por domínio
             </div>
           )}
 
           <TextField
-            label="Pattern"
+            label="Padrão"
             value={draft.pattern}
             onChange={(value) => onChange({ ...draft, pattern: value })}
           />
           <TextField
-            label="Reason"
+            label="Motivo"
             value={draft.reason}
             onChange={(value) => onChange({ ...draft, reason: value })}
           />
@@ -1068,7 +1102,7 @@ function BlockRuleDialog({
             disabled={isSaving}
             className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Cancel
+            Cancelar
           </button>
           <button
             type="button"
@@ -1076,7 +1110,7 @@ function BlockRuleDialog({
             disabled={isSaving || !draft.pattern.trim()}
             className="rounded-md border border-rose-900 bg-rose-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSaving ? "Saving rule" : "Save block rule"}
+            {isSaving ? "Salvando regra..." : "Salvar regra de bloqueio"}
           </button>
         </div>
       </div>
@@ -1180,7 +1214,7 @@ function InlineMessage({ tone, children }: { tone: "danger" | "info"; children: 
 function BlockedBadge() {
   return (
     <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">
-      Blocked
+      Bloqueada
     </span>
   );
 }
@@ -1212,7 +1246,7 @@ function buildDiscoveryRequest(
     parseDiscoveryTerms(form.selectedTerms, form.customTerms),
   );
   if (searchTerms.length === 0) {
-    return { error: "Enter a query like 'dentistas em São Paulo' or add at least one search term." };
+    return { error: "Digite uma busca como 'dentistas em São Paulo' ou adicione pelo menos um termo." };
   }
 
   const radiusM = clampNumber(form.radiusM, 100, 50000);
@@ -1224,7 +1258,7 @@ function buildDiscoveryRequest(
     const postalCode = form.postalCode.trim();
     const baseLocation = city || parsedQuery?.locationQuery || "";
     if (!baseLocation) {
-      return { error: "Enter a city or use a query like 'dentistas em São Paulo' before running discovery." };
+      return { error: "Informe uma cidade ou use uma busca como 'dentistas em São Paulo' antes de continuar." };
     }
     return {
       request: {
@@ -1240,7 +1274,7 @@ function buildDiscoveryRequest(
   const latitude = parseCoordinate(form.latitude);
   const longitude = parseCoordinate(form.longitude);
   if (latitude === null || longitude === null) {
-    return { error: "Enter both latitude and longitude before running discovery." };
+    return { error: "Informe latitude e longitude antes de rodar a descoberta por coordenadas." };
   }
 
   return {
@@ -1317,52 +1351,52 @@ function collectNewlyBlockedIds(items: DiscoveryPreviewItem[], previousBlocked: 
 function buildEnrichmentMessage(response: DiscoveryPreviewEnrichmentResponse) {
   const parts: string[] = [];
   if (response.summary.emails_found) {
-    parts.push(`${response.summary.emails_found.toLocaleString()} email result(s)`);
+    parts.push(`${response.summary.emails_found.toLocaleString()} email(s)`);
   }
   if (response.summary.instagrams_found) {
-    parts.push(`${response.summary.instagrams_found.toLocaleString()} Instagram result(s)`);
+    parts.push(`${response.summary.instagrams_found.toLocaleString()} Instagram(s)`);
   }
   if (response.summary.contact_forms_found) {
-    parts.push(`${response.summary.contact_forms_found.toLocaleString()} form result(s)`);
+    parts.push(`${response.summary.contact_forms_found.toLocaleString()} formulário(s)`);
   }
 
-  let message = `Enriched ${response.summary.processed.toLocaleString()} preview row(s).`;
+  let message = `Enriquecimento concluído em ${response.summary.processed.toLocaleString()} empresa(s) da prévia.`;
   if (parts.length) {
-    message += ` Found ${parts.join(", ")}.`;
+    message += ` Encontramos ${parts.join(", ")}.`;
   } else if (response.summary.no_email_found > 0) {
-    message += " No additional public email was found on the enriched rows.";
+    message += " Nenhum novo email público foi encontrado nessas empresas.";
   } else {
-    message += " No additional public contact details were found.";
+    message += " Nenhum novo contato público foi encontrado.";
   }
   if (response.summary.skipped_no_website > 0) {
-    message += ` ${response.summary.skipped_no_website.toLocaleString()} had no website to enrich.`;
+    message += ` ${response.summary.skipped_no_website.toLocaleString()} estavam sem site para enriquecer.`;
   }
   if (response.summary.blocked_after_enrichment > 0) {
-    message += ` ${response.summary.blocked_after_enrichment.toLocaleString()} became blocked after re-checking exclusions.`;
+    message += ` ${response.summary.blocked_after_enrichment.toLocaleString()} foram bloqueadas após a nova checagem de exclusões.`;
   }
   if (response.summary.errors > 0) {
-    message += ` ${response.summary.errors.toLocaleString()} row(s) failed.`;
+    message += ` ${response.summary.errors.toLocaleString()} falharam durante o processo.`;
   }
   return message;
 }
 
 function buildWebsiteRecoveryMessage(response: DiscoveryPreviewWebsiteRecoveryResponse) {
-  let message = `Checked ${response.summary.processed.toLocaleString()} no-website preview row(s) for a recoverable website.`;
+  let message = `Verificamos ${response.summary.processed.toLocaleString()} empresa(s) sem site em busca de um endereço recuperável.`;
   if (response.summary.recovered_count > 0) {
-    message += ` Recovered ${response.summary.recovered_count.toLocaleString()} website/domain pair(s).`;
+    message += ` Recuperamos ${response.summary.recovered_count.toLocaleString()} site(s) ou domínio(s).`;
   } else if (response.summary.no_website_found > 0) {
-    message += " No public website was recovered from the provider details.";
+    message += " Nenhum site público foi recuperado a partir dos dados do provedor.";
   } else {
-    message += " No additional website details were recovered.";
+    message += " Nenhum novo detalhe de site foi recuperado.";
   }
   if (response.summary.skipped_missing_place_id > 0) {
-    message += ` ${response.summary.skipped_missing_place_id.toLocaleString()} row(s) had no recoverable place id.`;
+    message += ` ${response.summary.skipped_missing_place_id.toLocaleString()} estavam sem place id recuperável.`;
   }
   if (response.summary.blocked_after_recovery > 0) {
-    message += ` ${response.summary.blocked_after_recovery.toLocaleString()} became blocked after re-checking exclusions.`;
+    message += ` ${response.summary.blocked_after_recovery.toLocaleString()} foram bloqueadas após a nova checagem de exclusões.`;
   }
   if (response.summary.errors > 0) {
-    message += ` ${response.summary.errors.toLocaleString()} row(s) failed.`;
+    message += ` ${response.summary.errors.toLocaleString()} falharam durante a recuperação.`;
   }
   return message;
 }
@@ -1419,14 +1453,5 @@ function clampNumber(value: number, min: number, max: number) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    if (error.detail === MISSING_GOOGLE_API_KEY_DETAIL) {
-      return MISSING_GOOGLE_API_KEY_UI_MESSAGE;
-    }
-    return error.detail ?? error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "The request could not be completed.";
+  return formatUserFacingError(error, "Não foi possível concluir a busca.");
 }

@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-table";
 import { useMemo } from "react";
 
+import { formatLeadLabel } from "@/lib/format/lead-labels";
 import type { LeadSummary } from "@/lib/api/types";
 
 type LeadQueueTableProps = {
@@ -72,17 +73,17 @@ export function LeadQueueTable({
       },
       {
         accessorKey: "business_name",
-        header: ({ column }) => <SortHeader column={column} label="Company" />,
+        header: ({ column }) => <SortHeader column={column} label="Empresa" />,
         cell: ({ row }) => (
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium text-neutral-950">{row.original.business_name}</p>
               {row.original.is_blocked ? <BlockedBadge /> : null}
             </div>
-            <p className="text-xs text-neutral-500">{row.original.category ?? "No category"}</p>
+            <p className="text-xs text-neutral-500">{row.original.category ?? "Sem categoria"}</p>
             {row.original.is_blocked ? (
               <p className="mt-1 line-clamp-2 text-xs text-rose-700">
-                Reason: {row.original.blocked_reason ?? "Matched an active exclusion rule."}
+                Motivo: {row.original.blocked_reason ?? "Corresponde a uma regra de exclusão ativa."}
               </p>
             ) : null}
           </div>
@@ -90,43 +91,43 @@ export function LeadQueueTable({
       },
       {
         accessorKey: "city",
-        header: ({ column }) => <SortHeader column={column} label="Location" />,
+        header: ({ column }) => <SortHeader column={column} label="Localização" />,
         cell: ({ row }) => (
           <span>
-            {[row.original.city, row.original.state].filter(Boolean).join(", ") || "Unknown"}
+            {[row.original.city, row.original.state].filter(Boolean).join(", ") || "Não informado"}
           </span>
         ),
       },
       {
         accessorKey: "status",
         header: ({ column }) => <SortHeader column={column} label="Status" />,
-        cell: ({ getValue }) => <Badge>{labelToken(String(getValue()))}</Badge>,
+        cell: ({ getValue }) => <Badge>{formatLeadLabel(String(getValue()))}</Badge>,
       },
       {
         id: "assignment",
         enableSorting: false,
-        header: "Assignment",
+        header: "Responsável",
         cell: ({ row }) => (
           <div>
-            <p>{row.original.assigned_sales_rep?.name ?? "Unassigned"}</p>
-            <p className="text-xs text-neutral-500">{row.original.sales_region?.name ?? "No region"}</p>
+            <p>{row.original.assigned_sales_rep?.name ?? "Sem responsável"}</p>
+            <p className="text-xs text-neutral-500">{row.original.sales_region?.name ?? "Sem região"}</p>
           </div>
         ),
       },
       {
         accessorKey: "company_size_fit",
-        header: ({ column }) => <SortHeader column={column} label="Fit" />,
+        header: ({ column }) => <SortHeader column={column} label="Perfil" />,
         cell: ({ row }) => (
           <div>
-            <p>{labelToken(row.original.company_size_fit)}</p>
-            <p className="text-xs text-neutral-500">{labelToken(row.original.trade_type)}</p>
+            <p>{formatLeadLabel(row.original.company_size_fit)}</p>
+            <p className="text-xs text-neutral-500">{formatLeadLabel(row.original.trade_type)}</p>
           </div>
         ),
       },
       {
         id: "contacts",
         enableSorting: false,
-        header: "Contacts",
+        header: "Canais",
         cell: ({ row }) => (
           <div className="flex flex-wrap gap-1">
             <ContactPill active={Boolean(row.original.email)}>Email</ContactPill>
@@ -142,7 +143,7 @@ export function LeadQueueTable({
       },
       {
         accessorKey: "updated_at",
-        header: ({ column }) => <SortHeader column={column} label="Updated" />,
+        header: ({ column }) => <SortHeader column={column} label="Atualizado" />,
         cell: ({ getValue }) => <span>{formatDate(String(getValue()))}</span>,
       },
     ],
@@ -168,13 +169,13 @@ export function LeadQueueTable({
     <section className="rounded-md border border-neutral-200 bg-white">
       <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-neutral-950">Leads queue</h2>
+          <h2 className="text-base font-semibold text-neutral-950">Lista de leads</h2>
           <p className="text-sm text-neutral-500">
-            {isLoading ? "Loading leads" : `${total.toLocaleString()} leads in current set`}
+            {isLoading ? "Carregando leads..." : `${total.toLocaleString()} leads na lista atual`}
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-neutral-700">
-          Rows
+          Linhas
           <select
             value={pageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
@@ -224,7 +225,7 @@ export function LeadQueueTable({
             ) : (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-neutral-500">
-                  No leads match the current queue.
+                  Nenhum lead encontrado com os filtros atuais.
                 </td>
               </tr>
             )}
@@ -234,7 +235,7 @@ export function LeadQueueTable({
 
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-500">
-          Page {pageIndex + 1} of {pageCount}
+          Página {pageIndex + 1} de {pageCount}
         </p>
         <div className="flex gap-2">
           <button
@@ -243,7 +244,7 @@ export function LeadQueueTable({
             onClick={() => onPageChange(Math.max(0, pageIndex - 1))}
             className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Previous
+            Anterior
           </button>
           <button
             type="button"
@@ -251,7 +252,7 @@ export function LeadQueueTable({
             onClick={() => onPageChange(Math.min(pageCount - 1, pageIndex + 1))}
             className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Next
+            Próxima
           </button>
         </div>
       </div>
@@ -295,7 +296,7 @@ function Badge({ children }: { children: React.ReactNode }) {
 function BlockedBadge() {
   return (
     <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">
-      Blocked
+      Bloqueado
     </span>
   );
 }
@@ -314,16 +315,12 @@ function ContactPill({ active, children }: { active: boolean; children: React.Re
   );
 }
 
-function labelToken(value: string) {
-  return value.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Unknown";
+    return "Não informado";
   }
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat("pt-BR", {
     month: "short",
     day: "numeric",
     year: "numeric",
