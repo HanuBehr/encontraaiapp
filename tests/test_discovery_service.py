@@ -156,6 +156,80 @@ def test_google_places_provider_retries_transient_ssl_error_and_succeeds(monkeyp
     assert attempts["count"] == 2
 
 
+def test_google_places_provider_uses_page_size_for_requested_results(monkeypatch) -> None:
+    provider = GooglePlacesProvider(Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key"))
+    request_bodies: list[dict] = []
+
+    def fake_request(method, url, **kwargs):
+        request_bodies.append(kwargs["json"])
+        return _FakeGooglePlacesResponse({"places": []})
+
+    monkeypatch.setattr("app.services.providers.google_places.requests.request", fake_request)
+
+    results = provider.search(
+        search_term="industria calcadista",
+        location_label="Zona Oeste, Sao Paulo",
+        latitude=-23.5505,
+        longitude=-46.6333,
+        radius_m=10000,
+        max_results=20,
+    )
+
+    assert results == []
+    assert len(request_bodies) == 1
+    assert request_bodies[0]["pageSize"] == 20
+    assert "maxResultCount" not in request_bodies[0]
+
+
+def test_google_places_provider_paginates_up_to_requested_max(monkeypatch) -> None:
+    provider = GooglePlacesProvider(Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key"))
+    request_bodies: list[dict] = []
+
+    def _place(index: int) -> dict:
+        return {
+            "id": f"place-{index}",
+            "displayName": {"text": f"Empresa {index}"},
+            "location": {"latitude": -23.5505, "longitude": -46.6333},
+            "googleMapsUri": f"https://maps.google.com/?q=Empresa+{index}",
+        }
+
+    responses = [
+        _FakeGooglePlacesResponse(
+            {
+                "places": [_place(index) for index in range(1, 21)],
+                "nextPageToken": "page-2-token",
+            }
+        ),
+        _FakeGooglePlacesResponse(
+            {
+                "places": [_place(index) for index in range(21, 31)],
+            }
+        ),
+    ]
+
+    def fake_request(method, url, **kwargs):
+        request_bodies.append(kwargs["json"])
+        return responses[len(request_bodies) - 1]
+
+    monkeypatch.setattr("app.services.providers.google_places.requests.request", fake_request)
+
+    results = provider.search(
+        search_term="industria calcadista",
+        location_label="Zona Oeste, Sao Paulo",
+        latitude=-23.5505,
+        longitude=-46.6333,
+        radius_m=10000,
+        max_results=25,
+    )
+
+    assert len(results) == 25
+    assert len(request_bodies) == 2
+    assert request_bodies[0]["pageSize"] == 20
+    assert "pageToken" not in request_bodies[0]
+    assert request_bodies[1]["pageSize"] == 5
+    assert request_bodies[1]["pageToken"] == "page-2-token"
+
+
 def test_google_places_provider_requires_google_api_key_for_location_discovery() -> None:
     provider = GooglePlacesProvider(Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY=""))
 
@@ -401,6 +475,39 @@ def test_discovery_preview_recovers_website_from_provider_raw_payload(db_session
     assert len(preview.items) == 1
     assert preview.items[0].candidate.website == "https://www.tintasrecuperadas.com.br"
     assert preview.items[0].candidate.domain == "tintasrecuperadas.com.br"
+
+
+def test_discovery_preview_passes_requested_max_results_to_provider(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    request = DiscoverySearchRequest(
+        raw_query="industria calcadista",
+        search_terms=["industria calcadista"],
+        location_query="Zona Oeste, Sao Paulo",
+        radius_m=10000,
+        max_results_per_term=20,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_resolve_location",
+        lambda payload: GeocodedLocation(label="Zona Oeste, Sao Paulo", latitude=-23.5505, longitude=-46.6333),
+    )
+
+    provider_calls: list[dict[str, object]] = []
+
+    def fake_provider_search(**kwargs):
+        provider_calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(service.provider, "search", fake_provider_search)
+
+    preview = service.preview(request)
+
+    assert preview.total_provider_results == 0
+    assert len(provider_calls) == 1
+    assert provider_calls[0]["search_term"] == "industria calcadista"
+    assert provider_calls[0]["max_results"] == 20
 
 
 def test_discovery_preview_recovers_website_from_candidate_domain(db_session, monkeypatch) -> None:

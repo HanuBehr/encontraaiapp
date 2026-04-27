@@ -51,6 +51,7 @@ class GooglePlacesProvider(DiscoveryProvider):
             "places.nationalPhoneNumber",
             "places.primaryType",
             "places.primaryTypeDisplayName",
+            "nextPageToken",
         ]
     )
 
@@ -70,30 +71,66 @@ class GooglePlacesProvider(DiscoveryProvider):
         if not self.settings.google_api_key:
             raise GooglePlacesProviderError(MISSING_GOOGLE_API_KEY_MESSAGE, status_code=503)
 
-        payload = self._request_places_json(
-            method="POST",
-            url=f"{self.settings.google_places_base_url}/places:searchText",
-            headers={
-                "Content-Type": "application/json",
-                "X-Goog-Api-Key": self.settings.google_api_key,
-                "X-Goog-FieldMask": self.FIELD_MASK,
+        request_body = {
+            "textQuery": f"{search_term} em {location_label}",
+            "languageCode": "pt-BR",
+            "regionCode": "BR",
+            "locationBias": {
+                "circle": {
+                    "center": {"latitude": latitude, "longitude": longitude},
+                    "radius": float(radius_m),
+                }
             },
-            json_body={
-                "textQuery": f"{search_term} em {location_label}",
-                "languageCode": "pt-BR",
-                "regionCode": "BR",
-                "maxResultCount": max_results,
-                "locationBias": {
-                    "circle": {
-                        "center": {"latitude": latitude, "longitude": longitude},
-                        "radius": float(radius_m),
-                    }
+        }
+        remaining_results = max(0, max_results)
+        collected_results: list[ProviderLeadResult] = []
+        seen_place_ids: set[str] = set()
+        next_page_token: str | None = None
+
+        while remaining_results > 0:
+            page_size = min(remaining_results, 20)
+            payload = self._request_places_json(
+                method="POST",
+                url=f"{self.settings.google_places_base_url}/places:searchText",
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Goog-Api-Key": self.settings.google_api_key,
+                    "X-Goog-FieldMask": self.FIELD_MASK,
                 },
-            },
-            operation=f"searchText '{search_term}' in '{location_label}'",
-        )
-        places = payload.get("places", [])
-        return [self._to_result(place) for place in places]
+                json_body={
+                    **request_body,
+                    "pageSize": page_size,
+                    **({"pageToken": next_page_token} if next_page_token else {}),
+                },
+                operation=f"searchText '{search_term}' in '{location_label}'",
+            )
+            places = payload.get("places", [])
+            if not isinstance(places, list) or not places:
+                break
+
+            added_this_page = 0
+            for place in places:
+                if not isinstance(place, dict):
+                    continue
+                place_id = str(place.get("id") or "").strip()
+                if place_id and place_id in seen_place_ids:
+                    continue
+                if place_id:
+                    seen_place_ids.add(place_id)
+                collected_results.append(self._to_result(place))
+                added_this_page += 1
+                remaining_results -= 1
+                if remaining_results == 0:
+                    break
+
+            if remaining_results == 0 or added_this_page == 0:
+                break
+
+            next_page_token = payload.get("nextPageToken")
+            if not isinstance(next_page_token, str) or not next_page_token.strip():
+                break
+
+        return collected_results
 
     def fetch_place_details(self, place_id: str) -> dict[str, Any]:
         if not self.settings.google_api_key:

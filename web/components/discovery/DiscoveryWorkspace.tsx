@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   createExclusionRule,
@@ -57,6 +57,14 @@ type BlockDraft = {
   ruleType: ExclusionRuleType;
   pattern: string;
   reason: string;
+};
+
+type DiscoveryRequestContext = {
+  queryCategorySequence: number;
+  queryLocationSequence: number;
+  manualTermsSequence: number;
+  manualAreaLocationSequence: number;
+  manualCoordinateLabelSequence: number;
 };
 
 const defaultForm: DiscoveryFormState = {
@@ -118,25 +126,39 @@ export function DiscoveryWorkspace() {
   const [lastImport, setLastImport] = useState<DiscoveryImportResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const latestPreviewRequestIdRef = useRef(0);
+  const editSequenceRef = useRef(0);
+  const queryCategorySequenceRef = useRef(0);
+  const queryLocationSequenceRef = useRef(0);
+  const manualTermsSequenceRef = useRef(0);
+  const manualAreaLocationSequenceRef = useRef(0);
+  const manualCoordinateLabelSequenceRef = useRef(0);
+  const [previewError, setPreviewError] = useState<unknown>(null);
+  const [isPreviewPending, setIsPreviewPending] = useState(false);
 
-  const previewMutation = useMutation({
-    mutationFn: previewDiscovery,
-    onSuccess: (data) => {
-      const websiteReadyCount = data.items.filter((item) => hasWebsiteForCandidate(item.candidate)).length;
-      const recoverableNoWebsiteCount = data.items.filter(
-        (item) => !item.exclusion.is_blocked && !hasWebsiteForCandidate(item.candidate) && hasWebsiteRecoveryLookupId(item),
-      ).length;
-      setPreview(data);
-      setSelectedIds(selectAllUnblocked(data.items));
-      setNewlyBlockedIds({});
-      setLastImport(null);
-      setActionMessage(
-        data.items.length === 0
-          ? NO_DISCOVERY_RESULTS_UI_MESSAGE
-          : `Prévia pronta. ${websiteReadyCount.toLocaleString()} empresa(s) já têm site ou domínio para enriquecimento, e ${recoverableNoWebsiteCount.toLocaleString()} empresa(s) sem site podem passar por recuperação.`,
-      );
-    },
-  });
+  function applyPreviewResponse(data: DiscoveryPreviewResponse) {
+    const totalCount = data.items.length;
+    const websiteReadyCount = data.items.filter((item) => hasWebsiteForCandidate(item.candidate)).length;
+    const noWebsiteCount = Math.max(totalCount - websiteReadyCount, 0);
+    const recoverableNoWebsiteCount = data.items.filter(
+      (item) => !item.exclusion.is_blocked && !hasWebsiteForCandidate(item.candidate) && hasWebsiteRecoveryLookupId(item),
+    ).length;
+    setPreview(data);
+    setSelectedIds(selectAllUnblocked(data.items));
+    setNewlyBlockedIds({});
+    setLastImport(null);
+    setPreviewError(null);
+    setActionMessage(
+      totalCount === 0
+        ? NO_DISCOVERY_RESULTS_UI_MESSAGE
+        : buildPreviewReadyMessage({
+            totalCount,
+            websiteReadyCount,
+            noWebsiteCount,
+            recoverableNoWebsiteCount,
+          }),
+    );
+  }
 
   const enrichMutation = useMutation({
     mutationFn: enrichDiscoveryPreview,
@@ -280,13 +302,74 @@ export function DiscoveryWorkspace() {
     () => parseNaturalLanguageDiscoveryQuery(form.naturalLanguageQuery),
     [form.naturalLanguageQuery],
   );
+  const discoveryRequestContext: DiscoveryRequestContext = {
+    queryCategorySequence: queryCategorySequenceRef.current,
+    queryLocationSequence: queryLocationSequenceRef.current,
+    manualTermsSequence: manualTermsSequenceRef.current,
+    manualAreaLocationSequence: manualAreaLocationSequenceRef.current,
+    manualCoordinateLabelSequence: manualCoordinateLabelSequenceRef.current,
+  };
+  const interpretedLocationLabel =
+    form.locationMode === "area"
+      ? resolveAreaLocationQuery(form, parsedNaturalLanguageQuery, discoveryRequestContext)
+      : resolveCoordinateLocationQuery(form, parsedNaturalLanguageQuery, discoveryRequestContext);
 
   function updateForm<Key extends keyof DiscoveryFormState>(key: Key, value: DiscoveryFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function nextEditSequence() {
+    editSequenceRef.current += 1;
+    return editSequenceRef.current;
+  }
+
+  function updateNaturalLanguageQuery(value: string) {
+    const nextParsedQuery = parseNaturalLanguageDiscoveryQuery(value);
+    if (queryCategoryKey(parsedNaturalLanguageQuery, form.naturalLanguageQuery) !== queryCategoryKey(nextParsedQuery, value)) {
+      queryCategorySequenceRef.current = nextEditSequence();
+    }
+    if (queryLocationKey(parsedNaturalLanguageQuery) !== queryLocationKey(nextParsedQuery)) {
+      queryLocationSequenceRef.current = nextEditSequence();
+    }
+    updateForm("naturalLanguageQuery", value);
+  }
+
+  function updateAreaLocationField(key: "city" | "neighborhood" | "postalCode", value: string) {
+    manualAreaLocationSequenceRef.current = nextEditSequence();
+    updateForm(key, value);
+  }
+
+  function updateCoordinateLabel(value: string) {
+    manualCoordinateLabelSequenceRef.current = nextEditSequence();
+    updateForm("locationLabel", value);
+  }
+
+  function updateCustomTerms(value: string) {
+    manualTermsSequenceRef.current = nextEditSequence();
+    updateForm("customTerms", value);
+  }
+
+  function applySuggestedQuery(query: string) {
+    const nextParsedQuery = parseNaturalLanguageDiscoveryQuery(query);
+    if (queryCategoryKey(parsedNaturalLanguageQuery, form.naturalLanguageQuery) !== queryCategoryKey(nextParsedQuery, query)) {
+      queryCategorySequenceRef.current = nextEditSequence();
+    }
+    if (queryLocationKey(parsedNaturalLanguageQuery) !== queryLocationKey(nextParsedQuery)) {
+      queryLocationSequenceRef.current = nextEditSequence();
+    }
+    setForm((current) => ({
+      ...current,
+      naturalLanguageQuery: query,
+      locationMode: "area",
+    }));
+    setFormError(null);
+    setPreviewError(null);
+    setActionMessage(null);
+  }
+
   function toggleSearchTerm(term: string) {
     setForm((current) => {
+      manualTermsSequenceRef.current = nextEditSequence();
       const selectedTerms = current.selectedTerms.includes(term)
         ? current.selectedTerms.filter((selectedTerm) => selectedTerm !== term)
         : [...current.selectedTerms, term];
@@ -294,19 +377,39 @@ export function DiscoveryWorkspace() {
     });
   }
 
-  function runPreview(event: React.FormEvent<HTMLFormElement>) {
+  async function runPreview(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
     setActionMessage(null);
+    setPreviewError(null);
 
-    const result = buildDiscoveryRequest(form, parsedNaturalLanguageQuery);
+    const result = buildDiscoveryRequest(form, parsedNaturalLanguageQuery, discoveryRequestContext);
     if ("error" in result) {
       setFormError(result.error);
       return;
     }
 
     setSearchRequest(result.request);
-    previewMutation.mutate(result.request);
+    const requestId = latestPreviewRequestIdRef.current + 1;
+    latestPreviewRequestIdRef.current = requestId;
+    setIsPreviewPending(true);
+
+    try {
+      const response = await previewDiscovery(result.request);
+      if (requestId !== latestPreviewRequestIdRef.current) {
+        return;
+      }
+      applyPreviewResponse(response);
+    } catch (error) {
+      if (requestId !== latestPreviewRequestIdRef.current) {
+        return;
+      }
+      setPreviewError(error);
+    } finally {
+      if (requestId === latestPreviewRequestIdRef.current) {
+        setIsPreviewPending(false);
+      }
+    }
   }
 
   function toggleSelection(clientResultId: string, checked: boolean) {
@@ -469,10 +572,10 @@ export function DiscoveryWorkspace() {
           </div>
           <button
             type="submit"
-            disabled={previewMutation.isPending}
+            disabled={isPreviewPending}
             className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {previewMutation.isPending ? "Buscando..." : "Gerar prévia"}
+            {isPreviewPending ? "Buscando..." : "Gerar prévia"}
           </button>
         </div>
 
@@ -482,7 +585,7 @@ export function DiscoveryWorkspace() {
               <span className="text-xs font-medium text-neutral-600">O que você quer buscar</span>
               <input
                 value={form.naturalLanguageQuery}
-                onChange={(event) => updateForm("naturalLanguageQuery", event.target.value)}
+                onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
                 placeholder="dentistas em São Paulo"
                 className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
               />
@@ -501,7 +604,7 @@ export function DiscoveryWorkspace() {
                 </p>
                 <p className="mt-1">
                   <span className="font-medium">Local:</span>{" "}
-                  {parsedNaturalLanguageQuery?.locationQuery ?? "Adicione uma cidade na busca ou nos campos abaixo"}
+                  {interpretedLocationLabel ?? "Adicione uma cidade na busca ou nos campos abaixo"}
                 </p>
               </div>
             ) : null}
@@ -529,19 +632,19 @@ export function DiscoveryWorkspace() {
                 <TextField
                   label="Cidade"
                   value={form.city}
-                  onChange={(value) => updateForm("city", value)}
+                  onChange={(value) => updateAreaLocationField("city", value)}
                   placeholder="Campinas, SP"
                 />
                 <TextField
                   label="Bairro"
                   value={form.neighborhood}
-                  onChange={(value) => updateForm("neighborhood", value)}
+                  onChange={(value) => updateAreaLocationField("neighborhood", value)}
                   placeholder="Opcional"
                 />
                 <TextField
                   label="CEP"
                   value={form.postalCode}
-                  onChange={(value) => updateForm("postalCode", value)}
+                  onChange={(value) => updateAreaLocationField("postalCode", value)}
                   placeholder="Opcional"
                 />
               </div>
@@ -562,7 +665,7 @@ export function DiscoveryWorkspace() {
                 <TextField
                   label="Rótulo do local"
                   value={form.locationLabel}
-                  onChange={(value) => updateForm("locationLabel", value)}
+                  onChange={(value) => updateCoordinateLabel(value)}
                   placeholder="Opcional"
                 />
               </div>
@@ -608,7 +711,7 @@ export function DiscoveryWorkspace() {
               <span className="text-xs font-medium text-neutral-600">Termos livres</span>
               <textarea
                 value={form.customTerms}
-                onChange={(event) => updateForm("customTerms", event.target.value)}
+                onChange={(event) => updateCustomTerms(event.target.value)}
                 placeholder="Um por linha ou separados por vírgula"
                 className="mt-1 min-h-20 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
               />
@@ -617,7 +720,7 @@ export function DiscoveryWorkspace() {
         </div>
 
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
-        {previewMutation.isError ? <InlineMessage tone="danger">{errorMessage(previewMutation.error)}</InlineMessage> : null}
+        {previewError ? <InlineMessage tone="danger">{errorMessage(previewError)}</InlineMessage> : null}
       </form>
 
       <section className="rounded-md border border-neutral-200 bg-white p-4">
@@ -732,7 +835,7 @@ export function DiscoveryWorkspace() {
                 <button
                   key={query}
                   type="button"
-                  onClick={() => updateForm("naturalLanguageQuery", query)}
+                  onClick={() => applySuggestedQuery(query)}
                   className="rounded-full border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-800 hover:border-neutral-500"
                 >
                   {query}
@@ -1240,11 +1343,9 @@ function OutcomeBadge({
 function buildDiscoveryRequest(
   form: DiscoveryFormState,
   parsedQuery: ParsedDiscoveryQuery | null,
+  context: DiscoveryRequestContext,
 ): { request: DiscoverySearchRequest } | { error: string } {
-  const searchTerms = mergeDiscoveryTerms(
-    parsedQuery?.searchTerms ?? [],
-    parseDiscoveryTerms(form.selectedTerms, form.customTerms),
-  );
+  const searchTerms = mergeDiscoveryTerms(parsedQuery?.searchTerms ?? [], resolveManualDiscoveryTerms(form, parsedQuery, context));
   if (searchTerms.length === 0) {
     return { error: "Digite uma busca como 'dentistas em São Paulo' ou adicione pelo menos um termo." };
   }
@@ -1253,10 +1354,8 @@ function buildDiscoveryRequest(
   const maxResultsPerTerm = clampNumber(form.maxResultsPerTerm, 1, 20);
 
   if (form.locationMode === "area") {
-    const city = form.city.trim();
-    const neighborhood = form.neighborhood.trim();
-    const postalCode = form.postalCode.trim();
-    const baseLocation = city || parsedQuery?.locationQuery || "";
+    const locationQuery = resolveAreaLocationQuery(form, parsedQuery, context);
+    const baseLocation = locationQuery ?? "";
     if (!baseLocation) {
       return { error: "Informe uma cidade ou use uma busca como 'dentistas em São Paulo' antes de continuar." };
     }
@@ -1264,7 +1363,7 @@ function buildDiscoveryRequest(
       request: {
         raw_query: parsedQuery?.rawQuery ?? null,
         search_terms: searchTerms,
-        location_query: [neighborhood, baseLocation, postalCode].filter(Boolean).join(", "),
+        location_query: baseLocation,
         radius_m: radiusM,
         max_results_per_term: maxResultsPerTerm,
       },
@@ -1281,7 +1380,7 @@ function buildDiscoveryRequest(
     request: {
       raw_query: parsedQuery?.rawQuery ?? null,
       search_terms: searchTerms,
-      location_query: form.locationLabel.trim() || parsedQuery?.locationQuery || null,
+      location_query: resolveCoordinateLocationQuery(form, parsedQuery, context),
       latitude,
       longitude,
       radius_m: radiusM,
@@ -1316,6 +1415,54 @@ function mergeDiscoveryTerms(...groups: string[][]) {
       seen.add(term.toLowerCase());
       return true;
     });
+}
+
+function resolveManualDiscoveryTerms(
+  form: DiscoveryFormState,
+  parsedQuery: ParsedDiscoveryQuery | null,
+  context: DiscoveryRequestContext,
+) {
+  const manualTerms = parseDiscoveryTerms(form.selectedTerms, form.customTerms);
+  if (manualTerms.length === 0 || !parsedQuery) {
+    return manualTerms;
+  }
+  return context.manualTermsSequence >= context.queryCategorySequence ? manualTerms : [];
+}
+
+function resolveAreaLocationQuery(
+  form: DiscoveryFormState,
+  parsedQuery: ParsedDiscoveryQuery | null,
+  context: DiscoveryRequestContext,
+) {
+  const manualLocation = buildManualAreaLocationQuery(form);
+  if (!manualLocation) {
+    return parsedQuery?.locationQuery ?? null;
+  }
+  if (!parsedQuery?.locationQuery) {
+    return manualLocation;
+  }
+  return context.manualAreaLocationSequence >= context.queryLocationSequence ? manualLocation : parsedQuery.locationQuery;
+}
+
+function resolveCoordinateLocationQuery(
+  form: DiscoveryFormState,
+  parsedQuery: ParsedDiscoveryQuery | null,
+  context: DiscoveryRequestContext,
+) {
+  const manualLocation = normalizeFreeText(form.locationLabel);
+  if (!manualLocation) {
+    return parsedQuery?.locationQuery ?? null;
+  }
+  if (!parsedQuery?.locationQuery) {
+    return manualLocation;
+  }
+  return context.manualCoordinateLabelSequence >= context.queryLocationSequence
+    ? manualLocation
+    : parsedQuery.locationQuery;
+}
+
+function buildManualAreaLocationQuery(form: DiscoveryFormState) {
+  return [form.neighborhood.trim(), form.city.trim(), form.postalCode.trim()].filter(Boolean).join(", ") || null;
 }
 
 function selectAllUnblocked(items: DiscoveryPreviewItem[]) {
@@ -1376,6 +1523,24 @@ function buildEnrichmentMessage(response: DiscoveryPreviewEnrichmentResponse) {
   }
   if (response.summary.errors > 0) {
     message += ` ${response.summary.errors.toLocaleString()} falharam durante o processo.`;
+  }
+  return message;
+}
+
+function buildPreviewReadyMessage({
+  totalCount,
+  websiteReadyCount,
+  noWebsiteCount,
+  recoverableNoWebsiteCount,
+}: {
+  totalCount: number;
+  websiteReadyCount: number;
+  noWebsiteCount: number;
+  recoverableNoWebsiteCount: number;
+}) {
+  let message = `Prévia pronta. ${totalCount.toLocaleString()} empresa(s) encontradas: ${websiteReadyCount.toLocaleString()} com site ou domínio e ${noWebsiteCount.toLocaleString()} sem site.`;
+  if (noWebsiteCount > 0 && recoverableNoWebsiteCount > 0) {
+    message += ` ${recoverableNoWebsiteCount.toLocaleString()} sem site podem passar por recuperação agora.`;
   }
   return message;
 }
@@ -1443,6 +1608,19 @@ function parseCoordinate(value: string) {
 
 function normalizeFreeText(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeDiscoveryKey(value: string | null | undefined) {
+  const normalized = normalizeFreeText(value ?? "");
+  return normalized ? normalized.toLocaleLowerCase("pt-BR") : null;
+}
+
+function queryCategoryKey(parsedQuery: ParsedDiscoveryQuery | null, rawQuery: string) {
+  return normalizeDiscoveryKey(parsedQuery?.category ?? rawQuery);
+}
+
+function queryLocationKey(parsedQuery: ParsedDiscoveryQuery | null) {
+  return normalizeDiscoveryKey(parsedQuery?.locationQuery);
 }
 
 function clampNumber(value: number, min: number, max: number) {
