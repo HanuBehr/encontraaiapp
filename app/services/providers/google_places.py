@@ -21,6 +21,7 @@ from app.services.normalization import (
 from app.services.providers.discovery_base import DiscoveryProvider, ProviderLeadResult
 
 logger = logging.getLogger(__name__)
+MISSING_GOOGLE_API_KEY_MESSAGE = "GOOGLE_API_KEY must be configured to use location-based discovery."
 
 
 class GooglePlacesProviderError(RuntimeError):
@@ -67,7 +68,7 @@ class GooglePlacesProvider(DiscoveryProvider):
         max_results: int,
     ) -> list[ProviderLeadResult]:
         if not self.settings.google_api_key:
-            raise ValueError("GOOGLE_API_KEY is required for discovery.")
+            raise GooglePlacesProviderError(MISSING_GOOGLE_API_KEY_MESSAGE, status_code=503)
 
         payload = self._request_places_json(
             method="POST",
@@ -96,7 +97,7 @@ class GooglePlacesProvider(DiscoveryProvider):
 
     def fetch_place_details(self, place_id: str) -> dict[str, Any]:
         if not self.settings.google_api_key:
-            raise ValueError("GOOGLE_API_KEY is required for discovery.")
+            raise GooglePlacesProviderError(MISSING_GOOGLE_API_KEY_MESSAGE, status_code=503)
 
         encoded_place_id = quote(place_id, safe="")
         payload = self._request_places_json(

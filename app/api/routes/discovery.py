@@ -34,6 +34,8 @@ def preview_discovery_search(
         return service.preview(payload)
     except GooglePlacesProviderError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/evaluate-exclusions", response_model=DiscoveryPreviewResponse)
@@ -109,3 +111,5 @@ def run_discovery_search(
         return service.search(payload)
     except GooglePlacesProviderError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

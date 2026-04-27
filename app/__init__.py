@@ -1,1 +1,1 @@
-"""Application package for the reverse logistics MVP."""
+"""Application package for the Encontra.ai lead discovery platform."""

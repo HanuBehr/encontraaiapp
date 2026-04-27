@@ -6,8 +6,8 @@ from io import BytesIO
 import json
 
 import pandas as pd
-from openpyxl.styles import Font, PatternFill
 from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
@@ -26,57 +26,36 @@ from app.services.normalization import (
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 MISSING_FILL = PatternFill(fill_type="solid", fgColor="FCE4D6")
-EMPRESAS_COLUMNS = [
-    "Nome",
-    "CNPJ",
-    "Razão Social",
-    "Categoria",
-    "Origem",
-    "Usuário responsável",
-    "Setor",
-    "Descrição",
-    "E-mail",
-    "WhatsApp",
-    "Telefone",
-    "Celular",
-    "Fax",
-    "Ramal",
-    "Website",
-    "CEP",
-    "País",
-    "Estado",
-    "Cidade",
-    "Bairro",
-    "Rua",
-    "Número",
-    "Complemento",
-    "Produto",
-    "Facebook",
-    "Twitter",
-    "LinkedIn",
-    "Skype",
-    "Instagram",
-    "Ranking",
+LEADS_COLUMNS = [
+    "business_name",
+    "category",
+    "city",
+    "state",
+    "address",
+    "street",
+    "number",
+    "postal_code",
+    "phone",
+    "whatsapp",
+    "email",
+    "instagram",
+    "website",
+    "google_maps_url",
+    "source",
+    "status",
+    "notes",
+    "neighborhood",
+    "assigned_owner",
+    "market_segment",
+    "market_subsegment",
+    "lead_score",
+    "rating",
+    "review_count",
 ]
 METADATA_COLUMNS = ["metric", "value"]
 SHEET_COLUMNS = {
-    "Empresas": EMPRESAS_COLUMNS,
+    "Leads": LEADS_COLUMNS,
     "Metadata": METADATA_COLUMNS,
-}
-COMPANY_SIZE_FIT_LABELS = {
-    "ideal_sme": "Ideal PME",
-    "possible_sme": "Possível PME",
-    "large_enterprise": "Grande empresa",
-    "unknown": "Não classificado",
-}
-TRADE_TYPE_LABELS = {
-    "varejo": "Varejo",
-    "atacado": "Atacado",
-    "distribuidora": "Distribuidora",
-    "ecommerce": "E-commerce",
-    "industria": "Indústria",
-    "construcao_civil": "Construção Civil",
-    "unknown": "Não classificado",
 }
 
 
@@ -99,16 +78,15 @@ class ExcelExportService:
         else:
             requested_ids = list(dict.fromkeys(int(lead_id) for lead_id in lead_ids))
             leads = self.lead_repository.list_export_leads_by_ids(requested_ids, blocked=filters.blocked)
-        lead_ids = [lead.id for lead in leads]
         scope_metadata = dict(scope_metadata or {})
         if explicit_lead_ids:
             scope_metadata.setdefault("scope_type", "explicit_lead_ids")
 
-        empresas_df = pd.DataFrame([self._lead_row(lead) for lead in leads])
+        leads_df = pd.DataFrame([self._lead_row(lead) for lead in leads])
         metadata_df = pd.DataFrame(
             self._metadata_rows(
                 leads,
-                empresas_df,
+                leads_df,
                 filters,
                 scope_label=scope_label,
                 scope_metadata=scope_metadata,
@@ -117,11 +95,11 @@ class ExcelExportService:
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            self._write_sheet(writer, "Empresas", empresas_df)
+            self._write_sheet(writer, "Leads", leads_df)
             self._write_sheet(writer, "Metadata", metadata_df)
 
             workbook = writer.book
-            self._format_sheet(workbook["Empresas"], highlight_missing_contacts=True)
+            self._format_sheet(workbook["Leads"], highlight_missing_contacts=True)
             self._format_sheet(workbook["Metadata"], freeze_headers=False)
 
         filename = f"lead_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -154,7 +132,7 @@ class ExcelExportService:
 
         if highlight_missing_contacts and max_row > 1:
             headers = {worksheet.cell(row=1, column=index).value: index for index in range(1, max_col + 1)}
-            for header_name in ["E-mail", "Telefone", "WhatsApp"]:
+            for header_name in ["email", "phone", "whatsapp"]:
                 column_index = headers.get(header_name)
                 if not column_index:
                     continue
@@ -180,36 +158,30 @@ class ExcelExportService:
             postal_code=lead.postal_code,
         )
         return {
-            "Nome": lead.business_name,
-            "CNPJ": None,
-            "Razão Social": None,
-            "Categoria": lead.category,
-            "Origem": self._humanize(lead.lead_source_type.value if lead.lead_source_type else None),
-            "Usuário responsável": lead.assigned_sales_rep.name if lead.assigned_sales_rep else None,
-            "Setor": self._sector_label(lead),
-            "Descrição": self._description(lead),
-            "E-mail": email,
-            "WhatsApp": whatsapp,
-            "Telefone": phone,
-            "Celular": None,
-            "Fax": None,
-            "Ramal": None,
-            "Website": self._client_facing_website(lead.website),
-            "CEP": lead.postal_code,
-            "País": self._country_label(lead),
-            "Estado": normalize_brazilian_state(lead.state),
-            "Cidade": lead.city,
-            "Bairro": lead.neighborhood,
-            "Rua": street_name,
-            "Número": street_number,
-            "Complemento": None,
-            "Produto": None,
-            "Facebook": None,
-            "Twitter": None,
-            "LinkedIn": None,
-            "Skype": None,
-            "Instagram": instagram,
-            "Ranking": lead.lead_score,
+            "business_name": lead.business_name,
+            "category": lead.category,
+            "city": lead.city,
+            "state": normalize_brazilian_state(lead.state),
+            "address": lead.address,
+            "street": street_name,
+            "number": street_number,
+            "postal_code": lead.postal_code,
+            "phone": phone,
+            "whatsapp": whatsapp,
+            "email": email,
+            "instagram": instagram,
+            "website": self._client_facing_website(lead.website),
+            "google_maps_url": lead.google_maps_url,
+            "source": lead.lead_source_type.value if lead.lead_source_type else None,
+            "status": lead.status.value if lead.status else None,
+            "notes": lead.notes,
+            "neighborhood": lead.neighborhood,
+            "assigned_owner": lead.assigned_sales_rep.name if lead.assigned_sales_rep else None,
+            "market_segment": lead.market_segment.name if lead.market_segment else None,
+            "market_subsegment": lead.market_subsegment.name if lead.market_subsegment else None,
+            "lead_score": lead.lead_score,
+            "rating": None,
+            "review_count": None,
         }
 
     @classmethod
@@ -270,45 +242,11 @@ class ExcelExportService:
             text = text.rsplit(".", 1)[-1]
         return text.lower()
 
-    def _sector_label(self, lead) -> str | None:
-        segment = lead.market_segment.name if lead.market_segment else None
-        subsegment = lead.market_subsegment.name if lead.market_subsegment else None
-        parts = [value for value in [segment, subsegment] if value]
-        if parts:
-            return " - ".join(parts)
-        trade_type = self._label(TRADE_TYPE_LABELS, lead.trade_type)
-        if trade_type and trade_type != TRADE_TYPE_LABELS["unknown"]:
-            return trade_type
-        return lead.category
-
-    @staticmethod
-    def _description(lead) -> str | None:
-        return lead.notes
-
-    @staticmethod
-    def _country_label(lead) -> str | None:
-        if any([lead.postal_code, lead.state, lead.city, lead.neighborhood, lead.address]):
-            return "Brasil"
-        return None
-
     @staticmethod
     def _client_facing_website(value: str | None) -> str | None:
         if not is_probable_business_website(value):
             return None
         return canonicalize_url(value)
-
-    @staticmethod
-    def _label(labels: dict[str, str], value: object | None) -> str | None:
-        if value in (None, ""):
-            return None
-        normalized = getattr(value, "value", value)
-        return labels.get(str(normalized), str(normalized))
-
-    @staticmethod
-    def _humanize(value: object | None) -> str | None:
-        if value in (None, ""):
-            return None
-        return str(value).replace("_", " ").strip().title()
 
     @staticmethod
     def _metadata_rows(
@@ -327,18 +265,16 @@ class ExcelExportService:
         scope["lead_count"] = int(len(leads))
 
         duplicate_count = sum(1 for lead in leads if lead.is_duplicate)
-        total_with_email = (
-            int(leads_df["E-mail"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
-        )
+        total_with_email = int(leads_df["email"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
         total_with_whatsapp = (
-            int(leads_df["WhatsApp"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+            int(leads_df["whatsapp"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
         )
         total_with_website = (
-            int(leads_df["Website"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+            int(leads_df["website"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
         )
-        score_min = int(leads_df["Ranking"].min()) if not leads_df.empty else 0
-        score_avg = float(leads_df["Ranking"].mean()) if not leads_df.empty else 0.0
-        score_max = int(leads_df["Ranking"].max()) if not leads_df.empty else 0
+        score_min = int(leads_df["lead_score"].min()) if not leads_df.empty else 0
+        score_avg = float(leads_df["lead_score"].mean()) if not leads_df.empty else 0.0
+        score_max = int(leads_df["lead_score"].max()) if not leads_df.empty else 0
 
         return [
             {"metric": "export_timestamp_utc", "value": datetime.now(timezone.utc).isoformat()},

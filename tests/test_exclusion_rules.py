@@ -183,6 +183,45 @@ def test_reapply_unblocks_leads_when_rule_is_deactivated(db_session) -> None:
     assert lead.blocked_rule_id is None
 
 
+def test_workshops_are_allowed_without_explicit_exclusion_rule(db_session) -> None:
+    organization = _organization()
+    db_session.add(organization)
+    db_session.flush()
+
+    candidate = _candidate("Oficina Motor Sul", category="oficina mecanica")
+    service = ExclusionRuleService(db_session, organization_id=organization.id)
+    repository = LeadRepository(db_session, organization_id=organization.id)
+
+    assert service.evaluate_candidate(candidate) is None
+
+    lead, created = repository.upsert_from_discovery(candidate)
+
+    assert created is True
+    assert lead.is_blocked is False
+    assert lead.blocked_reason is None
+
+
+def test_explicit_provider_category_rule_can_block_workshops(db_session) -> None:
+    organization = _organization()
+    db_session.add(organization)
+    db_session.flush()
+    service = ExclusionRuleService(db_session, organization_id=organization.id)
+    repository = LeadRepository(db_session, organization_id=organization.id)
+    service.create_rule(
+        rule_type="provider_category",
+        pattern="oficina mecanica",
+        reason="Configured automotive exclusion",
+    )
+
+    lead, created = repository.upsert_from_discovery(
+        _candidate("Oficina Motor Sul", category="oficina mecanica")
+    )
+
+    assert created is True
+    assert lead.is_blocked is True
+    assert lead.blocked_reason == "Configured automotive exclusion"
+
+
 def test_import_exclusion_rules_script_imports_csv_and_reapplies(monkeypatch, db_session, capsys) -> None:
     organization = _organization("default")
     lead = _lead("Rede Nacional Campinas", organization=organization)
@@ -253,7 +292,7 @@ def _exported_names(payload: bytes) -> list[str]:
     workbook = load_workbook(BytesIO(payload))
     return [
         row[0].value
-        for row in workbook["Empresas"].iter_rows(min_row=2, max_col=1)
+        for row in workbook["Leads"].iter_rows(min_row=2, max_col=1)
         if row[0].value
     ]
 

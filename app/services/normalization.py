@@ -57,44 +57,44 @@ ENRICHMENT_PAGE_HINTS = CONTACT_URL_HINTS + (
     "quem somos",
     "nossa historia",
 )
-MATERIAL_SIGNAL_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "catalytic_converters": (
-        "catalisador",
-        "catalisadores",
-        "catalytic converter",
-        "escapamento",
+PROFILE_SIGNAL_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "appointments": (
+        "agendamento",
+        "agende",
+        "consulta",
+        "consultas",
+        "reserva",
+        "reservas",
+        "appointment",
+        "booking",
     ),
-    "batteries": (
-        "bateria",
-        "baterias",
-        "bateria automotiva",
-        "acumulador",
+    "catalog": (
+        "catalogo",
+        "catálogo",
+        "produtos",
+        "servicos",
+        "serviços",
+        "menu",
+        "cardapio",
+        "cardápio",
+        "portfolio",
+        "portfólio",
     ),
-    "electronics": (
-        "eletronica",
-        "eletronico",
-        "placa mae",
-        "placa-mãe",
-        "cpu",
-        "hd",
-        "ssd",
-        "notebook",
-        "computador",
-        "celular",
+    "delivery": (
+        "delivery",
+        "entrega",
+        "entregas",
+        "retirada",
+        "envio",
+        "shipping",
     ),
-    "repair_waste": (
-        "manutencao",
-        "manutenção",
-        "conserto",
-        "assistencia tecnica",
-        "assistência técnica",
-        "oficina",
-        "sucata",
-        "residuo",
-        "resíduo",
-        "descarte",
-        "logistica reversa",
-        "logística reversa",
+    "support": (
+        "atendimento",
+        "suporte",
+        "orcamento",
+        "orçamento",
+        "fale conosco",
+        "contact us",
     ),
 }
 BRAZILIAN_STATE_UFS = {
@@ -471,10 +471,11 @@ def extract_instagram_links(urls: Iterable[str]) -> list[str]:
 
 
 def infer_material_signals(text: str) -> dict[str, dict[str, object]]:
+    # Legacy function name kept for compatibility with the persisted `material_profile` field.
     normalized_text = normalize_text(text) or ""
     signal_payload: dict[str, dict[str, object]] = {}
 
-    for signal_name, keywords in MATERIAL_SIGNAL_KEYWORDS.items():
+    for signal_name, keywords in PROFILE_SIGNAL_KEYWORDS.items():
         matches = [keyword for keyword in keywords if normalize_text(keyword) and normalize_text(keyword) in normalized_text]
         confidence = min(1.0, 0.35 + (0.2 * len(matches))) if matches else 0.0
         signal_payload[signal_name] = {

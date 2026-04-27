@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = Field(default="development", alias="APP_ENV")
-    api_title: str = Field(default="Reverse Logistics Lead Discovery MVP", alias="API_TITLE")
+    api_title: str = Field(default="Encontra.ai Lead Discovery API", alias="API_TITLE")
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
     streamlit_server_port: int = Field(default=8501, alias="STREAMLIT_SERVER_PORT")

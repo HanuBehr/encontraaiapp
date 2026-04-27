@@ -1,3 +1,9 @@
+"""Internal draft-only outreach helpers.
+
+This module intentionally supports reviewable message drafts only.
+It does not add campaign orchestration or message sending behavior.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -14,48 +20,49 @@ from app.schemas.outreach import DraftPreviewResponse
 DEFAULT_TEMPLATES: dict[TemplateKey, dict[str, Any]] = {
     TemplateKey.COLD_EMAIL: {
         "channel": OutreachChannel.EMAIL,
-        "name": "Cold Email",
-        "subject_template": "Coleta responsavel de materiais para {business_name}",
+        "name": "Internal Intro Email Draft",
+        "subject_template": "Contato inicial com {business_name}",
         "body_template": (
             "Ola, equipe da {business_name}.\n\n"
-            "Atuamos com coleta responsavel e logistica reversa para materiais de alto impacto, "
-            "com foco em operacoes locais como {category_text} em {city_text}.\n\n"
-            "{material_text}\n\n"
-            "Se fizer sentido, posso enviar uma explicacao curta de como funciona a retirada e a destinacao correta.\n\n"
+            "Este e um rascunho interno de contato inicial gerado a partir de pesquisa publica.\n"
+            "Identificamos {business_name} em uma busca por {category_text} em {city_text}.\n\n"
+            "{profile_text}\n\n"
+            "Se fizer sentido, posso compartilhar um resumo curto do motivo do contato e confirmar a melhor pessoa para continuar a conversa.\n\n"
             "Atenciosamente,\n"
-            "Equipe de Logistica Reversa"
+            "Equipe Encontra.ai"
         ),
     },
     TemplateKey.COLD_WHATSAPP: {
         "channel": OutreachChannel.WHATSAPP,
-        "name": "Cold WhatsApp",
+        "name": "Internal Intro WhatsApp Draft",
         "subject_template": None,
         "body_template": (
-            "Ola, tudo bem? Aqui e da equipe de logistica reversa.\n\n"
-            "Trabalhamos com coleta responsavel de materiais de alto impacto para negocios como {business_name} "
-            "em {city_text}, incluindo {material_short_text}.\n\n"
-            "Se for util, posso explicar rapidinho como funciona a retirada e a destinacao correta."
+            "Ola, tudo bem?\n\n"
+            "Este e um rascunho interno de contato inicial para {business_name}. "
+            "Identificamos o negocio em uma pesquisa publica por {category_text} em {city_text}.\n\n"
+            "Se fizer sentido, posso compartilhar um resumo curto do motivo do contato por aqui."
         ),
     },
     TemplateKey.FOLLOW_UP_EMAIL: {
         "channel": OutreachChannel.EMAIL,
-        "name": "Follow-up Email",
+        "name": "Internal Follow-up Email Draft",
         "subject_template": "Retomando contato com {business_name}",
         "body_template": (
             "Ola, equipe da {business_name}.\n\n"
-            "Retomando meu contato anterior sobre coleta responsavel e logistica reversa para materiais "
-            "gerados em {category_text}.\n\n"
-            "Se houver interesse, posso enviar um resumo objetivo com o fluxo de atendimento em {city_text}.\n\n"
+            "Este e um rascunho interno de follow-up baseado no contato anterior com o negocio.\n"
+            "Estou retomando o contexto relacionado a {category_text} em {city_text}.\n\n"
+            "Se houver interesse, posso enviar um resumo objetivo do motivo do contato e alinhar os proximos passos.\n\n"
             "Fico a disposicao."
         ),
     },
     TemplateKey.FOLLOW_UP_WHATSAPP: {
         "channel": OutreachChannel.WHATSAPP,
-        "name": "Follow-up WhatsApp",
+        "name": "Internal Follow-up WhatsApp Draft",
         "subject_template": None,
         "body_template": (
-            "Ola, estou retomando o contato sobre a coleta responsavel de materiais gerados por {business_name}.\n\n"
-            "Se ainda fizer sentido, posso mandar um resumo curto de como atendemos {city_text}."
+            "Ola, estou retomando o contato com {business_name}.\n\n"
+            "Este e um rascunho interno de follow-up referente ao negocio identificado em {city_text}.\n"
+            "Se ainda fizer sentido, posso mandar um resumo curto do contexto por aqui."
         ),
     },
 }
@@ -135,7 +142,7 @@ class OutreachService:
                 entity_id=lead_id,
                 action=ActivityAction.DRAFT_GENERATED,
                 actor=actor,
-                message=f"Outreach draft generated using template {template.key.value}.",
+                message=f"Internal outreach draft generated using template {template.key.value}.",
                 metadata_json={"template_key": template.key.value, "draft_id": draft.id},
             )
         )
@@ -173,28 +180,32 @@ class OutreachService:
 
     @staticmethod
     def _build_context(lead) -> dict[str, str]:
-        material_labels = {
-            "catalytic_converters": "catalisadores",
-            "batteries": "baterias",
-            "electronics": "eletronicos e placas",
-            "repair_waste": "residuos tecnicos de manutencao",
+        profile_signal_labels = {
+            "appointments": "agendamento publico",
+            "catalog": "catalogo de produtos ou servicos",
+            "delivery": "entrega ou retirada",
+            "support": "atendimento publico",
         }
-        relevant_materials = [
-            material_labels[key]
+        relevant_profile_signals = [
+            profile_signal_labels[key]
             for key, details in (lead.material_profile or {}).items()
-            if details.get("relevant") and key in material_labels
+            if details.get("relevant") and key in profile_signal_labels
         ]
-        material_short_text = ", ".join(relevant_materials) if relevant_materials else "materiais automotivos e eletronicos"
-        material_text = (
-            f"Percebemos potencial aderencia a materiais como {material_short_text}."
-            if relevant_materials
-            else "Atendemos materiais automotivos e eletronicos com destinacao correta."
+        profile_short_text = (
+            ", ".join(relevant_profile_signals)
+            if relevant_profile_signals
+            else "presenca publica basica do negocio"
+        )
+        profile_text = (
+            f"Tambem identificamos sinais publicos como {profile_short_text}."
+            if relevant_profile_signals
+            else "A busca encontrou apenas sinais publicos basicos do negocio."
         )
         return {
             "business_name": lead.business_name,
             "city_text": lead.city or "sua regiao",
             "neighborhood_text": lead.neighborhood or "seu bairro",
             "category_text": lead.category or "operacoes locais",
-            "material_short_text": material_short_text,
-            "material_text": material_text,
+            "profile_short_text": profile_short_text,
+            "profile_text": profile_text,
         }

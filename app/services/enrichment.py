@@ -376,7 +376,7 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
 
 
 class EnrichmentService:
-    USER_AGENT = "reverse-logistics-mvp/0.1"
+    USER_AGENT = "encontraai/0.1"
     SQLITE_LOCK_RETRY_DELAYS_SECONDS = (0.2, 0.5)
     PAGE_PATHS = (
         "/",

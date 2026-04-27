@@ -30,37 +30,31 @@ from app.services.export_excel import ExcelExportService
 from app.services.normalization import normalize_business_name
 
 
-EXPECTED_EMPRESAS_HEADERS = [
-    "Nome",
-    "CNPJ",
-    "Razão Social",
-    "Categoria",
-    "Origem",
-    "Usuário responsável",
-    "Setor",
-    "Descrição",
-    "E-mail",
-    "WhatsApp",
-    "Telefone",
-    "Celular",
-    "Fax",
-    "Ramal",
-    "Website",
-    "CEP",
-    "País",
-    "Estado",
-    "Cidade",
-    "Bairro",
-    "Rua",
-    "Número",
-    "Complemento",
-    "Produto",
-    "Facebook",
-    "Twitter",
-    "LinkedIn",
-    "Skype",
-    "Instagram",
-    "Ranking",
+EXPECTED_LEADS_HEADERS = [
+    "business_name",
+    "category",
+    "city",
+    "state",
+    "address",
+    "street",
+    "number",
+    "postal_code",
+    "phone",
+    "whatsapp",
+    "email",
+    "instagram",
+    "website",
+    "google_maps_url",
+    "source",
+    "status",
+    "notes",
+    "neighborhood",
+    "assigned_owner",
+    "market_segment",
+    "market_subsegment",
+    "lead_score",
+    "rating",
+    "review_count",
 ]
 
 
@@ -168,38 +162,36 @@ def test_excel_export_matches_empresas_template(db_session) -> None:
 
     assert filename.endswith(".xlsx")
     assert payload[:2] == b"PK"
-    assert workbook.sheetnames[0] == "Empresas"
-    assert "Leads" not in workbook.sheetnames
+    assert workbook.sheetnames[0] == "Leads"
+    assert "Empresas" not in workbook.sheetnames
     assert "Metadata" in workbook.sheetnames
     metadata_rows = [row[0].value for row in workbook["Metadata"].iter_rows(min_row=2, max_col=1)]
-    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
-    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_headers = [cell.value for cell in workbook["Leads"][1]]
+    lead_values = [cell.value for cell in workbook["Leads"][2]]
     lead_row = dict(zip(lead_headers, lead_values, strict=False))
     assert "export_timestamp_utc" in metadata_rows
-    assert lead_headers == EXPECTED_EMPRESAS_HEADERS
+    assert lead_headers == EXPECTED_LEADS_HEADERS
     assert "latitude" not in lead_headers
     assert "longitude" not in lead_headers
     assert "source_provider" not in lead_headers
-    assert "google_maps_url" not in lead_headers
-    assert lead_row["Nome"] == "Oficina Export"
-    assert lead_row["CNPJ"] is None
-    assert lead_row["Razão Social"] is None
-    assert lead_row["Categoria"] == "oficina mecanica"
-    assert lead_row["Origem"] == "Google Places"
-    assert lead_row["Usuário responsável"] == "Vendas2"
-    assert lead_row["Setor"] == "Varejo - loja de tintas"
-    assert lead_row["Descrição"] == "Observação comercial"
-    assert lead_row["WhatsApp"] == "+5511999999999"
-    assert lead_row["E-mail"] == "vendas@export.com.br"
-    assert lead_row["Website"] == "https://export.com.br"
-    assert lead_row["CEP"] == "01000-000"
-    assert lead_row["País"] == "Brasil"
-    assert lead_row["Estado"] == "SP"
-    assert lead_row["Cidade"] == "Sao Paulo"
-    assert lead_row["Rua"] == "Rua das Tintas"
-    assert lead_row["Número"] == "100"
-    assert lead_row["Instagram"] == "https://instagram.com/export"
-    assert lead_row["Ranking"] == 0
+    assert lead_row["business_name"] == "Oficina Export"
+    assert lead_row["category"] == "oficina mecanica"
+    assert lead_row["source"] == "google_places"
+    assert lead_row["status"] == "new"
+    assert lead_row["assigned_owner"] == "Vendas2"
+    assert lead_row["market_segment"] == "Varejo"
+    assert lead_row["market_subsegment"] == "loja de tintas"
+    assert lead_row["notes"] == "Observação comercial"
+    assert lead_row["whatsapp"] == "+5511999999999"
+    assert lead_row["email"] == "vendas@export.com.br"
+    assert lead_row["website"] == "https://export.com.br"
+    assert lead_row["postal_code"] == "01000-000"
+    assert lead_row["state"] == "SP"
+    assert lead_row["city"] == "Sao Paulo"
+    assert lead_row["street"] == "Rua das Tintas"
+    assert lead_row["number"] == "100"
+    assert lead_row["instagram"] == "https://instagram.com/export"
+    assert lead_row["lead_score"] == 0
 
 
 def test_excel_export_normalizes_client_facing_address_fields_and_filters_social_website(db_session) -> None:
@@ -226,18 +218,18 @@ def test_excel_export_normalizes_client_facing_address_fields_and_filters_social
     _, payload = service.build_workbook(LeadListFilters())
 
     workbook = load_workbook(BytesIO(payload))
-    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
-    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_headers = [cell.value for cell in workbook["Leads"][1]]
+    lead_values = [cell.value for cell in workbook["Leads"][2]]
     lead_row = dict(zip(lead_headers, lead_values, strict=False))
 
-    assert lead_row["Estado"] == "SP"
-    assert lead_row["Cidade"] == "Sao Paulo"
-    assert lead_row["Bairro"] == "Bela Vista"
-    assert lead_row["Rua"] == "Avenida Paulista"
-    assert lead_row["Número"] == "1578"
-    assert lead_row["CEP"] == "01310-200"
-    assert lead_row["Website"] is None
-    assert lead_row["Instagram"] == "https://instagram.com/casapaulista"
+    assert lead_row["state"] == "SP"
+    assert lead_row["city"] == "Sao Paulo"
+    assert lead_row["neighborhood"] == "Bela Vista"
+    assert lead_row["street"] == "Avenida Paulista"
+    assert lead_row["number"] == "1578"
+    assert lead_row["postal_code"] == "01310-200"
+    assert lead_row["website"] is None
+    assert lead_row["instagram"] == "https://instagram.com/casapaulista"
 
 
 def test_excel_export_prefers_plausible_email_and_blanks_ambiguous_number(db_session) -> None:
@@ -285,13 +277,13 @@ def test_excel_export_prefers_plausible_email_and_blanks_ambiguous_number(db_ses
     _, payload = service.build_workbook(LeadListFilters())
 
     workbook = load_workbook(BytesIO(payload))
-    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
-    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_headers = [cell.value for cell in workbook["Leads"][1]]
+    lead_values = [cell.value for cell in workbook["Leads"][2]]
     lead_row = dict(zip(lead_headers, lead_values, strict=False))
 
-    assert lead_row["Rua"] == "Rua Alfa"
-    assert lead_row["Número"] is None
-    assert lead_row["E-mail"] == "comercial@rualimpa.com.br"
+    assert lead_row["street"] == "Rua Alfa"
+    assert lead_row["number"] is None
+    assert lead_row["email"] == "comercial@rualimpa.com.br"
 
 
 def test_excel_export_blanks_placeholder_email_when_no_plausible_option_exists(db_session) -> None:
@@ -312,11 +304,11 @@ def test_excel_export_blanks_placeholder_email_when_no_plausible_option_exists(d
     _, payload = service.build_workbook(LeadListFilters())
 
     workbook = load_workbook(BytesIO(payload))
-    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
-    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_headers = [cell.value for cell in workbook["Leads"][1]]
+    lead_values = [cell.value for cell in workbook["Leads"][2]]
     lead_row = dict(zip(lead_headers, lead_values, strict=False))
 
-    assert lead_row["E-mail"] is None
+    assert lead_row["email"] is None
 
 
 def test_excel_export_strips_prefixed_numeric_garbage_from_street(db_session) -> None:
@@ -341,13 +333,13 @@ def test_excel_export_strips_prefixed_numeric_garbage_from_street(db_session) ->
     _, payload = service.build_workbook(LeadListFilters())
 
     workbook = load_workbook(BytesIO(payload))
-    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
-    lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_headers = [cell.value for cell in workbook["Leads"][1]]
+    lead_values = [cell.value for cell in workbook["Leads"][2]]
     lead_row = dict(zip(lead_headers, lead_values, strict=False))
 
-    assert lead_row["Rua"] == "R. Bento Goncalves"
-    assert lead_row["Número"] == "112"
-    assert lead_row["Estado"] == "RS"
+    assert lead_row["street"] == "R. Bento Goncalves"
+    assert lead_row["number"] == "112"
+    assert lead_row["state"] == "RS"
 
 
 def test_excel_export_with_explicit_lead_ids_preserves_scope_and_order(db_session) -> None:
@@ -392,11 +384,11 @@ def test_excel_export_with_explicit_lead_ids_preserves_scope_and_order(db_sessio
     workbook = load_workbook(BytesIO(payload))
     lead_rows = [
         row[0].value
-        for row in workbook["Empresas"].iter_rows(min_row=2, max_col=1)
+        for row in workbook["Leads"].iter_rows(min_row=2, max_col=1)
         if row[0].value
     ]
-    lead_headers = [cell.value for cell in workbook["Empresas"][1]]
-    first_lead_values = [cell.value for cell in workbook["Empresas"][2]]
+    lead_headers = [cell.value for cell in workbook["Leads"][1]]
+    first_lead_values = [cell.value for cell in workbook["Leads"][2]]
     first_lead_row = dict(zip(lead_headers, first_lead_values, strict=False))
     metadata = {
         row[0].value: row[1].value
@@ -408,9 +400,9 @@ def test_excel_export_with_explicit_lead_ids_preserves_scope_and_order(db_sessio
     assert "Gamma Materiais" not in lead_rows
     assert beta.email is None
     assert beta.instagram is None
-    assert lead_headers == EXPECTED_EMPRESAS_HEADERS
-    assert first_lead_row["E-mail"] == "vendas@beta.com.br"
-    assert first_lead_row["Instagram"] == "https://instagram.com/beta"
+    assert lead_headers == EXPECTED_LEADS_HEADERS
+    assert first_lead_row["email"] == "vendas@beta.com.br"
+    assert first_lead_row["instagram"] == "https://instagram.com/beta"
     assert metadata["scope_type"] == "current_filtered_queue"
     assert metadata["scope_label"] == "Current filtered queue"
     assert metadata["lead_count"] == 2

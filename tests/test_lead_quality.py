@@ -33,10 +33,14 @@ def _lead(
     business_name: str,
     *,
     organization: Organization,
-    category: str = "loja de tintas",
+    category: str = "empresa local",
     city: str | None = "Campinas",
     segment: MarketSegment | None = None,
     subsegment: MarketSubsegment | None = None,
+    website: str | None = None,
+    email: str | None = None,
+    address: str | None = None,
+    google_maps_url: str | None = None,
 ) -> Lead:
     return Lead(
         organization=organization,
@@ -46,6 +50,10 @@ def _lead(
         city=city,
         state="SP",
         phone="+5511999999999",
+        website=website,
+        email=email,
+        address=address,
+        google_maps_url=google_maps_url,
         lead_source_type=LeadSourceType.GOOGLE_PLACES,
         status=LeadStatus.NEW,
         market_segment=segment,
@@ -82,30 +90,40 @@ def test_lead_quality_classifies_large_enterprise_conservatively(db_session) -> 
         organization=organization,
         category="hipermercado",
     )
-    weak_words_lead = _lead(
-        "Grupo Brasil Comercial Loja de Tintas",
+    local_lead = _lead(
+        "Grupo Brasil Consultorio",
         organization=organization,
-        category="loja de tintas",
+        category="clinica odontologica",
+        website="https://grupobrasil.example.com",
+        email="contato@grupobrasil.example.com",
+        address="Rua Alpha, 10",
+        google_maps_url="https://maps.google.com/?q=Grupo+Brasil+Consultorio",
     )
-    db_session.add_all([large_lead, weak_words_lead])
+    db_session.add_all([large_lead, local_lead])
     db_session.commit()
 
     service = LeadQualityService(db_session, organization_id=organization.id)
-    service.apply_batch(lead_ids=[large_lead.id, weak_words_lead.id])
+    service.apply_batch(lead_ids=[large_lead.id, local_lead.id])
     db_session.refresh(large_lead)
-    db_session.refresh(weak_words_lead)
+    db_session.refresh(local_lead)
 
     assert large_lead.company_size_fit == CompanySizeFit.LARGE_ENTERPRISE.value
     assert "walmart" in (large_lead.company_size_fit_explanation or "").lower()
-    assert weak_words_lead.company_size_fit != CompanySizeFit.LARGE_ENTERPRISE.value
-    assert weak_words_lead.trade_type == TradeType.VAREJO.value
+    assert local_lead.company_size_fit == CompanySizeFit.IDEAL_SME.value
+    assert local_lead.trade_type == TradeType.UNKNOWN.value
 
 
-def test_lead_quality_classifies_ideal_sme_and_varejo_trade_type(db_session) -> None:
+def test_lead_quality_classifies_generic_service_business_from_contact_and_location_evidence(db_session) -> None:
     organization = _organization()
-    segment = _segment(organization, "varejo", "Varejo")
-    subsegment = _subsegment(organization, segment, "loja_de_tintas", "loja de tintas")
-    lead = _lead("Casa Alpha Tintas", organization=organization, segment=segment, subsegment=subsegment)
+    lead = _lead(
+        "Clinica Sorriso",
+        organization=organization,
+        category="dentista",
+        website="https://clinicasorriso.example.com",
+        email="contato@clinicasorriso.example.com",
+        address="Rua Central, 100",
+        google_maps_url="https://maps.google.com/?q=Clinica+Sorriso",
+    )
     db_session.add(lead)
     db_session.commit()
 
@@ -114,11 +132,35 @@ def test_lead_quality_classifies_ideal_sme_and_varejo_trade_type(db_session) -> 
     summary = LeadSummary.model_validate(lead)
 
     assert lead.company_size_fit == CompanySizeFit.IDEAL_SME.value
-    assert lead.trade_type == TradeType.VAREJO.value
+    assert lead.trade_type == TradeType.UNKNOWN.value
     assert lead.quality_classified_at is not None
     assert "company_size_fit" in result.changed_fields
     assert summary.company_size_fit == CompanySizeFit.IDEAL_SME
-    assert summary.trade_type == TradeType.VAREJO
+    assert summary.trade_type == TradeType.UNKNOWN
+
+
+def test_lead_quality_uses_explicit_taxonomy_for_retail_trade_type(db_session) -> None:
+    organization = _organization()
+    segment = _segment(organization, "varejo", "Varejo")
+    subsegment = _subsegment(organization, segment, "loja_de_moveis", "loja de moveis")
+    lead = _lead(
+        "Loja Bela Casa",
+        organization=organization,
+        category="loja de moveis",
+        segment=segment,
+        subsegment=subsegment,
+        website="https://belacasa.example.com",
+        address="Avenida Moveis, 200",
+        google_maps_url="https://maps.google.com/?q=Loja+Bela+Casa",
+    )
+    db_session.add(lead)
+    db_session.commit()
+
+    LeadQualityService(db_session, organization_id=organization.id).apply_to_lead(lead.id)
+    db_session.refresh(lead)
+
+    assert lead.company_size_fit == CompanySizeFit.IDEAL_SME.value
+    assert lead.trade_type == TradeType.VAREJO.value
 
 
 def test_lead_quality_distinguishes_atacado_from_distribuidora(db_session) -> None:
@@ -127,24 +169,26 @@ def test_lead_quality_distinguishes_atacado_from_distribuidora(db_session) -> No
     distributor_subsegment = _subsegment(
         organization,
         segment,
-        "distribuidoras_tintas",
-        "distribuidoras de tintas",
+        "distribuicao_embalagens",
+        "distribuicao de embalagens",
     )
     wholesale_subsegment = _subsegment(
         organization,
         segment,
-        "atacado_ferragens",
-        "atacado de ferragens",
+        "atacado_moveis",
+        "atacado de moveis",
     )
     distributor = _lead(
-        "Distribuidora Alpha Tintas",
+        "Distribuidora Alpha Embalagens",
         organization=organization,
+        category="fornecedores de embalagens",
         segment=segment,
         subsegment=distributor_subsegment,
     )
     wholesale = _lead(
-        "Atacado Beta Ferragens",
+        "Atacado Beta Moveis",
         organization=organization,
+        category="atacado de moveis",
         segment=segment,
         subsegment=wholesale_subsegment,
     )
@@ -163,8 +207,17 @@ def test_lead_quality_distinguishes_atacado_from_distribuidora(db_session) -> No
 def test_lead_quality_dry_run_and_repository_filters(db_session) -> None:
     organization = _organization()
     segment = _segment(organization, "varejo", "Varejo")
-    subsegment = _subsegment(organization, segment, "ferragistas", "ferragistas")
-    lead = _lead("Ferragens Central", organization=organization, segment=segment, subsegment=subsegment)
+    subsegment = _subsegment(organization, segment, "loja_de_moveis", "loja de moveis")
+    lead = _lead(
+        "Moveis Central",
+        organization=organization,
+        category="loja de moveis",
+        segment=segment,
+        subsegment=subsegment,
+        website="https://moveiscentral.example.com",
+        address="Rua das Flores, 50",
+        google_maps_url="https://maps.google.com/?q=Moveis+Central",
+    )
     db_session.add(lead)
     db_session.commit()
 
@@ -180,9 +233,7 @@ def test_lead_quality_dry_run_and_repository_filters(db_session) -> None:
     service.apply_batch(lead_ids=[lead.id])
     db_session.refresh(lead)
     repository = LeadRepository(db_session, organization_id=organization.id)
-    fit_matches, fit_total = repository.list_leads(
-        LeadListFilters(company_size_fit=CompanySizeFit.IDEAL_SME)
-    )
+    fit_matches, fit_total = repository.list_leads(LeadListFilters(company_size_fit=CompanySizeFit.IDEAL_SME))
     trade_matches, trade_total = repository.list_leads(LeadListFilters(trade_type=TradeType.VAREJO))
 
     assert fit_total == 1

@@ -19,11 +19,6 @@ KNOWN_LARGE_ENTERPRISE_SIGNALS = (
     "carrefour",
     "atacadao",
     "assai",
-    "leroy merlin",
-    "telhanorte",
-    "sodimac",
-    "obramax",
-    "c c casa e construcao",
     "magazine luiza",
     "mercado livre",
     "amazon",
@@ -35,69 +30,42 @@ KNOWN_LARGE_ENTERPRISE_SIGNALS = (
     "extra hipermercado",
     "hipermercado extra",
 )
-LARGE_ENTERPRISE_CATEGORY_SIGNALS = (
+ENTERPRISE_SCALE_CATEGORY_SIGNALS = (
     "hipermercado",
     "megastore",
-)
-SME_FIT_SIGNALS = (
-    "casa de",
-    "loja de",
-    "ferragista",
-    "ferragens",
-    "vidracaria",
-    "vidraceiro",
-    "marmoraria",
-    "material de construcao",
-    "materiais de construcao",
-    "tintas",
-    "construtora",
-    "incorporadora",
-    "distribuidora",
-    "atacado",
-    "comercial",
+    "shopping center",
+    "shopping mall",
 )
 DISTRIBUTOR_SIGNALS = (
     "distribuidora",
     "distribuicao",
-    "distribuidor",
+    "distributor",
 )
 WHOLESALE_SIGNALS = (
     "atacado",
     "atacadista",
+    "wholesale",
 )
 ECOMMERCE_SIGNALS = (
     "e commerce",
     "ecommerce",
-    "loja virtual",
-    "marketplace",
     "loja online",
+    "online store",
+    "marketplace",
 )
 INDUSTRY_SIGNALS = (
     "industria",
     "industrial",
     "fabrica",
-    "metalurgica",
-    "quimica",
-    "textil",
-    "moveleira",
-)
-CONSTRUCTION_SIGNALS = (
-    "construtora",
-    "incorporadora",
-    "construcao civil",
-    "impermeabilizacao",
+    "manufacturer",
+    "manufatura",
 )
 RETAIL_SIGNALS = (
-    "varejo",
-    "loja de",
-    "casa de",
-    "ferragista",
-    "ferragens",
-    "vidracaria",
-    "marmoraria",
-    "material de construcao",
-    "materiais de construcao",
-    "tintas",
+    "loja",
+    "store",
+    "boutique",
+    "showroom",
+    "retail",
 )
 
 
@@ -134,11 +102,10 @@ class LeadQualityService:
     def evaluate_lead(self, lead: Lead) -> LeadQualitySuggestion:
         text = self._lead_text(lead)
         enterprise_match = self._first_match(text, KNOWN_LARGE_ENTERPRISE_SIGNALS)
-        enterprise_category_match = self._first_match(text, LARGE_ENTERPRISE_CATEGORY_SIGNALS)
+        enterprise_category_match = self._first_match(text, ENTERPRISE_SCALE_CATEGORY_SIGNALS)
         trade_type, trade_explanation, trade_metadata = self._classify_trade_type(lead, text)
         fit, fit_explanation, fit_metadata = self._classify_company_size_fit(
             lead=lead,
-            text=text,
             trade_type=trade_type,
             enterprise_match=enterprise_match,
             enterprise_category_match=enterprise_category_match,
@@ -171,10 +138,7 @@ class LeadQualityService:
         else:
             leads = self.repository.list_all_leads(filters)
 
-        results = [
-            self._apply_to_loaded_lead(lead, overwrite=overwrite, dry_run=dry_run)
-            for lead in leads
-        ]
+        results = [self._apply_to_loaded_lead(lead, overwrite=overwrite, dry_run=dry_run) for lead in leads]
         if not dry_run:
             self.db.flush()
         return LeadQualityBatchResult(
@@ -196,17 +160,12 @@ class LeadQualityService:
         if not dry_run:
             self._apply_suggestion(lead, suggestion, changed_fields=changed_fields)
             self.db.flush()
-        return LeadQualityResult(
-            lead_id=lead.id,
-            changed_fields=changed_fields,
-            suggestion=suggestion,
-        )
+        return LeadQualityResult(lead_id=lead.id, changed_fields=changed_fields, suggestion=suggestion)
 
     def _classify_company_size_fit(
         self,
         *,
         lead: Lead,
-        text: str,
         trade_type: TradeType,
         enterprise_match: str | None,
         enterprise_category_match: str | None,
@@ -214,55 +173,85 @@ class LeadQualityService:
         if enterprise_match:
             return (
                 CompanySizeFit.LARGE_ENTERPRISE,
-                f"Matched known large-chain signal '{enterprise_match}'.",
-                self._fit_metadata(lead, matched_signal=enterprise_match, signal_type="known_large_chain"),
+                f"Matched known enterprise-scale signal '{enterprise_match}'.",
+                self._fit_metadata(
+                    lead,
+                    signal_type="known_large_chain",
+                    matched_signal=enterprise_match,
+                    direct_contact_count=self._direct_contact_count(lead),
+                    location_signal_count=self._location_signal_count(lead),
+                    trade_type=trade_type,
+                ),
             )
         if enterprise_category_match:
             return (
                 CompanySizeFit.LARGE_ENTERPRISE,
-                f"Matched enterprise-scale provider/name signal '{enterprise_category_match}'.",
+                f"Matched enterprise-scale category signal '{enterprise_category_match}'.",
                 self._fit_metadata(
                     lead,
-                    matched_signal=enterprise_category_match,
                     signal_type="enterprise_scale_category",
+                    matched_signal=enterprise_category_match,
+                    direct_contact_count=self._direct_contact_count(lead),
+                    location_signal_count=self._location_signal_count(lead),
+                    trade_type=trade_type,
                 ),
             )
 
-        sme_signal = self._first_match(text, SME_FIT_SIGNALS)
-        has_market_classification = bool(lead.market_subsegment_id or lead.market_segment_id)
-        has_contact_or_location = bool(
-            lead.email
-            or lead.phone
-            or lead.whatsapp
-            or lead.instagram
-            or lead.website
-            or lead.address
-            or lead.city
-        )
+        direct_contact_count = self._direct_contact_count(lead)
+        location_signal_count = self._location_signal_count(lead)
+        has_market_classification = bool(lead.market_segment_id or lead.market_subsegment_id)
         known_trade_type = trade_type != TradeType.UNKNOWN
 
-        if has_market_classification and sme_signal and has_contact_or_location:
+        if direct_contact_count >= 2 and location_signal_count >= 1:
             return (
                 CompanySizeFit.IDEAL_SME,
-                f"Matched market classification and SME signal '{sme_signal}' with no large-chain signal.",
-                self._fit_metadata(lead, matched_signal=sme_signal, signal_type="sme_positive"),
+                "Lead has multiple direct contact channels plus location evidence.",
+                self._fit_metadata(
+                    lead,
+                    signal_type="contact_and_location_complete",
+                    matched_signal=None,
+                    direct_contact_count=direct_contact_count,
+                    location_signal_count=location_signal_count,
+                    trade_type=trade_type,
+                ),
             )
-        if has_market_classification or known_trade_type:
-            reason = (
-                "Matched market classification with no large-chain signal, but SME evidence is still limited."
-                if has_market_classification
-                else "Matched a practical trade type with no large-chain signal, but SME evidence is still limited."
+        if has_market_classification and direct_contact_count >= 1 and location_signal_count >= 1:
+            return (
+                CompanySizeFit.IDEAL_SME,
+                "Lead has explicit market classification plus direct contact and location evidence.",
+                self._fit_metadata(
+                    lead,
+                    signal_type="market_classification_supported",
+                    matched_signal=None,
+                    direct_contact_count=direct_contact_count,
+                    location_signal_count=location_signal_count,
+                    trade_type=trade_type,
+                ),
             )
+        if direct_contact_count >= 1 or location_signal_count >= 1 or has_market_classification or known_trade_type:
             return (
                 CompanySizeFit.POSSIBLE_SME,
-                reason,
-                self._fit_metadata(lead, matched_signal=None, signal_type="possible_sme"),
+                "Lead has partial business evidence, but not enough to confirm a strong SME profile yet.",
+                self._fit_metadata(
+                    lead,
+                    signal_type="partial_business_evidence",
+                    matched_signal=None,
+                    direct_contact_count=direct_contact_count,
+                    location_signal_count=location_signal_count,
+                    trade_type=trade_type,
+                ),
             )
-
         return (
             CompanySizeFit.UNKNOWN,
-            "Not enough local classification or size evidence to determine SME fit.",
-            self._fit_metadata(lead, matched_signal=None, signal_type="unknown"),
+            "Not enough business evidence is available to classify company size fit.",
+            self._fit_metadata(
+                lead,
+                signal_type="insufficient_evidence",
+                matched_signal=None,
+                direct_contact_count=direct_contact_count,
+                location_signal_count=location_signal_count,
+                trade_type=trade_type,
+            ),
         )
 
     def _classify_trade_type(self, lead: Lead, text: str) -> tuple[TradeType, str, dict[str, Any]]:
@@ -270,15 +259,19 @@ class LeadQualityService:
         subsegment_text = self._related_text(getattr(lead, "market_subsegment", None))
 
         if segment_key == "varejo":
-            return self._trade_result(TradeType.VAREJO, "Matched market segment 'Varejo'.", "market_segment")
+            return self._trade_result(TradeType.VAREJO, "Matched explicit market segment 'Varejo'.", "market_segment")
         if segment_key == "e_commerce":
-            return self._trade_result(TradeType.ECOMMERCE, "Matched market segment 'E-commerce'.", "market_segment")
+            return self._trade_result(
+                TradeType.ECOMMERCE,
+                "Matched explicit market segment 'E-commerce'.",
+                "market_segment",
+            )
         if segment_key == "industria":
-            return self._trade_result(TradeType.INDUSTRIA, "Matched market segment 'Industria'.", "market_segment")
+            return self._trade_result(TradeType.INDUSTRIA, "Matched explicit market segment 'Industria'.", "market_segment")
         if segment_key == "construcao_civil":
             return self._trade_result(
                 TradeType.CONSTRUCAO_CIVIL,
-                "Matched market segment 'Construcao Civil'.",
+                "Matched explicit market segment 'Construcao Civil'.",
                 "market_segment",
             )
         if segment_key == "atacado_distribuidora":
@@ -288,7 +281,7 @@ class LeadQualityService:
             if distributor_match:
                 return self._trade_result(
                     TradeType.DISTRIBUIDORA,
-                    f"Matched distributor signal '{distributor_match}' in Atacado/Distribuidora context.",
+                    f"Matched distributor signal '{distributor_match}' in an explicit Atacado/Distribuidora context.",
                     "subsegment_or_text",
                     distributor_match,
                 )
@@ -296,13 +289,13 @@ class LeadQualityService:
             if wholesale_match:
                 return self._trade_result(
                     TradeType.ATACADO,
-                    f"Matched wholesale signal '{wholesale_match}' in Atacado/Distribuidora context.",
+                    f"Matched wholesale signal '{wholesale_match}' in an explicit Atacado/Distribuidora context.",
                     "subsegment_or_text",
                     wholesale_match,
                 )
             return self._trade_result(
                 TradeType.UNKNOWN,
-                "Matched Atacado/Distribuidora segment, but available text did not distinguish atacado from distribuidora.",
+                "Explicit Atacado/Distribuidora taxonomy is present, but the text does not distinguish wholesale from distributor.",
                 "market_segment",
             )
 
@@ -311,14 +304,13 @@ class LeadQualityService:
             (TradeType.DISTRIBUIDORA, DISTRIBUTOR_SIGNALS),
             (TradeType.ATACADO, WHOLESALE_SIGNALS),
             (TradeType.INDUSTRIA, INDUSTRY_SIGNALS),
-            (TradeType.CONSTRUCAO_CIVIL, CONSTRUCTION_SIGNALS),
             (TradeType.VAREJO, RETAIL_SIGNALS),
         ]:
             match = self._first_match(text, signals)
             if match:
                 return self._trade_result(
                     trade_type,
-                    f"Matched trade signal '{match}' in lead text.",
+                    f"Matched business-model signal '{match}' in lead text.",
                     "lead_text",
                     match,
                 )
@@ -454,22 +446,40 @@ class LeadQualityService:
         )
 
     @staticmethod
-    def _fit_metadata(lead: Lead, *, matched_signal: str | None, signal_type: str) -> dict[str, Any]:
+    def _direct_contact_count(lead: Lead) -> int:
+        return sum(1 for value in [lead.email, lead.phone, lead.whatsapp, lead.website or lead.domain] if value)
+
+    @staticmethod
+    def _location_signal_count(lead: Lead) -> int:
+        return sum(
+            1
+            for value in [
+                lead.address,
+                lead.city and lead.state,
+                lead.google_maps_url or lead.google_place_id,
+            ]
+            if value
+        )
+
+    @staticmethod
+    def _fit_metadata(
+        lead: Lead,
+        *,
+        signal_type: str,
+        matched_signal: str | None,
+        direct_contact_count: int,
+        location_signal_count: int,
+        trade_type: TradeType,
+    ) -> dict[str, Any]:
         return {
             "schema_version": 1,
             "matched_signal": matched_signal,
             "signal_type": signal_type,
             "market_segment_id": lead.market_segment_id,
             "market_subsegment_id": lead.market_subsegment_id,
-            "has_contact_or_location": bool(
-                lead.email
-                or lead.phone
-                or lead.whatsapp
-                or lead.instagram
-                or lead.website
-                or lead.address
-                or lead.city
-            ),
+            "direct_contact_count": direct_contact_count,
+            "location_signal_count": location_signal_count,
+            "trade_type": trade_type.value,
         }
 
     @staticmethod

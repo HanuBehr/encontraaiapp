@@ -1,3 +1,5 @@
+"""Repository helpers for internal draft-only outreach records."""
+
 from __future__ import annotations
 
 from sqlalchemy import select

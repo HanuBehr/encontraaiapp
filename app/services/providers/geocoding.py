@@ -5,6 +5,10 @@ from dataclasses import dataclass
 import requests
 
 from app.config import Settings
+from app.services.providers.google_places import (
+    GooglePlacesProviderError,
+    MISSING_GOOGLE_API_KEY_MESSAGE,
+)
 
 
 @dataclass(slots=True)
@@ -20,7 +24,7 @@ class GoogleGeocodingClient:
 
     def resolve(self, query: str) -> GeocodedLocation:
         if not self.settings.google_api_key:
-            raise ValueError("GOOGLE_API_KEY is required for location resolution.")
+            raise GooglePlacesProviderError(MISSING_GOOGLE_API_KEY_MESSAGE, status_code=503)
 
         response = requests.get(
             self.settings.google_geocode_base_url,

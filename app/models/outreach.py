@@ -1,3 +1,9 @@
+"""Internal draft-only outreach persistence models.
+
+These tables support reviewed templates and draft history only.
+Campaign orchestration and message sending remain out of scope.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime

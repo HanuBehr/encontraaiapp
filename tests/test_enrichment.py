@@ -73,7 +73,7 @@ def test_extract_public_page_data_finds_contacts_and_signals() -> None:
         <a href="https://wa.me/5511987654321">WhatsApp</a>
         <a href="https://instagram.com/oficina">Instagram</a>
         <form action="/fale-conosco"></form>
-        <p>Trabalhamos com baterias, eletrônica automotiva e manutenção.</p>
+        <p>Agende sua consulta, veja nosso catalogo online e peca delivery pelo site.</p>
       </body>
     </html>
     """
@@ -85,8 +85,9 @@ def test_extract_public_page_data_finds_contacts_and_signals() -> None:
     assert result.extracted_fields["whatsapps"]
     assert result.extracted_fields["instagram_links"]
     assert result.extracted_fields["contact_form_urls"]
-    assert result.material_signals["batteries"]["relevant"] is True
-    assert result.material_signals["electronics"]["relevant"] is True
+    assert result.material_signals["appointments"]["relevant"] is True
+    assert result.material_signals["catalog"]["relevant"] is True
+    assert result.material_signals["delivery"]["relevant"] is True
 
 
 def test_extract_public_page_data_finds_hidden_and_obfuscated_emails() -> None:

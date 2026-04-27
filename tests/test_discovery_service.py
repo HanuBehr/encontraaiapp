@@ -156,6 +156,25 @@ def test_google_places_provider_retries_transient_ssl_error_and_succeeds(monkeyp
     assert attempts["count"] == 2
 
 
+def test_google_places_provider_requires_google_api_key_for_location_discovery() -> None:
+    provider = GooglePlacesProvider(Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY=""))
+
+    try:
+        provider.search(
+            search_term="dentistas",
+            location_label="Sao Paulo, SP",
+            latitude=-23.5505,
+            longitude=-46.6333,
+            radius_m=2500,
+            max_results=5,
+        )
+    except GooglePlacesProviderError as exc:
+        assert str(exc) == "GOOGLE_API_KEY must be configured to use location-based discovery."
+        assert exc.status_code == 503
+    else:
+        raise AssertionError("Expected GooglePlacesProviderError to be raised.")
+
+
 def test_google_places_provider_raises_clean_error_after_transient_request_failures(monkeypatch) -> None:
     provider = GooglePlacesProvider(Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key"))
 

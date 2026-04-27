@@ -164,9 +164,9 @@ export function LeadBatchActions({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase text-cyan-700">Batch actions</p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">Run operator actions</h2>
+          <h2 className="mt-1 text-base font-semibold text-neutral-950">Run batch actions</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Choose a scope, then enrich, assign, or export without leaving the queue.
+            Choose a scope, then enrich, assign, or export without leaving the lead queue.
           </p>
           {searchActive ? (
             <p className="mt-2 text-xs text-neutral-500">

@@ -63,7 +63,7 @@ def _workbook_names(payload: bytes) -> list[str]:
     workbook = load_workbook(BytesIO(payload))
     return [
         row[0].value
-        for row in workbook["Empresas"].iter_rows(min_row=2, max_col=1)
+        for row in workbook["Leads"].iter_rows(min_row=2, max_col=1)
         if row[0].value
     ]
 
@@ -476,6 +476,23 @@ def test_discovery_preview_endpoint_returns_503_for_google_places_provider_error
     assert response.status_code == 503
     assert response.json() == {
         "detail": "Google Places request failed due to an upstream SSL/network error. Retry shortly."
+    }
+
+
+def test_discovery_preview_endpoint_returns_503_when_google_api_key_is_missing(client) -> None:
+    response = client.post(
+        "/discovery/preview",
+        json={
+            "search_terms": ["dentistas"],
+            "location_query": "São Paulo, SP",
+            "radius_m": 2500,
+            "max_results_per_term": 5,
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "GOOGLE_API_KEY must be configured to use location-based discovery."
     }
 
 

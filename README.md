@@ -18,7 +18,7 @@ Encontra.ai is a lead discovery and operations platform for researching public b
 - deduplication and canonical merge logic
 - lead scoring with stored reasoning
 - assignment regions, market taxonomy, and validation tooling
-- Excel export with `Leads`, `Outreach_Log`, `Templates`, `Settings`, and `Metadata`
+- Excel export with generic `Leads` and `Metadata` sheets
 - pytest coverage for normalization, enrichment, dedupe, scoring, assignment, export, and API contracts
 
 ## Stack
@@ -46,21 +46,13 @@ Copy-Item .env.example .env.local
 cd ..
 ```
 
-## Initialize the database
+## Start the backend
 
 ```powershell
-python scripts/init_db.py
-```
-
-Optional demo data:
-
-```powershell
-python scripts/seed_demo.py
-```
-
-## Run the API
-
-```powershell
+cd "C:\Users\hanub\OneDrive\Documentos\Work\Encontra.ai\encontraaiapp"
+.\.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = (Get-Location).Path
+python .\scripts\init_local_db.py
 uvicorn app.api.main:app --host 127.0.0.1 --port 8000 --log-level debug
 ```
 
@@ -69,7 +61,7 @@ Default API URLs:
 - [http://127.0.0.1:8000](http://127.0.0.1:8000)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-## Run the V2 web app
+## Start the V2 web app
 
 ```powershell
 cd web
@@ -82,7 +74,21 @@ Default web URL:
 
 The Next.js backend proxy reads `API_BASE_URL` from `web/.env.local` and defaults to `http://127.0.0.1:8000`.
 
-## Run the legacy Streamlit workspace
+## Optional example configuration
+
+```powershell
+python .\scripts\bootstrap_default_assignment_configuration.py
+```
+
+This seeds an example São Paulo-centric assignment model for internal demos and validation. It is optional and not required for generic discovery or lead review.
+
+Optional demo data:
+
+```powershell
+python .\scripts\seed_demo.py
+```
+
+## Legacy Streamlit workspace
 
 ```powershell
 streamlit run streamlit_app.py
@@ -91,6 +97,8 @@ streamlit run streamlit_app.py
 Default Streamlit URL:
 
 - [http://127.0.0.1:8501](http://127.0.0.1:8501)
+
+Use Streamlit only as a legacy internal workspace. The primary product UI is the Next.js app in `web/`.
 
 ## Run checks
 

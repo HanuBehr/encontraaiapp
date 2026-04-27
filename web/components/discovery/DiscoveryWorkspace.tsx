@@ -80,8 +80,11 @@ const searchTermOptions = [
   "fornecedores de embalagens",
   "pet shops",
   "escritórios de contabilidade",
-  "materiais de construção",
+  "clínicas veterinárias",
 ];
+
+const MISSING_GOOGLE_API_KEY_DETAIL = "GOOGLE_API_KEY must be configured to use location-based discovery.";
+const MISSING_GOOGLE_API_KEY_UI_MESSAGE = "Configure GOOGLE_API_KEY no backend para usar a busca por localização.";
 
 const blockedOptions: Array<{ value: LeadBlockedFilter; label: string }> = [
   { value: "exclude", label: "Exclude blocked" },
@@ -1417,6 +1420,9 @@ function clampNumber(value: number, min: number, max: number) {
 
 function errorMessage(error: unknown) {
   if (error instanceof ApiError) {
+    if (error.detail === MISSING_GOOGLE_API_KEY_DETAIL) {
+      return MISSING_GOOGLE_API_KEY_UI_MESSAGE;
+    }
     return error.detail ?? error.message;
   }
   if (error instanceof Error) {

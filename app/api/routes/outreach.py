@@ -1,3 +1,5 @@
+"""Internal review-only outreach draft routes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,7 +16,7 @@ from app.schemas.outreach import (
 )
 from app.services.outreach import OutreachService
 
-router = APIRouter(prefix="/outreach", tags=["outreach"])
+router = APIRouter(prefix="/outreach", tags=["outreach-internal"])
 
 
 @router.get("/templates", response_model=list[TemplateRead])
