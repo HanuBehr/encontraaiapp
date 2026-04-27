@@ -57,6 +57,7 @@ def test_discovery_preview_and_ingest(db_session, monkeypatch) -> None:
     settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
     service = DiscoveryService(db_session, settings)
     request = DiscoverySearchRequest(
+        raw_query="oficinas mecânicas em Campinas",
         search_terms=["oficina mecânica", "auto elétrica"],
         location_query="Campinas, SP",
         radius_m=2500,
@@ -120,6 +121,9 @@ def test_discovery_preview_and_ingest(db_session, monkeypatch) -> None:
     assert response.created_leads == 2
     assert response.updated_leads == 0
     assert len(response.leads) == 2
+    batch = db_session.scalar(select(ImportBatch))
+    assert batch is not None
+    assert batch.source_query == "oficinas mecânicas em Campinas"
     assert db_session.scalar(select(func.count(Lead.id))) == 2
     assert db_session.scalar(select(func.count(ImportBatch.id))) == 1
     assert db_session.scalar(select(func.count(RawDiscoveryRecord.id))) == 2

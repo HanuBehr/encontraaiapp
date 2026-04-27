@@ -18,7 +18,7 @@ from app.services.normalization import normalize_business_name
 from scripts import import_exclusion_rules
 
 
-def _organization(slug: str = "garin") -> Organization:
+def _organization(slug: str = "tenant-a") -> Organization:
     return Organization(slug=slug, name=slug.title(), display_name=slug.title())
 
 

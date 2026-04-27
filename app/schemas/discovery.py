@@ -40,6 +40,7 @@ class DiscoveryLeadCandidate(BaseModel):
 
 
 class DiscoverySearchRequest(BaseModel):
+    raw_query: str | None = None
     search_terms: list[str] = Field(min_length=1)
     location_query: str | None = None
     latitude: float | None = None

@@ -23,11 +23,11 @@ def test_tenant_foundation_tables_are_created(session_factory) -> None:
     }.issubset(table_names)
 
 
-def test_tenant_foundation_relationships_support_garin_style_configuration(db_session) -> None:
+def test_tenant_foundation_relationships_support_assignment_configuration(db_session) -> None:
     organization = Organization(
-        slug="garin",
-        name="Garin",
-        display_name="Garin",
+        slug="tenant-a",
+        name="Tenant A",
+        display_name="Tenant A",
         branding_json={"accent": "lavender"},
         terminology_json={"lead": "cliente potencial"},
     )
@@ -67,7 +67,7 @@ def test_tenant_foundation_relationships_support_garin_style_configuration(db_se
         market_segment=segment,
         market_subsegment=subsegment,
         sales_rep=sales_rep,
-        conditions_json={"source": "garin_seed"},
+        conditions_json={"source": "default_assignment_bootstrap"},
     )
 
     db_session.add(organization)

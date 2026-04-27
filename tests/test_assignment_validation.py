@@ -6,8 +6,8 @@ from pathlib import Path
 
 from app.enums import LeadSourceType, LeadStatus
 from app.models.lead import Lead
-from app.services.garin_bootstrap import bootstrap_garin_configuration
-from app.services.lead_assignment_validation import GarinAssignmentValidationService
+from app.services.default_assignment_bootstrap import bootstrap_default_assignment_configuration
+from app.services.lead_assignment_validation import AssignmentValidationService
 from app.services.normalization import normalize_business_name
 
 
@@ -35,8 +35,8 @@ def _lead(
 
 
 def test_validation_defaults_to_org_that_owns_current_leads_and_writes_artifacts(db_session) -> None:
-    bootstrap_garin_configuration(db_session, organization_slug="garin")
-    default_result = bootstrap_garin_configuration(db_session)
+    bootstrap_default_assignment_configuration(db_session, organization_slug="tenant-a")
+    default_result = bootstrap_default_assignment_configuration(db_session)
     lead = _lead(
         "Construtora Campinas",
         organization_id=default_result.organization_id,
@@ -46,9 +46,9 @@ def test_validation_defaults_to_org_that_owns_current_leads_and_writes_artifacts
     db_session.add(lead)
     db_session.flush()
 
-    service = GarinAssignmentValidationService(db_session)
+    service = AssignmentValidationService(db_session)
     report = service.build_report(dry_run=True)
-    output_dir = Path(".pytest_cache") / "garin_assignment_validation_test"
+    output_dir = Path(".pytest_cache") / "assignment_validation_test"
     if output_dir.exists():
         shutil.rmtree(output_dir, ignore_errors=True)
     artifacts = service.write_artifacts(report, output_dir)
@@ -58,7 +58,7 @@ def test_validation_defaults_to_org_that_owns_current_leads_and_writes_artifacts
     assert report.organization_source == "lead_owner_default_plus_legacy_null"
     assert report.processed == 1
     assert report.assigned_count == 1
-    assert report.counts_by_rep == {"Willian": 1}
+    assert report.counts_by_rep == {"Construction Desk A": 1}
     assert report.counts_by_region == {"Campinas": 1}
     assert report.counts_by_segment == {"Construção Civil": 1}
     assert report.counts_by_subsegment == {"construtoras": 1}
@@ -70,7 +70,7 @@ def test_validation_defaults_to_org_that_owns_current_leads_and_writes_artifacts
 
 
 def test_validation_reports_assignment_counts_by_rep_region_and_segment(db_session) -> None:
-    result = bootstrap_garin_configuration(db_session)
+    result = bootstrap_default_assignment_configuration(db_session)
     leads = [
         _lead(
             "Construtora Campinas",
@@ -94,18 +94,22 @@ def test_validation_reports_assignment_counts_by_rep_region_and_segment(db_sessi
     db_session.add_all(leads)
     db_session.flush()
 
-    report = GarinAssignmentValidationService(db_session).build_report(dry_run=True)
+    report = AssignmentValidationService(db_session).build_report(dry_run=True)
 
     assert report.processed == 3
     assert report.assigned_count == 3
     assert report.unassigned_count == 0
-    assert report.counts_by_rep == {"Sueli": 1, "Thayná": 1, "Willian": 1}
+    assert report.counts_by_rep == {
+        "Commercial Desk B": 1,
+        "Construction Desk A": 1,
+        "Industry Desk": 1,
+    }
     assert report.counts_by_region == {"Bauru": 2, "Campinas": 1}
     assert report.counts_by_segment == {"Construção Civil": 1, "Indústria": 1, "Varejo": 1}
 
 
 def test_validation_reports_unassigned_reason_buckets(db_session) -> None:
-    result = bootstrap_garin_configuration(db_session)
+    result = bootstrap_default_assignment_configuration(db_session)
     leads = [
         _lead(
             "Casa de Tintas São Paulo",
@@ -129,7 +133,7 @@ def test_validation_reports_unassigned_reason_buckets(db_session) -> None:
     db_session.add_all(leads)
     db_session.flush()
 
-    report = GarinAssignmentValidationService(db_session).build_report(dry_run=True)
+    report = AssignmentValidationService(db_session).build_report(dry_run=True)
 
     assert report.assigned_count == 0
     assert report.unassigned_reasons == {
@@ -140,7 +144,7 @@ def test_validation_reports_unassigned_reason_buckets(db_session) -> None:
 
 
 def test_validation_marks_sao_jose_do_rio_preto_commercial_gap_as_expected(db_session) -> None:
-    result = bootstrap_garin_configuration(db_session)
+    result = bootstrap_default_assignment_configuration(db_session)
     lead = _lead(
         "Ferragens Rio Preto",
         organization_id=result.organization_id,
@@ -150,7 +154,7 @@ def test_validation_marks_sao_jose_do_rio_preto_commercial_gap_as_expected(db_se
     db_session.add(lead)
     db_session.flush()
 
-    report = GarinAssignmentValidationService(db_session).build_report(dry_run=True)
+    report = AssignmentValidationService(db_session).build_report(dry_run=True)
 
     assert report.assigned_count == 0
     assert report.expected_sjrp_gap_count == 1
@@ -159,7 +163,7 @@ def test_validation_marks_sao_jose_do_rio_preto_commercial_gap_as_expected(db_se
 
 
 def test_validation_reports_suspicious_broad_subsegment_matches(db_session) -> None:
-    result = bootstrap_garin_configuration(db_session)
+    result = bootstrap_default_assignment_configuration(db_session)
     lead = _lead(
         "Marketplace Obra",
         organization_id=result.organization_id,
@@ -169,7 +173,7 @@ def test_validation_reports_suspicious_broad_subsegment_matches(db_session) -> N
     db_session.add(lead)
     db_session.flush()
 
-    report = GarinAssignmentValidationService(db_session).build_report(dry_run=True)
+    report = AssignmentValidationService(db_session).build_report(dry_run=True)
     suspicious_rows = [row for row in report.rows if row.suspicious_reasons]
 
     assert report.assigned_count == 1
@@ -179,7 +183,7 @@ def test_validation_reports_suspicious_broad_subsegment_matches(db_session) -> N
 
 
 def test_validation_dry_run_does_not_mutate_leads(db_session) -> None:
-    result = bootstrap_garin_configuration(db_session)
+    result = bootstrap_default_assignment_configuration(db_session)
     lead = _lead(
         "Construtora Campinas",
         organization_id=result.organization_id,
@@ -189,7 +193,7 @@ def test_validation_dry_run_does_not_mutate_leads(db_session) -> None:
     db_session.add(lead)
     db_session.flush()
 
-    report = GarinAssignmentValidationService(db_session).build_report(dry_run=True)
+    report = AssignmentValidationService(db_session).build_report(dry_run=True)
     db_session.refresh(lead)
 
     assert report.assigned_count == 1

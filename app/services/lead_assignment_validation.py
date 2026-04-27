@@ -23,7 +23,7 @@ from app.repositories.organization_repository import (
     OrganizationRepository,
     get_or_create_default_organization,
 )
-from app.services.garin_bootstrap import bootstrap_garin_configuration
+from app.services.default_assignment_bootstrap import bootstrap_default_assignment_configuration
 from app.services.lead_assignment import LeadAssignmentService, LeadAssignmentSuggestion
 from app.services.normalization import normalize_text
 
@@ -139,7 +139,7 @@ class ValidationReport:
         }
 
 
-class GarinAssignmentValidationService:
+class AssignmentValidationService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
@@ -214,7 +214,10 @@ class GarinAssignmentValidationService:
         scope = self.resolve_organization_scope(organization_slug)
         bootstrap_warnings: list[str] = []
         if bootstrap:
-            bootstrap_result = bootstrap_garin_configuration(self.db, organization_slug=scope.organization.slug)
+            bootstrap_result = bootstrap_default_assignment_configuration(
+                self.db,
+                organization_slug=scope.organization.slug,
+            )
             self.db.commit()
             bootstrap_warnings = list(bootstrap_result.warnings)
             scope = self.resolve_organization_scope(scope.organization.slug)
@@ -282,13 +285,13 @@ class GarinAssignmentValidationService:
     def write_artifacts(self, report: ValidationReport, output_dir: Path) -> ValidationArtifacts:
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        prefix = output_dir / f"garin_assignment_validation_{timestamp}"
+        prefix = output_dir / f"assignment_validation_{timestamp}"
 
         artifacts = ValidationArtifacts(
             summary_json=prefix.with_suffix(".json"),
-            assigned_csv=output_dir / f"garin_assignment_assigned_{timestamp}.csv",
-            unassigned_csv=output_dir / f"garin_assignment_unassigned_{timestamp}.csv",
-            suspicious_matches_csv=output_dir / f"garin_assignment_suspicious_matches_{timestamp}.csv",
+            assigned_csv=output_dir / f"assignment_assigned_{timestamp}.csv",
+            unassigned_csv=output_dir / f"assignment_unassigned_{timestamp}.csv",
+            suspicious_matches_csv=output_dir / f"assignment_suspicious_matches_{timestamp}.csv",
         )
         report.artifacts = artifacts
 
@@ -315,7 +318,7 @@ class GarinAssignmentValidationService:
         top_reps = self._format_counter(report.counts_by_rep, empty="none")
         top_regions = self._format_counter(report.counts_by_region, empty="none")
         lines = [
-            f"Garin assignment validation ({report.mode})",
+            f"Assignment validation ({report.mode})",
             f"Organization: {report.organization_slug} (id={report.organization_id}, source={report.organization_source})",
             (
                 f"Leads: {report.processed} | assigned: {report.assigned_count} "

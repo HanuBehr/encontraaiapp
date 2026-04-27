@@ -10,7 +10,7 @@ def _streamlit_source() -> str:
     return STREAMLIT_APP.read_text(encoding="utf-8")
 
 
-def test_streamlit_discovery_defaults_are_garin_facing() -> None:
+def test_streamlit_discovery_defaults_are_encontra_facing() -> None:
     source = _streamlit_source()
 
     for legacy_term in [
@@ -24,21 +24,21 @@ def test_streamlit_discovery_defaults_are_garin_facing() -> None:
     ]:
         assert legacy_term not in source
 
-    for garin_term in [
+    for target_term in [
         "materiais de construção",
         "loja de tintas",
         "indústria química",
         "marketplace / loja virtual",
     ]:
-        assert garin_term in source
+        assert target_term in source
 
 
-def test_streamlit_copy_uses_garin_workspace_language() -> None:
+def test_streamlit_copy_uses_encontra_workspace_language() -> None:
     source = _streamlit_source()
 
     assert "LeadFlow Workspace" not in source
-    assert "Garin prospecting workspace" in source
-    assert "Suggested Garin segments and subsegments" in source
+    assert "Encontra.ai prospecting workspace" in source
+    assert "Suggested target segments and subsegments" in source
     assert "Provider category" in source
 
 

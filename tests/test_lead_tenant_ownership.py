@@ -56,7 +56,7 @@ def _candidate(name: str, *, google_place_id: str, domain: str = "shared.example
 
 
 def test_google_place_id_is_unique_per_organization(db_session) -> None:
-    org_a = _organization("garin")
+    org_a = _organization("tenant-a")
     org_b = _organization("client-b")
     db_session.add_all([org_a, org_b])
     db_session.flush()

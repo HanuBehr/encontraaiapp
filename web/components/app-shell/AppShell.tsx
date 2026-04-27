@@ -15,8 +15,8 @@ export function AppShell({ children }: AppShellProps) {
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto flex min-h-16 w-full max-w-[1500px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div>
-            <p className="text-xs font-semibold uppercase text-cyan-700">Garin</p>
-            <h1 className="text-lg font-semibold text-neutral-950">Lead Operations</h1>
+            <p className="text-xs font-semibold uppercase text-cyan-700">Encontra.ai</p>
+            <h1 className="text-lg font-semibold text-neutral-950">Lead Workspace</h1>
           </div>
           <nav aria-label="Primary navigation" className="flex items-center gap-2">
             {navItems.map((item) => {

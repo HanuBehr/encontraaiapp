@@ -24,11 +24,16 @@ import type {
   ExclusionRuleType,
   LeadBlockedFilter,
 } from "@/lib/api/types";
+import {
+  parseNaturalLanguageDiscoveryQuery,
+  type ParsedDiscoveryQuery,
+} from "@/lib/discovery/query-parser";
 
 type LocationMode = "area" | "coordinates";
 type WebsiteFilter = "all" | "has_website" | "no_website";
 
 type DiscoveryFormState = {
+  naturalLanguageQuery: string;
   locationMode: LocationMode;
   city: string;
   neighborhood: string;
@@ -51,6 +56,7 @@ type BlockDraft = {
 };
 
 const defaultForm: DiscoveryFormState = {
+  naturalLanguageQuery: "",
   locationMode: "area",
   city: "",
   neighborhood: "",
@@ -60,21 +66,21 @@ const defaultForm: DiscoveryFormState = {
   longitude: "",
   radiusM: 3000,
   maxResultsPerTerm: 10,
-  selectedTerms: ["materiais de construcao", "loja de tintas"],
+  selectedTerms: [],
   customTerms: "",
 };
 
 const searchTermOptions = [
-  "materiais de construcao",
-  "loja de tintas",
-  "ferragistas",
-  "construtoras",
-  "incorporadoras",
-  "marmorarias",
-  "vidracarias",
-  "madeireiras",
-  "loja de material eletrico",
-  "equipamentos de construcao",
+  "dentistas",
+  "restaurantes",
+  "clínicas de estética",
+  "academias",
+  "lojas de móveis",
+  "oficinas mecânicas",
+  "fornecedores de embalagens",
+  "pet shops",
+  "escritórios de contabilidade",
+  "materiais de construção",
 ];
 
 const blockedOptions: Array<{ value: LeadBlockedFilter; label: string }> = [
@@ -259,6 +265,10 @@ export function DiscoveryWorkspace() {
   const websiteReadyCount = preview?.items.filter((item) => hasWebsiteForCandidate(item.candidate)).length ?? 0;
   const recoverySelectionMissingLookupCount =
     selectedNoWebsiteClientResultIds.length - selectedRecoverableClientResultIds.length;
+  const parsedNaturalLanguageQuery = useMemo(
+    () => parseNaturalLanguageDiscoveryQuery(form.naturalLanguageQuery),
+    [form.naturalLanguageQuery],
+  );
 
   function updateForm<Key extends keyof DiscoveryFormState>(key: Key, value: DiscoveryFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -278,7 +288,7 @@ export function DiscoveryWorkspace() {
     setFormError(null);
     setActionMessage(null);
 
-    const result = buildDiscoveryRequest(form);
+    const result = buildDiscoveryRequest(form, parsedNaturalLanguageQuery);
     if ("error" in result) {
       setFormError(result.error);
       return;
@@ -427,7 +437,7 @@ export function DiscoveryWorkspace() {
           <p className="text-xs font-semibold uppercase text-cyan-700">Discovery Workspace</p>
           <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Discovery</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Search public businesses, suppress blocked brands, and save the useful results into Garin.
+            Search public businesses, suppress blocked brands, and save the useful results into your workspace.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center sm:min-w-[480px] sm:grid-cols-4">
@@ -457,6 +467,34 @@ export function DiscoveryWorkspace() {
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-4">
+            <label className="block">
+              <span className="text-xs font-medium text-neutral-600">Search query</span>
+              <input
+                value={form.naturalLanguageQuery}
+                onChange={(event) => updateForm("naturalLanguageQuery", event.target.value)}
+                placeholder="dentistas em São Paulo"
+                className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                Use a natural-language query like &quot;restaurantes em Campinas&quot; or leave it blank and use the
+                advanced fields below.
+              </p>
+            </label>
+
+            {form.naturalLanguageQuery.trim() ? (
+              <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm text-cyan-950">
+                <p className="text-xs font-semibold uppercase text-cyan-800">Parsed query</p>
+                <p className="mt-1">
+                  <span className="font-medium">Category:</span>{" "}
+                  {parsedNaturalLanguageQuery?.category ?? "Could not parse"}
+                </p>
+                <p className="mt-1">
+                  <span className="font-medium">Location:</span>{" "}
+                  {parsedNaturalLanguageQuery?.locationQuery ?? "Add a city in the query or below"}
+                </p>
+              </div>
+            ) : null}
+
             <div>
               <span className="text-xs font-medium text-neutral-600">Location mode</span>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -538,7 +576,10 @@ export function DiscoveryWorkspace() {
           </div>
 
           <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
-            <p className="text-sm font-semibold text-neutral-950">Target terms</p>
+            <p className="text-sm font-semibold text-neutral-950">Extra search terms</p>
+            <p className="mt-1 text-xs text-neutral-500">
+              Optional. Add more niche terms if you want the same city search to fan out across multiple categories.
+            </p>
             <div className="mt-3 grid gap-2">
               {searchTermOptions.map((term) => (
                 <label key={term} className="flex items-center gap-2 text-sm text-neutral-700">
@@ -1161,10 +1202,14 @@ function OutcomeBadge({
 
 function buildDiscoveryRequest(
   form: DiscoveryFormState,
+  parsedQuery: ParsedDiscoveryQuery | null,
 ): { request: DiscoverySearchRequest } | { error: string } {
-  const searchTerms = parseDiscoveryTerms(form.selectedTerms, form.customTerms);
+  const searchTerms = mergeDiscoveryTerms(
+    parsedQuery?.searchTerms ?? [],
+    parseDiscoveryTerms(form.selectedTerms, form.customTerms),
+  );
   if (searchTerms.length === 0) {
-    return { error: "Choose at least one target term before running discovery." };
+    return { error: "Enter a query like 'dentistas em São Paulo' or add at least one search term." };
   }
 
   const radiusM = clampNumber(form.radiusM, 100, 50000);
@@ -1172,16 +1217,17 @@ function buildDiscoveryRequest(
 
   if (form.locationMode === "area") {
     const city = form.city.trim();
-    if (!city) {
-      return { error: "Enter a city before running discovery." };
+    const neighborhood = form.neighborhood.trim();
+    const postalCode = form.postalCode.trim();
+    const baseLocation = city || parsedQuery?.locationQuery || "";
+    if (!baseLocation) {
+      return { error: "Enter a city or use a query like 'dentistas em São Paulo' before running discovery." };
     }
     return {
       request: {
+        raw_query: parsedQuery?.rawQuery ?? null,
         search_terms: searchTerms,
-        location_query: [form.neighborhood, city, form.postalCode]
-          .map((part) => part.trim())
-          .filter(Boolean)
-          .join(", "),
+        location_query: [neighborhood, baseLocation, postalCode].filter(Boolean).join(", "),
         radius_m: radiusM,
         max_results_per_term: maxResultsPerTerm,
       },
@@ -1196,8 +1242,9 @@ function buildDiscoveryRequest(
 
   return {
     request: {
+      raw_query: parsedQuery?.rawQuery ?? null,
       search_terms: searchTerms,
-      location_query: form.locationLabel.trim() || null,
+      location_query: form.locationLabel.trim() || parsedQuery?.locationQuery || null,
       latitude,
       longitude,
       radius_m: radiusM,
@@ -1210,7 +1257,21 @@ function parseDiscoveryTerms(selectedTerms: string[], customTerms: string) {
   const terms = [...selectedTerms, ...customTerms.split(/[,\n]/)];
   const seen = new Set<string>();
   return terms
-    .map((term) => term.trim())
+    .map(normalizeFreeText)
+    .filter((term) => {
+      if (!term || seen.has(term.toLowerCase())) {
+        return false;
+      }
+      seen.add(term.toLowerCase());
+      return true;
+    });
+}
+
+function mergeDiscoveryTerms(...groups: string[][]) {
+  const seen = new Set<string>();
+  return groups
+    .flat()
+    .map(normalizeFreeText)
     .filter((term) => {
       if (!term || seen.has(term.toLowerCase())) {
         return false;
@@ -1341,6 +1402,10 @@ function firstExtractedContactUrl(item: DiscoveryPreviewItem, contactType: strin
 function parseCoordinate(value: string) {
   const parsed = Number(value.trim().replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeFreeText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function clampNumber(value: number, min: number, max: number) {

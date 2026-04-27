@@ -49,7 +49,7 @@ from app.services.outreach import OutreachService
 
 settings = get_settings()
 
-st.set_page_config(page_title="Encontra.ai | Garin", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Encontra.ai | Workspace", layout="wide", initial_sidebar_state="expanded")
 
 LEAD_PAGE_SIZE = 300
 SORT_OPTIONS = [
@@ -1331,7 +1331,7 @@ def _render_overview_hero(*, next_step: str, next_copy: str) -> None:
         f"""
         <div class="overview-hero">
             <div>
-                <div class="page-hero__eyebrow">Garin lead operations</div>
+                <div class="page-hero__eyebrow">Encontra.ai lead operations</div>
                 <div class="overview-hero__title">Review, classify, and move prospects with clarity.</div>
                 <div class="overview-hero__summary">
                     Run discovery for target segments, review assignments, work one business at a time, and export without losing context.
@@ -1380,7 +1380,7 @@ def _render_sidebar_brand() -> None:
         """
         <div class="sidebar-brand">
             <div class="sidebar-brand__badge">Encontra.ai</div>
-            <div class="sidebar-brand__title">Garin Prospecting</div>
+            <div class="sidebar-brand__title">Encontra.ai Prospecting</div>
             <div class="sidebar-brand__copy">
                 Discovery, assignment review, and export in one shared workspace.
             </div>
@@ -1395,12 +1395,12 @@ def _render_app_header(page: str) -> None:
         f"""
         <div class="app-header">
             <div class="app-header__left">
-                <div class="app-header__eyebrow">Garin prospecting workspace</div>
+                <div class="app-header__eyebrow">Encontra.ai prospecting workspace</div>
                 <div class="app-header__title">{escape(page)}</div>
             </div>
             <div class="app-header__actions">
                 <div class="app-header__pill">{escape(_humanize(settings.app_env))}</div>
-                <div class="app-header__pill app-header__pill--accent">Garin workspace</div>
+                <div class="app-header__pill app-header__pill--accent">Encontra.ai workspace</div>
             </div>
         </div>
         """,
@@ -2523,9 +2523,9 @@ _render_app_header(page)
 if page == "Discovery":
     _render_flash("Discovery")
     _render_page_intro(
-        "Garin prospecting",
+        "Encontra.ai prospecting",
         "Discovery",
-        "Search São Paulo territories by Garin target segments, preview businesses, and save the right ones into your working lead queue.",
+        "Search São Paulo territories by target segments, preview businesses, and save the right ones into your working lead queue.",
     )
     _render_badges(
         [
@@ -2545,7 +2545,7 @@ if page == "Discovery":
     with discovery_form_col:
         with st.container(border=True):
             st.markdown("### Discovery setup")
-            st.caption("Define the territory, Garin segment terms, and preview limits before running a read-only discovery pass.")
+            st.caption("Define the territory, target segment terms, and preview limits before running a read-only discovery pass.")
             with st.form("discovery_form"):
                 location_mode = st.radio(
                     "Location mode",
@@ -2613,9 +2613,9 @@ if page == "Discovery":
                         key="discovery_max_results_per_term",
                     )
 
-                st.markdown("### 2. Garin target terms")
+                st.markdown("### 2. Target terms")
                 st.multiselect(
-                    "Suggested Garin segments and subsegments",
+                    "Suggested target segments and subsegments",
                     options=DISCOVERY_SEARCH_TERM_OPTIONS,
                     key="discovery_search_terms",
                     placeholder="Choose one or more target segments or subsegments",
@@ -2650,7 +2650,7 @@ if page == "Discovery":
         _render_step_card(
             "How discovery works",
             [
-                "Search a target territory and Garin segment terms.",
+                "Search a target territory and segment terms.",
                 "Preview the matched public businesses.",
                 "Save the right businesses as leads.",
                 "Continue in the Leads queue for review.",
@@ -2763,7 +2763,7 @@ if page == "Discovery":
                 )
             else:
                 _render_notice(
-                    "No businesses were found for the current search. Try different Garin terms or a wider radius.",
+                    "No businesses were found for the current search. Try different target terms or a wider radius.",
                     tone="warn",
                     title="No matches found",
                 )

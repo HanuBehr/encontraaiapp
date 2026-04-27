@@ -13,7 +13,7 @@ from app.services.normalization import normalize_business_name
 
 
 def _organization() -> Organization:
-    return Organization(slug="garin", name="Garin", display_name="Garin")
+    return Organization(slug="tenant-a", name="Tenant A", display_name="Tenant A")
 
 
 def _segment(organization: Organization, key: str, name: str) -> MarketSegment:

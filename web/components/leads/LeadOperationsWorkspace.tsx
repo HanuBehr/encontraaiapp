@@ -124,7 +124,9 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         <div>
           <p className="text-xs font-semibold uppercase text-cyan-700">Lead Operations Workspace</p>
           <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Leads</h1>
-          <p className="mt-1 text-sm text-neutral-500">Review, filter, select, and inspect companies already in Garin.</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            Review, filter, select, and inspect companies already in your workspace.
+          </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[360px]">
           <Metric label="Current set" value={total.toLocaleString()} />

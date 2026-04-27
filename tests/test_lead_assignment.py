@@ -39,7 +39,7 @@ def _lead(
 
 
 def _assignment_fixture(db_session):
-    organization = _organization("garin")
+    organization = _organization("tenant-a")
     other_organization = _organization("other-client")
     sales_rep = SalesRep(organization=organization, name="Ana Comercial", email="ana@example.com")
     inactive_rep = SalesRep(organization=organization, name="Inativo", is_active=False)

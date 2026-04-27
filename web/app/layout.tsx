@@ -5,8 +5,8 @@ import { Providers } from "@/app/providers";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "Garin Lead Operations",
-  description: "Lead operations workspace for Garin operators.",
+  title: "Encontra.ai Lead Workspace",
+  description: "Lead discovery and operations workspace for Encontra.ai teams.",
 };
 
 type RootLayoutProps = {

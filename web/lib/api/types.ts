@@ -408,6 +408,7 @@ export type DiscoveryLeadCandidate = {
 };
 
 export type DiscoverySearchRequest = {
+  raw_query?: string | null;
   search_terms: string[];
   location_query?: string | null;
   latitude?: number | null;

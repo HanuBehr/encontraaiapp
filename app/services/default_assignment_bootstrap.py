@@ -17,18 +17,18 @@ from app.repositories.organization_repository import (
 )
 
 
-GARIN_SALES_REP_NAMES = (
-    "Willian",
-    "Gleicy",
-    "Sueli",
-    "Marta",
-    "Thayná",
-    "Cintia",
-    "Jackson",
-    "Vendas2",
+DEFAULT_SALES_REP_NAMES = (
+    "Construction Desk A",
+    "Construction Desk B",
+    "Industry Desk",
+    "Commercial Desk A",
+    "Commercial Desk B",
+    "Commercial Desk C",
+    "Commercial Desk D",
+    "Commercial Desk E",
 )
 
-GARIN_REGION_NAMES = (
+DEFAULT_REGION_NAMES = (
     "São Paulo – Zona Norte",
     "São Paulo – Zona Leste",
     "São Paulo – Zona Sul",
@@ -49,7 +49,7 @@ GARIN_REGION_NAMES = (
 )
 
 CONSTRUCTION_SPLIT = {
-    "Willian": (
+    "Construction Desk A": (
         "São Paulo – Zona Norte",
         "São Paulo – Zona Leste",
         "Litoral Sul Paulista",
@@ -60,7 +60,7 @@ CONSTRUCTION_SPLIT = {
         "Piracicaba",
         "Presidente Prudente",
     ),
-    "Gleicy": (
+    "Construction Desk B": (
         "São Paulo – Zona Sul",
         "São Paulo – Zona Oeste",
         "Macro Metropolitana Paulista",
@@ -73,28 +73,28 @@ CONSTRUCTION_SPLIT = {
 }
 
 COMMERCIAL_SPLIT = {
-    "Marta": (
+    "Commercial Desk A": (
         "São Paulo – Zona Norte",
         "Vale do Paraíba Paulista",
         "Ribeirão Preto",
         "Piracicaba",
     ),
-    "Thayná": (
+    "Commercial Desk B": (
         "São Paulo – Zona Leste",
         "Araraquara",
         "Bauru",
     ),
-    "Cintia": (
+    "Commercial Desk C": (
         "São Paulo – Zona Sul",
         "Macro Metropolitana Paulista",
         "Litoral Sul Paulista",
     ),
-    "Jackson": (
+    "Commercial Desk D": (
         "São Paulo – Zona Oeste",
         "Presidente Prudente",
         "Assis",
     ),
-    "Vendas2": (
+    "Commercial Desk E": (
         "Campinas",
         "Araçatuba",
         "Marília",
@@ -130,7 +130,7 @@ class SubsegmentSeed:
 
 
 @dataclass(frozen=True, slots=True)
-class GarinBootstrapResult:
+class DefaultAssignmentBootstrapResult:
     organization_id: int
     organization_slug: str
     sales_reps: int
@@ -538,11 +538,15 @@ SUBSEGMENT_SEEDS = (
 )
 
 
-def bootstrap_garin_configuration(db: Session, *, organization_slug: str | None = None) -> GarinBootstrapResult:
+def bootstrap_default_assignment_configuration(
+    db: Session,
+    *,
+    organization_slug: str | None = None,
+) -> DefaultAssignmentBootstrapResult:
     organization = _resolve_organization(db, organization_slug=organization_slug)
     reps = {
         name: _upsert_sales_rep(db, organization=organization, name=name)
-        for name in GARIN_SALES_REP_NAMES
+        for name in DEFAULT_SALES_REP_NAMES
     }
     regions = {
         seed.name: _upsert_sales_region(db, organization=organization, seed=seed)
@@ -570,7 +574,7 @@ def bootstrap_garin_configuration(db: Session, *, organization_slug: str | None 
     )
     db.flush()
 
-    return GarinBootstrapResult(
+    return DefaultAssignmentBootstrapResult(
         organization_id=organization.id,
         organization_slug=organization.slug,
         sales_reps=len(reps),
@@ -591,7 +595,7 @@ def _resolve_organization(db: Session, *, organization_slug: str | None) -> Orga
     if organization is not None:
         return organization
 
-    display_name = "Garin" if organization_slug == "garin" else organization_slug.replace("-", " ").title()
+    display_name = organization_slug.replace("-", " ").title()
     organization = Organization(slug=organization_slug, name=display_name, display_name=display_name)
     db.add(organization)
     db.flush()
@@ -599,7 +603,7 @@ def _resolve_organization(db: Session, *, organization_slug: str | None) -> Orga
 
 
 def _upsert_sales_rep(db: Session, *, organization: Organization, name: str) -> SalesRep:
-    external_ref = f"garin:{name.casefold()}"
+    external_ref = f"default-config:{name.casefold()}"
     rep = db.execute(
         select(SalesRep).where(
             SalesRep.organization_id == organization.id,
@@ -622,7 +626,7 @@ def _upsert_sales_rep(db: Session, *, organization: Organization, name: str) -> 
     rep.is_active = True
     rep.metadata_json = {
         **(rep.metadata_json or {}),
-        "source": "garin_bootstrap",
+        "source": "default_assignment_bootstrap",
     }
     return rep
 
@@ -654,7 +658,7 @@ def _upsert_sales_region(db: Session, *, organization: Organization, seed: Regio
     region.postal_codes_json = list(seed.postal_code_prefixes)
     region.metadata_json = {
         **seed.metadata,
-        "source": "garin_bootstrap",
+        "source": "default_assignment_bootstrap",
     }
     region.is_active = True
     return region
@@ -736,9 +740,9 @@ def _upsert_assignment_rules(
         _upsert_assignment_rule(
             db,
             organization=organization,
-            name="Indústria - Sueli - Todos os territórios",
+            name="Indústria - Industry Desk - Todos os territórios",
             priority=200,
-            sales_rep=reps["Sueli"],
+            sales_rep=reps["Industry Desk"],
             sales_region=None,
             market_segment=segments["industria"],
         )
@@ -792,7 +796,7 @@ def _upsert_assignment_rule(
     rule.market_subsegment = None
     rule.conditions_json = {
         "schema_version": 1,
-        "source": "garin_bootstrap",
+        "source": "default_assignment_bootstrap",
         "region": sales_region.name if sales_region else None,
         "segment_key": market_segment.key,
     }
@@ -812,7 +816,7 @@ def _bootstrap_warnings() -> list[str]:
     }
     missing_commercial_regions = [
         region_name
-        for region_name in GARIN_REGION_NAMES
+        for region_name in DEFAULT_REGION_NAMES
         if region_name not in commercial_regions
     ]
     if not missing_commercial_regions:

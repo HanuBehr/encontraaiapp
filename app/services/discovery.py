@@ -620,7 +620,7 @@ class DiscoveryService:
             batch_type=ImportBatchType.DISCOVERY,
             status=ImportBatchStatus.RUNNING,
             source_provider=preview.provider,
-            source_query=" | ".join(request.search_terms),
+            source_query=request.raw_query or " | ".join(request.search_terms),
             location_label=preview.resolved_location.label,
             input_payload=request.model_dump(mode="json"),
             started_at=utcnow(),
@@ -766,7 +766,7 @@ class DiscoveryService:
             batch_type=ImportBatchType.DISCOVERY,
             status=ImportBatchStatus.RUNNING,
             source_provider=annotated_preview.provider,
-            source_query=" | ".join(request.search_terms),
+            source_query=request.raw_query or " | ".join(request.search_terms),
             location_label=annotated_preview.resolved_location.label,
             input_payload={
                 **request.model_dump(mode="json"),

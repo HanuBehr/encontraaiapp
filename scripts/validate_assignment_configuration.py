@@ -10,11 +10,11 @@ if str(ROOT_DIR) not in sys.path:
 
 from app import models  # noqa: F401
 from app.db import SessionLocal, init_db
-from app.services.lead_assignment_validation import GarinAssignmentValidationService
+from app.services.lead_assignment_validation import AssignmentValidationService
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate Garin lead assignment/classification results.")
+    parser = argparse.ArgumentParser(description="Validate organization lead assignment/classification results.")
     parser.add_argument(
         "--organization-slug",
         default=None,
@@ -33,7 +33,7 @@ def main() -> None:
     parser.add_argument(
         "--bootstrap",
         action="store_true",
-        help="Idempotently seed Garin configuration before validating.",
+        help="Idempotently seed the default assignment configuration before validating.",
     )
     parser.add_argument(
         "--output-dir",
@@ -45,7 +45,7 @@ def main() -> None:
     init_db()
     db = SessionLocal()
     try:
-        service = GarinAssignmentValidationService(db)
+        service = AssignmentValidationService(db)
         report = service.build_report(
             organization_slug=args.organization_slug,
             dry_run=args.dry_run,

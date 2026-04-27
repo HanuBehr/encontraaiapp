@@ -229,7 +229,7 @@ class LeadQualityService:
             )
 
         sme_signal = self._first_match(text, SME_FIT_SIGNALS)
-        has_garin_classification = bool(lead.market_subsegment_id or lead.market_segment_id)
+        has_market_classification = bool(lead.market_subsegment_id or lead.market_segment_id)
         has_contact_or_location = bool(
             lead.email
             or lead.phone
@@ -241,16 +241,16 @@ class LeadQualityService:
         )
         known_trade_type = trade_type != TradeType.UNKNOWN
 
-        if has_garin_classification and sme_signal and has_contact_or_location:
+        if has_market_classification and sme_signal and has_contact_or_location:
             return (
                 CompanySizeFit.IDEAL_SME,
-                f"Matched Garin classification and SME signal '{sme_signal}' with no large-chain signal.",
+                f"Matched market classification and SME signal '{sme_signal}' with no large-chain signal.",
                 self._fit_metadata(lead, matched_signal=sme_signal, signal_type="sme_positive"),
             )
-        if has_garin_classification or known_trade_type:
+        if has_market_classification or known_trade_type:
             reason = (
-                "Matched Garin classification with no large-chain signal, but SME evidence is still limited."
-                if has_garin_classification
+                "Matched market classification with no large-chain signal, but SME evidence is still limited."
+                if has_market_classification
                 else "Matched a practical trade type with no large-chain signal, but SME evidence is still limited."
             )
             return (

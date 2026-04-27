@@ -10,11 +10,11 @@ if str(ROOT_DIR) not in sys.path:
 
 from app import models  # noqa: F401
 from app.db import init_db, session_scope
-from app.services.garin_bootstrap import bootstrap_garin_configuration
+from app.services.default_assignment_bootstrap import bootstrap_default_assignment_configuration
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed the real Garin tenant assignment configuration.")
+    parser = argparse.ArgumentParser(description="Seed the default assignment configuration for an organization.")
     parser.add_argument(
         "--organization-slug",
         default=None,
@@ -24,9 +24,9 @@ def main() -> None:
 
     init_db()
     with session_scope() as db:
-        result = bootstrap_garin_configuration(db, organization_slug=args.organization_slug)
+        result = bootstrap_default_assignment_configuration(db, organization_slug=args.organization_slug)
 
-    print(f"Garin bootstrap complete for organization '{result.organization_slug}' (id={result.organization_id}).")
+    print(f"Default assignment bootstrap complete for organization '{result.organization_slug}' (id={result.organization_id}).")
     print(f"Sales reps: {result.sales_reps}")
     print(f"Sales regions: {result.sales_regions}")
     print(f"Market segments: {result.market_segments}")
