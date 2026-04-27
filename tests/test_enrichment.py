@@ -51,6 +51,16 @@ class FakeHTTPSession:
         return self.responses[url]
 
 
+class RecordingHTTPSession(FakeHTTPSession):
+    def __init__(self, responses: dict[str, FakeResponse], *, default_status_code: int | None = 404) -> None:
+        super().__init__(responses, default_status_code=default_status_code)
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    def get(self, url: str, **kwargs) -> FakeResponse:
+        self.calls.append((url, kwargs))
+        return super().get(url, **kwargs)
+
+
 def _sqlite_lock_error() -> OperationalError:
     return OperationalError(
         "INSERT INTO lead_enrichment_records (...) VALUES (...)",
@@ -209,6 +219,69 @@ def test_enrichment_service_preview_candidate_enriches_without_persistence(db_se
     assert db_session.query(LeadEnrichmentRecord).count() == 0
     assert db_session.query(LeadContact).count() == 0
     assert db_session.query(ActivityLog).count() == 0
+
+
+def test_enrichment_service_preview_candidate_uses_lighter_crawl_profile(db_session) -> None:
+    candidate = DiscoveryLeadCandidate(
+        business_name="Preview Rapido",
+        normalized_business_name=normalize_business_name("Preview Rapido") or "preview rapido",
+        category="industria calcadista",
+        city="Sao Paulo",
+        state="SP",
+        website="preview-fast.example.com",
+        source_provider="google_places",
+        source_url="https://maps.google.com/?q=Preview+Rapido",
+        google_maps_url="https://maps.google.com/?q=Preview+Rapido",
+        google_place_id="preview-rapido",
+        lead_source_type=LeadSourceType.GOOGLE_PLACES,
+    )
+
+    fake_http = RecordingHTTPSession(
+        {
+            "https://preview-fast.example.com/robots.txt": FakeResponse(
+                url="https://preview-fast.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://preview-fast.example.com": FakeResponse(
+                url="https://preview-fast.example.com",
+                text="""
+                <html><body>
+                <a href="/contato">Contato</a>
+                </body></html>
+                """,
+            ),
+            "https://preview-fast.example.com/": FakeResponse(
+                url="https://preview-fast.example.com/",
+                text="""
+                <html><body>
+                <a href="/contato">Contato</a>
+                </body></html>
+                """,
+            ),
+            "https://preview-fast.example.com/contato": FakeResponse(
+                url="https://preview-fast.example.com/contato",
+                text='<html><body><a href="mailto:contato@preview-fast.example.com">Email</a></body></html>',
+            ),
+        }
+    )
+
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", EXPORT_DIR="./data/exports", GOOGLE_API_KEY="")
+    service = EnrichmentService(db_session, settings, http_session=fake_http)
+
+    enriched_candidate, metadata = service.enrich_preview_candidate(candidate)
+
+    assert enriched_candidate.email == "contato@preview-fast.example.com"
+    assert metadata.email_found is True
+    requested_urls = [url for url, _ in fake_http.calls]
+    assert "https://preview-fast.example.com/atendimento" not in requested_urls
+    assert "https://preview-fast.example.com/nossa-historia" not in requested_urls
+
+    robots_call = next(kwargs for url, kwargs in fake_http.calls if url.endswith("/robots.txt"))
+    page_calls = [kwargs for url, kwargs in fake_http.calls if not url.endswith("/robots.txt")]
+    assert robots_call["timeout"] == service.PREVIEW_ROBOTS_TIMEOUT_SECONDS
+    assert page_calls
+    assert all(kwargs["timeout"] == service.PREVIEW_REQUEST_TIMEOUT_SECONDS for kwargs in page_calls)
 
 
 def test_enrichment_service_updates_lead_and_stores_history(db_session) -> None:

@@ -105,6 +105,14 @@ class PublicWebsiteCrawlResult:
     skipped_reason: str | None = None
 
 
+@dataclass(slots=True)
+class CrawlProfile:
+    page_paths: tuple[str, ...]
+    max_discovered_contact_pages: int
+    request_timeout_seconds: int
+    robots_timeout_seconds: int
+
+
 def _decode_cloudflare_email(encoded_value: str | None) -> str | None:
     if not encoded_value:
         return None
@@ -398,6 +406,21 @@ class EnrichmentService:
         "/nossa-historia",
     )
     MAX_DISCOVERED_CONTACT_PAGES = 4
+    REQUEST_TIMEOUT_SECONDS = 20
+    ROBOTS_TIMEOUT_SECONDS = 10
+    PREVIEW_PAGE_PATHS = (
+        "/",
+        "/contato",
+        "/contact",
+        "/contatos",
+        "/fale-conosco",
+        "/sac",
+        "/sobre",
+        "/about",
+    )
+    PREVIEW_MAX_DISCOVERED_CONTACT_PAGES = 2
+    PREVIEW_REQUEST_TIMEOUT_SECONDS = 6
+    PREVIEW_ROBOTS_TIMEOUT_SECONDS = 4
 
     def __init__(
         self,
@@ -590,7 +613,10 @@ class EnrichmentService:
         else:
             updated_candidate.website = None
 
-        crawl_result = self._crawl_public_website(updated_candidate.website)
+        crawl_result = self._crawl_public_website(
+            updated_candidate.website,
+            profile=self._preview_crawl_profile(),
+        )
         extracted_contacts: list[EnrichmentExtractedContact] = []
         for page_result in crawl_result.page_results:
             for evidence in page_result.evidences:
@@ -641,8 +667,17 @@ class EnrichmentService:
         )
         return updated_candidate, metadata
 
-    def _crawl_public_website(self, website_url: str | None) -> PublicWebsiteCrawlResult:
-        candidate_pages = self._build_candidate_urls_from_website(website_url)
+    def _crawl_public_website(
+        self,
+        website_url: str | None,
+        *,
+        profile: CrawlProfile | None = None,
+    ) -> PublicWebsiteCrawlResult:
+        crawl_profile = profile or self._default_crawl_profile()
+        candidate_pages = self._build_candidate_urls_from_website(
+            website_url,
+            page_paths=crawl_profile.page_paths,
+        )
         if not candidate_pages:
             return PublicWebsiteCrawlResult(
                 pages_attempted=0,
@@ -669,7 +704,7 @@ class EnrichmentService:
             page_index += 1
             pages_attempted += 1
             page_type = self._classify_page(page_url, base_website_url)
-            robots_allowed = self._can_fetch(page_url)
+            robots_allowed = self._can_fetch(page_url, timeout_seconds=crawl_profile.robots_timeout_seconds)
             attempted_page = EnrichmentAttemptedPage(
                 url=page_url,
                 page_type=page_type,
@@ -699,7 +734,7 @@ class EnrichmentService:
                 response = self.http.get(
                     page_url,
                     headers={"User-Agent": self.USER_AGENT},
-                    timeout=20,
+                    timeout=crawl_profile.request_timeout_seconds,
                     allow_redirects=True,
                 )
             except requests.RequestException as exc:
@@ -758,7 +793,7 @@ class EnrichmentService:
             )
             aggregated_signals = self._merge_material_signals(aggregated_signals, extraction.material_signals)
             for discovered_url in extraction.candidate_page_urls:
-                if discovered_contact_pages >= self.MAX_DISCOVERED_CONTACT_PAGES:
+                if discovered_contact_pages >= crawl_profile.max_discovered_contact_pages:
                     break
                 if discovered_url in seen_candidate_urls:
                     continue
@@ -948,7 +983,12 @@ class EnrichmentService:
     def _build_candidate_urls(self, lead: Lead) -> list[CandidatePage]:
         return self._build_candidate_urls_from_website(lead.website)
 
-    def _build_candidate_urls_from_website(self, website_url: str | None) -> list[CandidatePage]:
+    def _build_candidate_urls_from_website(
+        self,
+        website_url: str | None,
+        *,
+        page_paths: tuple[str, ...] | None = None,
+    ) -> list[CandidatePage]:
         website_url = canonicalize_url(website_url)
         if not website_url:
             return []
@@ -956,7 +996,7 @@ class EnrichmentService:
         parsed = urlparse(website_url)
         root_url = f"{parsed.scheme}://{parsed.netloc}/"
         urls = [website_url, root_url]
-        urls.extend(urljoin(root_url, path) for path in self.PAGE_PATHS)
+        urls.extend(urljoin(root_url, path) for path in (page_paths or self.PAGE_PATHS))
         same_host_urls = [
             candidate
             for candidate in unique_preserve_order(urls)
@@ -968,7 +1008,7 @@ class EnrichmentService:
     def _is_same_host(candidate_url: str, base_url: str) -> bool:
         return urlparse(candidate_url).netloc.lower() == urlparse(base_url).netloc.lower()
 
-    def _get_robot_parser(self, target_url: str) -> RobotFileParser | None:
+    def _get_robot_parser(self, target_url: str, *, timeout_seconds: int) -> RobotFileParser | None:
         parsed = urlparse(target_url)
         root_key = f"{parsed.scheme}://{parsed.netloc}"
         if root_key in self.robot_cache:
@@ -976,7 +1016,11 @@ class EnrichmentService:
 
         robots_url = urljoin(f"{root_key}/", "robots.txt")
         try:
-            response = self.http.get(robots_url, headers={"User-Agent": self.USER_AGENT}, timeout=10)
+            response = self.http.get(
+                robots_url,
+                headers={"User-Agent": self.USER_AGENT},
+                timeout=timeout_seconds,
+            )
             if response.status_code >= 400 or not response.text.strip():
                 self.robot_cache[root_key] = None
                 return None
@@ -988,11 +1032,27 @@ class EnrichmentService:
             self.robot_cache[root_key] = None
             return None
 
-    def _can_fetch(self, target_url: str) -> bool:
-        parser = self._get_robot_parser(target_url)
+    def _can_fetch(self, target_url: str, *, timeout_seconds: int) -> bool:
+        parser = self._get_robot_parser(target_url, timeout_seconds=timeout_seconds)
         if parser is None:
             return True
         return parser.can_fetch(self.USER_AGENT, target_url)
+
+    def _default_crawl_profile(self) -> CrawlProfile:
+        return CrawlProfile(
+            page_paths=self.PAGE_PATHS,
+            max_discovered_contact_pages=self.MAX_DISCOVERED_CONTACT_PAGES,
+            request_timeout_seconds=self.REQUEST_TIMEOUT_SECONDS,
+            robots_timeout_seconds=self.ROBOTS_TIMEOUT_SECONDS,
+        )
+
+    def _preview_crawl_profile(self) -> CrawlProfile:
+        return CrawlProfile(
+            page_paths=self.PREVIEW_PAGE_PATHS,
+            max_discovered_contact_pages=self.PREVIEW_MAX_DISCOVERED_CONTACT_PAGES,
+            request_timeout_seconds=self.PREVIEW_REQUEST_TIMEOUT_SECONDS,
+            robots_timeout_seconds=self.PREVIEW_ROBOTS_TIMEOUT_SECONDS,
+        )
 
     def _create_enrichment_record(
         self,

@@ -113,7 +113,7 @@ const websiteOptions: Array<{ value: WebsiteFilter; label: string }> = [
 
 const ENRICH_VISIBLE_CONFIRMATION_THRESHOLD = 10;
 const WEBSITE_RECOVERY_MAX_ROWS = 25;
-const DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE = 5;
+const DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE = 3;
 
 export function DiscoveryWorkspace() {
   const [form, setForm] = useState<DiscoveryFormState>(defaultForm);

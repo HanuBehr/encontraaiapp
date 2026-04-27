@@ -12,7 +12,7 @@ import type {
   ExclusionRuleCreateResponse,
 } from "@/lib/api/types";
 
-const DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE = 5;
+const DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE = 3;
 
 export function previewDiscovery(request: DiscoverySearchRequest) {
   return postJson<DiscoveryPreviewResponse, DiscoverySearchRequest>("/discovery/preview", request);
