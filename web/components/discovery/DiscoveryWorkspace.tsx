@@ -113,6 +113,7 @@ const websiteOptions: Array<{ value: WebsiteFilter; label: string }> = [
 
 const ENRICH_VISIBLE_CONFIRMATION_THRESHOLD = 10;
 const WEBSITE_RECOVERY_MAX_ROWS = 25;
+const DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE = 5;
 
 export function DiscoveryWorkspace() {
   const [form, setForm] = useState<DiscoveryFormState>(defaultForm);
@@ -462,7 +463,12 @@ export function DiscoveryWorkspace() {
       return;
     }
     const skippedNoWebsite = selectedClientResultIds.length - selectedEnrichableClientResultIds.length;
-    if (skippedNoWebsite > 0) {
+    const batchCount = Math.ceil(selectedEnrichableClientResultIds.length / DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE);
+    if (batchCount > 1) {
+      setActionMessage(
+        `Enriquecendo ${selectedEnrichableClientResultIds.length.toLocaleString()} empresa(s) selecionadas em ${batchCount.toLocaleString()} lote(s) menores para evitar timeout no proxy.${skippedNoWebsite > 0 ? ` ${skippedNoWebsite.toLocaleString()} selecionada(s) ainda não têm site ou domínio.` : ""}`,
+      );
+    } else if (skippedNoWebsite > 0) {
       setActionMessage(
         `Enriquecendo ${selectedEnrichableClientResultIds.length.toLocaleString()} empresa(s) selecionadas com site. ${skippedNoWebsite.toLocaleString()} selecionada(s) ainda não têm site ou domínio.`,
       );
@@ -511,6 +517,7 @@ export function DiscoveryWorkspace() {
       return;
     }
     const skippedNoWebsite = visibleSelectableIds.length - visibleEnrichableIds.length;
+    const batchCount = Math.ceil(visibleEnrichableIds.length / DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE);
     if (
       visibleEnrichableIds.length >= ENRICH_VISIBLE_CONFIRMATION_THRESHOLD &&
       !window.confirm(
@@ -519,7 +526,11 @@ export function DiscoveryWorkspace() {
     ) {
       return;
     }
-    if (skippedNoWebsite > 0) {
+    if (batchCount > 1) {
+      setActionMessage(
+        `Enriquecendo ${visibleEnrichableIds.length.toLocaleString()} empresa(s) visíveis em ${batchCount.toLocaleString()} lote(s) menores para evitar timeout no proxy.${skippedNoWebsite > 0 ? ` ${skippedNoWebsite.toLocaleString()} linha(s) visíveis ainda não têm site ou domínio.` : ""}`,
+      );
+    } else if (skippedNoWebsite > 0) {
       setActionMessage(
         `Enriquecendo ${visibleEnrichableIds.length.toLocaleString()} empresa(s) visíveis com site. ${skippedNoWebsite.toLocaleString()} linha(s) visíveis ainda não têm site ou domínio.`,
       );

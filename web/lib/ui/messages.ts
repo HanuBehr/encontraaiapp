@@ -2,6 +2,8 @@ import { ApiError } from "@/lib/api/client";
 
 export const BACKEND_UNAVAILABLE_UI_MESSAGE =
   "Não foi possível conectar ao backend. Verifique se a API está rodando na porta 8000.";
+export const LONG_RUNNING_OPERATION_TIMEOUT_UI_MESSAGE =
+  "A operação demorou mais que o esperado. Tente novamente com menos empresas por vez.";
 export const MISSING_GOOGLE_API_KEY_DETAIL =
   "GOOGLE_API_KEY must be configured to use location-based discovery.";
 export const MISSING_GOOGLE_API_KEY_UI_MESSAGE =
@@ -31,6 +33,9 @@ export function formatUserFacingError(
     if (error.detail === MISSING_GOOGLE_API_KEY_DETAIL) {
       return MISSING_GOOGLE_API_KEY_UI_MESSAGE;
     }
+    if (isTimeoutLikeError(error)) {
+      return LONG_RUNNING_OPERATION_TIMEOUT_UI_MESSAGE;
+    }
     if (isBackendUnavailableError(error)) {
       return BACKEND_UNAVAILABLE_UI_MESSAGE;
     }
@@ -38,6 +43,9 @@ export function formatUserFacingError(
   }
 
   if (error instanceof Error) {
+    if (isTimeoutLikeError(error)) {
+      return LONG_RUNNING_OPERATION_TIMEOUT_UI_MESSAGE;
+    }
     if (looksLikeBackendUnavailable(error.message)) {
       return BACKEND_UNAVAILABLE_UI_MESSAGE;
     }
@@ -66,6 +74,14 @@ export function sanitizeUserFacingMessage(
 
 function isBackendUnavailableError(error: ApiError) {
   return error.status === 502 || looksLikeBackendUnavailable(error.detail ?? "");
+}
+
+function isTimeoutLikeError(error: ApiError | Error) {
+  const detail = error instanceof ApiError ? error.detail ?? error.body : error.message;
+  return (
+    (error instanceof ApiError && error.status === 504) ||
+    /timed out|timeout|demorou|smaller enrichment batch/i.test(detail)
+  );
 }
 
 function looksLikeBackendUnavailable(message: string) {

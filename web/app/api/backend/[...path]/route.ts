@@ -70,7 +70,16 @@ async function proxyBackend(request: NextRequest, context: RouteContext): Promis
   let upstreamResponse: Response;
   try {
     upstreamResponse = await fetch(targetUrl, init);
-  } catch {
+  } catch (error) {
+    if (isProxyTimeoutError(error)) {
+      return Response.json(
+        {
+          detail:
+            "Backend proxy request timed out before the upstream response completed. Retry with a smaller enrichment batch.",
+        },
+        { status: 504 },
+      );
+    }
     return Response.json(
       {
         detail:
@@ -100,3 +109,25 @@ export const PUT = proxyBackend;
 export const PATCH = proxyBackend;
 export const DELETE = proxyBackend;
 export const OPTIONS = proxyBackend;
+
+function isProxyTimeoutError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const cause = "cause" in error ? (error as { cause?: unknown }).cause : undefined;
+  const parts = [error.message];
+  if (cause instanceof Error) {
+    parts.push(cause.message);
+    if ("code" in cause && typeof (cause as { code?: unknown }).code === "string") {
+      parts.push((cause as { code: string }).code);
+    }
+  } else if (cause && typeof cause === "object") {
+    const code = "code" in cause ? (cause as { code?: unknown }).code : undefined;
+    if (typeof code === "string") {
+      parts.push(code);
+    }
+  } else if (typeof cause === "string") {
+    parts.push(cause);
+  }
+  return /timed out|timeout|headers timeout|body timeout|und_err/i.test(parts.join(" "));
+}
