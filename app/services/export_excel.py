@@ -27,34 +27,40 @@ HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 MISSING_FILL = PatternFill(fill_type="solid", fgColor="FCE4D6")
 LEADS_COLUMNS = [
-    "business_name",
-    "category",
-    "city",
-    "state",
-    "address",
-    "street",
-    "number",
-    "postal_code",
-    "phone",
-    "whatsapp",
-    "email",
-    "instagram",
-    "website",
-    "google_maps_url",
-    "source",
-    "status",
-    "notes",
-    "neighborhood",
-    "assigned_owner",
-    "market_segment",
-    "market_subsegment",
-    "lead_score",
-    "rating",
-    "review_count",
+    "Nome",
+    "CNPJ",
+    "Razão Social",
+    "Categoria",
+    "Origem",
+    "Usuário responsável",
+    "Setor",
+    "Descrição",
+    "E-mail",
+    "WhatsApp",
+    "Telefone",
+    "Celular",
+    "Fax",
+    "Ramal",
+    "Website",
+    "CEP",
+    "País",
+    "Estado",
+    "Cidade",
+    "Bairro",
+    "Rua",
+    "Número",
+    "Complemento",
+    "Produto",
+    "Facebook",
+    "Twitter",
+    "LinkedIn",
+    "Skype",
+    "Instagram",
+    "Ranking",
 ]
 METADATA_COLUMNS = ["metric", "value"]
 SHEET_COLUMNS = {
-    "Leads": LEADS_COLUMNS,
+    "Empresas": LEADS_COLUMNS,
     "Metadata": METADATA_COLUMNS,
 }
 
@@ -95,11 +101,11 @@ class ExcelExportService:
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            self._write_sheet(writer, "Leads", leads_df)
+            self._write_sheet(writer, "Empresas", leads_df)
             self._write_sheet(writer, "Metadata", metadata_df)
 
             workbook = writer.book
-            self._format_sheet(workbook["Leads"], highlight_missing_contacts=True)
+            self._format_sheet(workbook["Empresas"], highlight_missing_contacts=True)
             self._format_sheet(workbook["Metadata"], freeze_headers=False)
 
         filename = f"lead_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -132,7 +138,7 @@ class ExcelExportService:
 
         if highlight_missing_contacts and max_row > 1:
             headers = {worksheet.cell(row=1, column=index).value: index for index in range(1, max_col + 1)}
-            for header_name in ["email", "phone", "whatsapp"]:
+            for header_name in ["E-mail", "Telefone", "WhatsApp"]:
                 column_index = headers.get(header_name)
                 if not column_index:
                     continue
@@ -157,31 +163,40 @@ class ExcelExportService:
             state=lead.state,
             postal_code=lead.postal_code,
         )
+        category = lead.category
+        market_segment = lead.market_segment.name if lead.market_segment else None
+        market_subsegment = lead.market_subsegment.name if lead.market_subsegment else None
         return {
-            "business_name": lead.business_name,
-            "category": lead.category,
-            "city": lead.city,
-            "state": normalize_brazilian_state(lead.state),
-            "address": lead.address,
-            "street": street_name,
-            "number": street_number,
-            "postal_code": lead.postal_code,
-            "phone": phone,
-            "whatsapp": whatsapp,
-            "email": email,
-            "instagram": instagram,
-            "website": self._client_facing_website(lead.website),
-            "google_maps_url": lead.google_maps_url,
-            "source": lead.lead_source_type.value if lead.lead_source_type else None,
-            "status": lead.status.value if lead.status else None,
-            "notes": lead.notes,
-            "neighborhood": lead.neighborhood,
-            "assigned_owner": lead.assigned_sales_rep.name if lead.assigned_sales_rep else None,
-            "market_segment": lead.market_segment.name if lead.market_segment else None,
-            "market_subsegment": lead.market_subsegment.name if lead.market_subsegment else None,
-            "lead_score": lead.lead_score,
-            "rating": None,
-            "review_count": None,
+            "Nome": lead.business_name,
+            "CNPJ": None,
+            "Razão Social": None,
+            "Categoria": category,
+            "Origem": self._humanize_source(lead.lead_source_type.value if lead.lead_source_type else lead.source_provider),
+            "Usuário responsável": self._assigned_owner(lead),
+            "Setor": category or market_segment,
+            "Descrição": lead.notes,
+            "E-mail": email,
+            "WhatsApp": whatsapp,
+            "Telefone": phone,
+            "Celular": None,
+            "Fax": None,
+            "Ramal": None,
+            "Website": self._client_facing_website(lead.website),
+            "CEP": lead.postal_code,
+            "País": "Brasil",
+            "Estado": normalize_brazilian_state(lead.state),
+            "Cidade": lead.city,
+            "Bairro": lead.neighborhood,
+            "Rua": street_name,
+            "Número": street_number,
+            "Complemento": None,
+            "Produto": self._product_value(market_segment, market_subsegment),
+            "Facebook": None,
+            "Twitter": None,
+            "LinkedIn": None,
+            "Skype": None,
+            "Instagram": instagram,
+            "Ranking": lead.lead_score if lead.lead_score is not None else None,
         }
 
     @classmethod
@@ -249,6 +264,35 @@ class ExcelExportService:
         return canonicalize_url(value)
 
     @staticmethod
+    def _humanize_source(value: str | None) -> str | None:
+        if not value:
+            return None
+        source = value.strip()
+        normalized = source.lower()
+        if normalized == "google_places":
+            return "Google Places"
+        if normalized in {"website", "website_enrichment"}:
+            return "Website"
+        return source.replace("_", " ").strip().title() or None
+
+    @staticmethod
+    def _assigned_owner(lead) -> str | None:
+        if lead.owner:
+            return lead.owner
+        if lead.assigned_sales_rep:
+            return lead.assigned_sales_rep.name
+        return None
+
+    @staticmethod
+    def _product_value(market_segment: str | None, market_subsegment: str | None) -> str | None:
+        values = [value.strip() for value in [market_segment, market_subsegment] if value and value.strip()]
+        if not values:
+            return None
+        if len(values) == 2 and values[0].lower() != values[1].lower():
+            return " / ".join(values)
+        return values[-1]
+
+    @staticmethod
     def _metadata_rows(
         leads: list,
         leads_df: pd.DataFrame,
@@ -265,16 +309,16 @@ class ExcelExportService:
         scope["lead_count"] = int(len(leads))
 
         duplicate_count = sum(1 for lead in leads if lead.is_duplicate)
-        total_with_email = int(leads_df["email"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+        total_with_email = int(leads_df["E-mail"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
         total_with_whatsapp = (
-            int(leads_df["whatsapp"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+            int(leads_df["WhatsApp"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
         )
         total_with_website = (
-            int(leads_df["website"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
+            int(leads_df["Website"].fillna("").astype(str).str.len().gt(0).sum()) if not leads_df.empty else 0
         )
-        score_min = int(leads_df["lead_score"].min()) if not leads_df.empty else 0
-        score_avg = float(leads_df["lead_score"].mean()) if not leads_df.empty else 0.0
-        score_max = int(leads_df["lead_score"].max()) if not leads_df.empty else 0
+        score_min = int(leads_df["Ranking"].min()) if not leads_df.empty else 0
+        score_avg = float(leads_df["Ranking"].mean()) if not leads_df.empty else 0.0
+        score_max = int(leads_df["Ranking"].max()) if not leads_df.empty else 0
 
         return [
             {"metric": "export_timestamp_utc", "value": datetime.now(timezone.utc).isoformat()},

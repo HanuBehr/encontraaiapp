@@ -292,7 +292,7 @@ def _exported_names(payload: bytes) -> list[str]:
     workbook = load_workbook(BytesIO(payload))
     return [
         row[0].value
-        for row in workbook["Leads"].iter_rows(min_row=2, max_col=1)
+        for row in workbook["Empresas"].iter_rows(min_row=2, max_col=1)
         if row[0].value
     ]
 
