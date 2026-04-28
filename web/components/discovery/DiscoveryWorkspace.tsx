@@ -67,6 +67,14 @@ type DiscoveryRequestContext = {
   manualCoordinateLabelSequence: number;
 };
 
+type DiscoveryRequestPreviewSummary = {
+  searchTerms: string[];
+  locationLabel: string | null;
+  radiusM: number;
+  maxResultsPerTerm: number;
+  maxPotentialResults: number;
+};
+
 const defaultForm: DiscoveryFormState = {
   naturalLanguageQuery: "",
   locationMode: "area",
@@ -315,6 +323,15 @@ export function DiscoveryWorkspace() {
     form.locationMode === "area"
       ? resolveAreaLocationQuery(form, parsedNaturalLanguageQuery, discoveryRequestContext)
       : resolveCoordinateLocationQuery(form, parsedNaturalLanguageQuery, discoveryRequestContext);
+  const requestPreviewSummary = buildDiscoveryRequestPreviewSummary(
+    form,
+    parsedNaturalLanguageQuery,
+    discoveryRequestContext,
+  );
+  const optionalTermsCount = Math.max(
+    requestPreviewSummary.searchTerms.length - (parsedNaturalLanguageQuery?.searchTerms.length ?? 0),
+    0,
+  );
 
   function updateForm<Key extends keyof DiscoveryFormState>(key: Key, value: DiscoveryFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -574,56 +591,31 @@ export function DiscoveryWorkspace() {
         </div>
       </section>
 
-      <form onSubmit={runPreview} className="rounded-md border border-neutral-200 bg-white p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-neutral-950">Montar prévia de busca</p>
-            <p className="mt-1 text-sm text-neutral-500">
-              Descreva o nicho na busca principal, confira a prévia e salve apenas os leads que valem a pena.
-            </p>
-          </div>
-          <button
-            type="submit"
-            disabled={isPreviewPending}
-            className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isPreviewPending ? "Buscando..." : "Gerar prévia"}
-          </button>
-        </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-4">
-            <label className="block">
-              <span className="text-xs font-medium text-neutral-600">Busca principal</span>
-              <input
-                value={form.naturalLanguageQuery}
-                onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
-                placeholder="dentistas em São Paulo"
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
-              />
-              <p className="mt-1 text-xs text-neutral-500">
-                Use uma busca como &quot;restaurantes em Campinas&quot;. Se a query não trouxer a localização, complemente
-                com cidade, bairro ou CEP logo abaixo.
+      <form onSubmit={runPreview} className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-neutral-200 bg-gradient-to-br from-white to-cyan-50/70 p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-semibold text-neutral-950">Encontre leads por nicho e cidade</h2>
+              <p className="mt-2 text-sm text-neutral-600">
+                Digite o tipo de empresa, escolha a região e gere uma prévia antes de salvar os leads.
               </p>
-            </label>
-
-            {form.naturalLanguageQuery.trim() ? (
-              <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm text-cyan-950">
-                <p className="text-xs font-semibold uppercase text-cyan-800">Como a busca será lida</p>
-                <p className="mt-1">
-                  <span className="font-medium">Nicho:</span>{" "}
-                  {parsedNaturalLanguageQuery?.category ?? "Não foi possível identificar"}
-                </p>
-                <p className="mt-1">
-                  <span className="font-medium">Local:</span>{" "}
-                  {interpretedLocationLabel ?? "Adicione uma cidade na busca principal ou nos campos abaixo"}
-                </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {discoveryExampleQueries.map((query) => (
+                  <button
+                    key={query}
+                    type="button"
+                    onClick={() => applySuggestedQuery(query)}
+                    className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:border-neutral-500"
+                  >
+                    {query}
+                  </button>
+                ))}
               </div>
-            ) : null}
+            </div>
 
-            <div>
-              <span className="text-xs font-medium text-neutral-600">Como definir a localização</span>
-              <div className="mt-2 flex flex-wrap gap-2">
+            <div className="flex flex-col items-start gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Modo de localização</span>
+              <div className="flex flex-wrap gap-2">
                 <ToggleButton
                   active={form.locationMode === "area"}
                   onClick={() => updateForm("locationMode", "area")}
@@ -638,47 +630,82 @@ export function DiscoveryWorkspace() {
                 </ToggleButton>
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <label className="block">
+              <span className="text-xs font-medium text-neutral-600">Nicho ou busca</span>
+              <input
+                value={form.naturalLanguageQuery}
+                onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
+                placeholder="Ex: dentistas, reparos de celular, lojas de móveis"
+                className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-950 shadow-sm"
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                Você pode digitar só o nicho ou uma busca completa como &quot;dentistas em São Paulo&quot;.
+              </p>
+            </label>
 
             {form.locationMode === "area" ? (
-              <div className="space-y-2">
-                <p className="text-xs text-neutral-500">
-                  Use estes campos quando quiser complementar a cidade da busca principal ou pesquisar por uma região
-                  específica.
+              <label className="block">
+                <span className="text-xs font-medium text-neutral-600">Cidade ou região</span>
+                <input
+                  value={form.city}
+                  onChange={(event) => updateAreaLocationField("city", event.target.value)}
+                  placeholder="Ex: São Paulo, Campinas, Santana de Parnaíba"
+                  className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-950 shadow-sm"
+                />
+                <p className="mt-1 text-xs text-neutral-500">
+                  Se a cidade já estiver na busca principal, este campo pode ficar em branco.
                 </p>
-                <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_0.9fr]">
-                  <TextField
-                    label="Cidade ou região"
-                    value={form.city}
-                    onChange={(value) => updateAreaLocationField("city", value)}
-                    placeholder="Campinas, SP"
-                  />
-                  <TextField
-                    label="Bairro"
-                    value={form.neighborhood}
-                    onChange={(value) => updateAreaLocationField("neighborhood", value)}
-                    placeholder="Opcional"
-                  />
-                  <TextField
-                    label="CEP"
-                    value={form.postalCode}
-                    onChange={(value) => updateAreaLocationField("postalCode", value)}
-                    placeholder="Opcional"
-                  />
-                </div>
-              </div>
+              </label>
             ) : (
-              <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr]">
+              <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Coordenadas ativas</p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  Use latitude e longitude quando quiser montar a busca a partir de um ponto específico.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {form.locationMode === "area" ? (
+            <details className="mt-4 rounded-lg border border-neutral-200 bg-white/80 p-4">
+              <summary className="cursor-pointer list-item text-sm font-medium text-neutral-800">
+                Refinar localização
+              </summary>
+              <p className="mt-2 text-xs text-neutral-500">
+                Opcional. Use bairro ou CEP quando quiser restringir melhor a região da busca.
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <TextField
+                  label="Bairro"
+                  value={form.neighborhood}
+                  onChange={(value) => updateAreaLocationField("neighborhood", value)}
+                  placeholder="Opcional"
+                />
+                <TextField
+                  label="CEP"
+                  value={form.postalCode}
+                  onChange={(value) => updateAreaLocationField("postalCode", value)}
+                  placeholder="Opcional"
+                />
+              </div>
+            </details>
+          ) : (
+            <div className="mt-4 rounded-lg border border-neutral-200 bg-white/80 p-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.3fr]">
                 <TextField
                   label="Latitude"
                   value={form.latitude}
                   onChange={(value) => updateForm("latitude", value)}
-                  placeholder="-22.9056"
+                  placeholder="-23.5505"
                 />
                 <TextField
                   label="Longitude"
                   value={form.longitude}
                   onChange={(value) => updateForm("longitude", value)}
-                  placeholder="-47.0608"
+                  placeholder="-46.6333"
                 />
                 <TextField
                   label="Rótulo do local"
@@ -687,16 +714,21 @@ export function DiscoveryWorkspace() {
                   placeholder="Opcional"
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
               <NumberField
-                label="Raio em metros"
+                label="Raio"
                 min={100}
                 max={50000}
                 value={form.radiusM}
                 onChange={(value) => updateForm("radiusM", value)}
               />
+              <p className="mt-1 text-xs text-neutral-500">Aumente o raio para buscar mais longe.</p>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
               <NumberField
                 label="Máximo por termo"
                 min={1}
@@ -704,21 +736,53 @@ export function DiscoveryWorkspace() {
                 value={form.maxResultsPerTerm}
                 onChange={(value) => updateForm("maxResultsPerTerm", value)}
               />
+              <p className="mt-1 text-xs text-neutral-500">
+                É um limite máximo; a busca pode retornar menos resultados.
+              </p>
             </div>
+            <button
+              type="submit"
+              disabled={isPreviewPending}
+              className="min-w-[180px] rounded-lg border border-neutral-900 bg-neutral-950 px-5 py-3 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isPreviewPending ? "Buscando..." : "Gerar prévia"}
+            </button>
           </div>
 
-          <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
-            <p className="text-sm font-semibold text-neutral-950">Termos extras para ampliar a busca</p>
-            <p className="mt-1 text-xs text-neutral-500">
-              Opcional. Use apenas se quiser incluir variações relacionadas do mesmo nicho, como
-              &quot;oficina mecânica&quot; e &quot;reparo automotivo&quot;.
+          <div className="mt-4 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3">
+            <p className="text-sm font-medium text-cyan-950">
+              {buildDiscoverySummaryLine({
+                primaryTerm: parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
+                locationLabel: requestPreviewSummary.locationLabel,
+                radiusM: requestPreviewSummary.radiusM,
+                maxResultsPerTerm: requestPreviewSummary.maxResultsPerTerm,
+              })}
             </p>
+            {buildDiscoveryRelatedTermsSummary(
+              parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
+              requestPreviewSummary.searchTerms,
+            ) ? (
+              <p className="mt-1 text-xs text-cyan-900">
+                Termos relacionados:{" "}
+                {buildDiscoveryRelatedTermsSummary(
+                  parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
+                  requestPreviewSummary.searchTerms,
+                )}
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs text-cyan-900">Duplicatas serão consolidadas automaticamente.</p>
+          </div>
+
+          <details className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
+            <summary className="cursor-pointer list-item text-sm font-medium text-neutral-900">
+              Adicionar termos relacionados
+            </summary>
             <p className="mt-2 text-xs text-neutral-500">
-              Empresas repetidas entre termos parecidos são consolidadas em uma única linha na prévia.
+              Opcional. Use para buscar variações do mesmo nicho. A prévia remove duplicatas automaticamente.
             </p>
-            <div className="mt-3 grid gap-2">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {searchTermOptions.map((term) => (
-                <label key={term} className="flex items-center gap-2 text-sm text-neutral-700">
+                <label key={term} className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
                   <input
                     type="checkbox"
                     checked={form.selectedTerms.includes(term)}
@@ -729,16 +793,21 @@ export function DiscoveryWorkspace() {
                 </label>
               ))}
             </div>
-            <label className="mt-3 block">
+            <label className="mt-4 block">
               <span className="text-xs font-medium text-neutral-600">Termos livres</span>
               <textarea
                 value={form.customTerms}
                 onChange={(event) => updateCustomTerms(event.target.value)}
                 placeholder="Um por linha ou separados por vírgula"
-                className="mt-1 min-h-20 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
+                className="mt-1 min-h-24 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
               />
             </label>
-          </div>
+            <p className="mt-2 text-xs text-neutral-500">
+              {optionalTermsCount > 0
+                ? `${optionalTermsCount.toLocaleString()} termo(s) relacionado(s) entram na próxima prévia.`
+                : "Se você não adicionar nada aqui, a busca usa só o nicho principal."}
+            </p>
+          </details>
         </div>
 
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
@@ -1481,6 +1550,77 @@ function resolveCoordinateLocationQuery(
   return context.manualCoordinateLabelSequence >= context.queryLocationSequence
     ? manualLocation
     : parsedQuery.locationQuery;
+}
+
+function buildDiscoveryRequestPreviewSummary(
+  form: DiscoveryFormState,
+  parsedQuery: ParsedDiscoveryQuery | null,
+  context: DiscoveryRequestContext,
+): DiscoveryRequestPreviewSummary {
+  const searchTerms = mergeDiscoveryTerms(
+    parsedQuery?.searchTerms ?? [],
+    resolveManualDiscoveryTerms(form, parsedQuery, context),
+  );
+  const radiusM = clampNumber(form.radiusM, 100, 50000);
+  const maxResultsPerTerm = clampNumber(form.maxResultsPerTerm, 1, 20);
+
+  if (form.locationMode === "area") {
+    return {
+      searchTerms,
+      locationLabel: resolveAreaLocationQuery(form, parsedQuery, context),
+      radiusM,
+      maxResultsPerTerm,
+      maxPotentialResults: searchTerms.length * maxResultsPerTerm,
+    };
+  }
+
+  const latitude = parseCoordinate(form.latitude);
+  const longitude = parseCoordinate(form.longitude);
+  const coordinateLabel = resolveCoordinateLocationQuery(form, parsedQuery, context);
+  const coordinateText =
+    latitude !== null && longitude !== null ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : null;
+
+  return {
+    searchTerms,
+    locationLabel: coordinateLabel ?? coordinateText,
+    radiusM,
+    maxResultsPerTerm,
+    maxPotentialResults: searchTerms.length * maxResultsPerTerm,
+  };
+}
+
+function buildDiscoverySummaryLine({
+  primaryTerm,
+  locationLabel,
+  radiusM,
+  maxResultsPerTerm,
+}: {
+  primaryTerm: string | null;
+  locationLabel: string | null;
+  radiusM: number;
+  maxResultsPerTerm: number;
+}) {
+  const nicheLabel = primaryTerm ?? "defina o nicho";
+  const locationText = locationLabel ? `em ${locationLabel}` : "sem região definida";
+  return `Prévia: ${nicheLabel} ${locationText} · raio ${formatRadiusKm(radiusM)} · até ${maxResultsPerTerm.toLocaleString()} por termo`;
+}
+
+function buildDiscoveryRelatedTermsSummary(primaryTerm: string | null, searchTerms: string[]) {
+  const normalizedPrimary = primaryTerm?.trim().toLowerCase() ?? null;
+  const relatedTerms = searchTerms.filter((term, index) => {
+    if (index === 0 && !normalizedPrimary) {
+      return false;
+    }
+    return term.trim().toLowerCase() !== normalizedPrimary;
+  });
+  return relatedTerms.length ? relatedTerms.join(", ") : null;
+}
+
+function formatRadiusKm(radiusM: number) {
+  const km = radiusM / 1000;
+  return Number.isInteger(km)
+    ? `${km.toLocaleString("pt-BR")} km`
+    : `${km.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km`;
 }
 
 function buildManualAreaLocationQuery(form: DiscoveryFormState) {
