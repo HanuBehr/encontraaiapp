@@ -157,6 +157,7 @@ export function DiscoveryWorkspace() {
             websiteReadyCount,
             noWebsiteCount,
             recoverableNoWebsiteCount,
+            duplicatesRemoved: data.duplicates_removed,
           }),
     );
   }
@@ -576,9 +577,9 @@ export function DiscoveryWorkspace() {
       <form onSubmit={runPreview} className="rounded-md border border-neutral-200 bg-white p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-neutral-950">Configurar busca</p>
+            <p className="text-sm font-semibold text-neutral-950">Montar prévia de busca</p>
             <p className="mt-1 text-sm text-neutral-500">
-              Primeiro veja a prévia. Os leads só são criados quando você salva os resultados selecionados.
+              Descreva o nicho na busca principal, confira a prévia e salve apenas os leads que valem a pena.
             </p>
           </div>
           <button
@@ -593,7 +594,7 @@ export function DiscoveryWorkspace() {
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-4">
             <label className="block">
-              <span className="text-xs font-medium text-neutral-600">O que você quer buscar</span>
+              <span className="text-xs font-medium text-neutral-600">Busca principal</span>
               <input
                 value={form.naturalLanguageQuery}
                 onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
@@ -601,27 +602,27 @@ export function DiscoveryWorkspace() {
                 className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
               />
               <p className="mt-1 text-xs text-neutral-500">
-                Use uma busca natural como &quot;restaurantes em Campinas&quot; ou deixe em branco e preencha os campos
-                abaixo.
+                Use uma busca como &quot;restaurantes em Campinas&quot;. Se a query não trouxer a localização, complemente
+                com cidade, bairro ou CEP logo abaixo.
               </p>
             </label>
 
             {form.naturalLanguageQuery.trim() ? (
               <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm text-cyan-950">
-                <p className="text-xs font-semibold uppercase text-cyan-800">Busca interpretada</p>
+                <p className="text-xs font-semibold uppercase text-cyan-800">Como a busca será lida</p>
                 <p className="mt-1">
                   <span className="font-medium">Nicho:</span>{" "}
                   {parsedNaturalLanguageQuery?.category ?? "Não foi possível identificar"}
                 </p>
                 <p className="mt-1">
                   <span className="font-medium">Local:</span>{" "}
-                  {interpretedLocationLabel ?? "Adicione uma cidade na busca ou nos campos abaixo"}
+                  {interpretedLocationLabel ?? "Adicione uma cidade na busca principal ou nos campos abaixo"}
                 </p>
               </div>
             ) : null}
 
             <div>
-              <span className="text-xs font-medium text-neutral-600">Modo de localização</span>
+              <span className="text-xs font-medium text-neutral-600">Como definir a localização</span>
               <div className="mt-2 flex flex-wrap gap-2">
                 <ToggleButton
                   active={form.locationMode === "area"}
@@ -639,25 +640,31 @@ export function DiscoveryWorkspace() {
             </div>
 
             {form.locationMode === "area" ? (
-              <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_0.9fr]">
-                <TextField
-                  label="Cidade"
-                  value={form.city}
-                  onChange={(value) => updateAreaLocationField("city", value)}
-                  placeholder="Campinas, SP"
-                />
-                <TextField
-                  label="Bairro"
-                  value={form.neighborhood}
-                  onChange={(value) => updateAreaLocationField("neighborhood", value)}
-                  placeholder="Opcional"
-                />
-                <TextField
-                  label="CEP"
-                  value={form.postalCode}
-                  onChange={(value) => updateAreaLocationField("postalCode", value)}
-                  placeholder="Opcional"
-                />
+              <div className="space-y-2">
+                <p className="text-xs text-neutral-500">
+                  Use estes campos quando quiser complementar a cidade da busca principal ou pesquisar por uma região
+                  específica.
+                </p>
+                <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_0.9fr]">
+                  <TextField
+                    label="Cidade ou região"
+                    value={form.city}
+                    onChange={(value) => updateAreaLocationField("city", value)}
+                    placeholder="Campinas, SP"
+                  />
+                  <TextField
+                    label="Bairro"
+                    value={form.neighborhood}
+                    onChange={(value) => updateAreaLocationField("neighborhood", value)}
+                    placeholder="Opcional"
+                  />
+                  <TextField
+                    label="CEP"
+                    value={form.postalCode}
+                    onChange={(value) => updateAreaLocationField("postalCode", value)}
+                    placeholder="Opcional"
+                  />
+                </div>
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr]">
@@ -701,9 +708,13 @@ export function DiscoveryWorkspace() {
           </div>
 
           <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
-            <p className="text-sm font-semibold text-neutral-950">Termos extras</p>
+            <p className="text-sm font-semibold text-neutral-950">Termos extras para ampliar a busca</p>
             <p className="mt-1 text-xs text-neutral-500">
-              Opcional. Use mais termos se quiser abrir a mesma cidade em vários nichos relacionados.
+              Opcional. Use apenas se quiser incluir variações relacionadas do mesmo nicho, como
+              &quot;oficina mecânica&quot; e &quot;reparo automotivo&quot;.
+            </p>
+            <p className="mt-2 text-xs text-neutral-500">
+              Empresas repetidas entre termos parecidos são consolidadas em uma única linha na prévia.
             </p>
             <div className="mt-3 grid gap-2">
               {searchTermOptions.map((term) => (
@@ -956,7 +967,7 @@ function DiscoveryPreviewTable({
                       )}
                     </div>
                     <p className="mt-1 text-xs text-neutral-500">{item.candidate.category ?? "Sem categoria"}</p>
-                    <p className="mt-1 text-xs text-neutral-500">Busca: {item.search_term}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{previewSearchTermsLabel(item)}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {item.candidate.website ? (
                         <a
@@ -1543,13 +1554,18 @@ function buildPreviewReadyMessage({
   websiteReadyCount,
   noWebsiteCount,
   recoverableNoWebsiteCount,
+  duplicatesRemoved,
 }: {
   totalCount: number;
   websiteReadyCount: number;
   noWebsiteCount: number;
   recoverableNoWebsiteCount: number;
+  duplicatesRemoved: number;
 }) {
   let message = `Prévia pronta. ${totalCount.toLocaleString()} empresa(s) encontradas: ${websiteReadyCount.toLocaleString()} com site ou domínio e ${noWebsiteCount.toLocaleString()} sem site.`;
+  if (duplicatesRemoved > 0) {
+    message += ` ${duplicatesRemoved.toLocaleString()} duplicata(s) removida(s) da prévia.`;
+  }
   if (noWebsiteCount > 0 && recoverableNoWebsiteCount > 0) {
     message += ` ${recoverableNoWebsiteCount.toLocaleString()} sem site podem passar por recuperação agora.`;
   }
@@ -1579,6 +1595,14 @@ function buildWebsiteRecoveryMessage(response: DiscoveryPreviewWebsiteRecoveryRe
 
 function hasWebsiteForCandidate(candidate: DiscoveryLeadCandidate) {
   return Boolean(candidate.website || domainForCandidate(candidate));
+}
+
+function previewSearchTermsLabel(item: DiscoveryPreviewItem) {
+  const terms = Array.from(new Set([...(item.matched_search_terms ?? []), item.search_term].filter(Boolean)));
+  if (terms.length <= 1) {
+    return `Busca: ${terms[0] ?? item.search_term}`;
+  }
+  return `Encontrada por ${terms.length.toLocaleString()} termos: ${terms.join(", ")}`;
 }
 
 function hasWebsiteRecoveryLookupId(item: DiscoveryPreviewItem) {

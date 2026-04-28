@@ -80,6 +80,7 @@ class DiscoveryExclusionMetadata(BaseModel):
 class DiscoveryPreviewItem(BaseModel):
     client_result_id: str | None = None
     search_term: str
+    matched_search_terms: list[str] = Field(default_factory=list)
     provider_record_id: str | None = None
     source_url: str | None = None
     raw_payload: dict[str, Any] = Field(default_factory=dict)
@@ -92,6 +93,7 @@ class DiscoveryPreviewResponse(BaseModel):
     provider: str
     resolved_location: ResolvedLocation
     total_provider_results: int
+    duplicates_removed: int = 0
     items: list[DiscoveryPreviewItem]
 
 

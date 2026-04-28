@@ -882,3 +882,185 @@ def test_discovery_enrich_preview_keeps_request_alive_when_one_row_returns_bad_e
     assert by_id["preview-bad-1"].enrichment.success is False
     assert by_id["preview-bad-1"].enrichment.error_message == "'object' object has no attribute 'model_dump'"
     assert by_id["preview-good-2"].candidate.email == "boa2@example.com"
+
+
+def test_discovery_preview_deduplicates_similar_terms_and_merges_richer_fields(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    request = DiscoverySearchRequest(
+        raw_query="oficina mecanica em Curitiba",
+        search_terms=["oficina mecanica", "reparo automotivo"],
+        location_query="Curitiba, PR",
+        radius_m=3000,
+        max_results_per_term=10,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_resolve_location",
+        lambda payload: GeocodedLocation(label="Curitiba, PR", latitude=-25.4284, longitude=-49.2733),
+    )
+
+    canonical_maps_url = "https://maps.google.com/?q=Oficina+Modelo"
+    first_candidate = _candidate(
+        "Oficina Modelo",
+        category="oficina mecanica",
+        phone="+5511999991111",
+        city="Curitiba",
+    ).model_copy(
+        update={
+            "state": "PR",
+            "website": None,
+            "domain": None,
+            "email": None,
+            "instagram": None,
+            "google_maps_url": canonical_maps_url,
+            "google_place_id": "place-oficina-modelo",
+        }
+    )
+    second_candidate = _candidate(
+        "Oficina Modelo",
+        category="reparo automotivo",
+        phone="+5511999991111",
+        city="Curitiba",
+    ).model_copy(
+        update={
+            "state": "PR",
+            "website": "oficinamodelo.com.br",
+            "domain": None,
+            "email": "contato@oficinamodelo.com.br",
+            "instagram": "https://instagram.com/oficinamodelo",
+            "google_maps_url": canonical_maps_url,
+            "google_place_id": "place-oficina-modelo",
+        }
+    )
+
+    provider_results = {
+        "oficina mecanica": [
+            ProviderLeadResult(
+                candidate=first_candidate,
+                raw_payload={"id": "place-oficina-modelo"},
+                provider_record_id="place-oficina-modelo",
+                source_url=canonical_maps_url,
+            )
+        ],
+        "reparo automotivo": [
+            ProviderLeadResult(
+                candidate=second_candidate,
+                raw_payload={"id": "place-oficina-modelo", "websiteUri": "oficinamodelo.com.br"},
+                provider_record_id="place-oficina-modelo",
+                source_url=canonical_maps_url,
+            )
+        ],
+    }
+
+    monkeypatch.setattr(
+        service.provider,
+        "search",
+        lambda *, search_term, location_label, latitude, longitude, radius_m, max_results: provider_results[
+            search_term
+        ],
+    )
+
+    preview = service.preview(request)
+
+    assert preview.total_provider_results == 2
+    assert preview.duplicates_removed == 1
+    assert len(preview.items) == 1
+    item = preview.items[0]
+    assert item.search_term == "oficina mecanica"
+    assert item.matched_search_terms == ["oficina mecanica", "reparo automotivo"]
+    assert item.candidate.phone == "+5511999991111"
+    assert item.candidate.website == "https://oficinamodelo.com.br"
+    assert item.candidate.domain == "oficinamodelo.com.br"
+    assert item.candidate.email == "contato@oficinamodelo.com.br"
+    assert item.candidate.instagram == "https://instagram.com/oficinamodelo"
+    assert item.exclusion.is_blocked is False
+
+
+def test_discovery_preview_deduplicates_by_domain_when_place_id_is_missing(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    request = DiscoverySearchRequest(
+        raw_query="lojas de moveis em Ribeirao Preto",
+        search_terms=["loja de moveis", "moveis planejados"],
+        location_query="Ribeirao Preto, SP",
+        radius_m=3000,
+        max_results_per_term=10,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_resolve_location",
+        lambda payload: GeocodedLocation(label="Ribeirao Preto, SP", latitude=-21.1775, longitude=-47.8103),
+    )
+
+    first_candidate = _candidate(
+        "Casa Nova Moveis",
+        category="loja de moveis",
+        phone="+5516999991111",
+        city="Ribeirao Preto",
+    ).model_copy(
+        update={
+            "google_place_id": None,
+            "google_maps_url": "https://maps.google.com/?q=Casa+Nova+Moveis",
+            "website": "https://casanovamoveis.com.br",
+            "domain": None,
+            "email": None,
+            "address": "Avenida Brasil, 1200",
+        }
+    )
+    second_candidate = _candidate(
+        "Casa Nova Moveis",
+        category="moveis planejados",
+        phone="+5516999991111",
+        city="Ribeirao Preto",
+    ).model_copy(
+        update={
+            "google_place_id": None,
+            "google_maps_url": None,
+            "website": None,
+            "domain": "casanovamoveis.com.br",
+            "email": "contato@casanovamoveis.com.br",
+            "address": None,
+        }
+    )
+
+    provider_results = {
+        "loja de moveis": [
+            ProviderLeadResult(
+                candidate=first_candidate,
+                raw_payload={"websiteUri": "https://casanovamoveis.com.br"},
+                provider_record_id=None,
+                source_url="https://maps.google.com/?q=Casa+Nova+Moveis",
+            )
+        ],
+        "moveis planejados": [
+            ProviderLeadResult(
+                candidate=second_candidate,
+                raw_payload={"websiteUri": "casanovamoveis.com.br"},
+                provider_record_id=None,
+                source_url="https://maps.google.com/?q=Casa+Nova+Moveis+Planejados",
+            )
+        ],
+    }
+
+    monkeypatch.setattr(
+        service.provider,
+        "search",
+        lambda *, search_term, location_label, latitude, longitude, radius_m, max_results: provider_results[
+            search_term
+        ],
+    )
+
+    preview = service.preview(request)
+
+    assert preview.total_provider_results == 2
+    assert preview.duplicates_removed == 1
+    assert len(preview.items) == 1
+    item = preview.items[0]
+    assert item.matched_search_terms == ["loja de moveis", "moveis planejados"]
+    assert item.candidate.website == "https://casanovamoveis.com.br"
+    assert item.candidate.domain == "casanovamoveis.com.br"
+    assert item.candidate.email == "contato@casanovamoveis.com.br"
+    assert item.candidate.address == "Avenida Brasil, 1200"

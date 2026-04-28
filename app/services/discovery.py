@@ -33,7 +33,14 @@ from app.schemas.discovery import (
 from app.schemas.lead import LeadSummary
 from app.services.enrichment import EnrichmentService
 from app.services.exclusion_rules import ExclusionRuleService
-from app.services.normalization import canonicalize_url, is_non_business_website_domain, normalize_domain
+from app.services.normalization import (
+    canonicalize_url,
+    is_non_business_website_domain,
+    normalize_domain,
+    normalize_phone_br,
+    normalize_text,
+    unique_preserve_order,
+)
 from app.services.providers.geocoding import GeocodedLocation, GoogleGeocodingClient
 from app.services.providers.google_places import GooglePlacesProvider
 
@@ -49,6 +56,8 @@ _RAW_WEBSITE_PATHS = (
     ("metadata", "websiteUri"),
     ("metadata", "website"),
 )
+
+
 class DiscoveryService:
     def __init__(self, db: Session, settings: Settings) -> None:
         self.db = db
@@ -91,6 +100,7 @@ class DiscoveryService:
                             index=base_index + result_index,
                         ),
                         search_term=search_term,
+                        matched_search_terms=[search_term],
                         provider_record_id=result.provider_record_id,
                         source_url=result.source_url,
                         raw_payload=result.raw_payload,
@@ -98,6 +108,7 @@ class DiscoveryService:
                     )
                 )
 
+        deduped_items, duplicates_removed = self._dedupe_preview_items(items)
         preview = DiscoveryPreviewResponse(
             provider="google_places",
             resolved_location=ResolvedLocation(
@@ -106,9 +117,281 @@ class DiscoveryService:
                 longitude=resolved.longitude,
             ),
             total_provider_results=total_provider_results,
-            items=items,
+            duplicates_removed=duplicates_removed,
+            items=deduped_items,
         )
         return self.evaluate_preview_exclusions(preview)
+
+    def _dedupe_preview_items(
+        self,
+        items: list[DiscoveryPreviewItem],
+    ) -> tuple[list[DiscoveryPreviewItem], int]:
+        canonical_items: list[DiscoveryPreviewItem | None] = []
+        key_to_index: dict[str, int] = {}
+        duplicates_removed = 0
+
+        for item in items:
+            prepared_item = self._prepare_preview_item_for_dedupe(item)
+            item_keys = self._preview_item_dedupe_keys(prepared_item)
+            matched_indices = sorted(
+                {
+                    key_to_index[key]
+                    for key in item_keys
+                    if key in key_to_index and canonical_items[key_to_index[key]] is not None
+                }
+            )
+
+            if not matched_indices:
+                canonical_items.append(prepared_item)
+                canonical_index = len(canonical_items) - 1
+                self._assign_preview_dedupe_keys(key_to_index, item_keys, canonical_index)
+                continue
+
+            canonical_index = matched_indices[0]
+            merged_item = canonical_items[canonical_index]
+            if merged_item is None:
+                canonical_items[canonical_index] = prepared_item
+                self._assign_preview_dedupe_keys(key_to_index, item_keys, canonical_index)
+                continue
+
+            for duplicate_index in matched_indices[1:]:
+                duplicate_item = canonical_items[duplicate_index]
+                if duplicate_item is None:
+                    continue
+                duplicates_removed += 1
+                merged_item = self._merge_preview_items(merged_item, duplicate_item)
+                self._assign_preview_dedupe_keys(
+                    key_to_index,
+                    self._preview_item_dedupe_keys(duplicate_item),
+                    canonical_index,
+                )
+                canonical_items[duplicate_index] = None
+
+            duplicates_removed += 1
+            merged_item = self._merge_preview_items(merged_item, prepared_item)
+            canonical_items[canonical_index] = merged_item
+            self._assign_preview_dedupe_keys(key_to_index, item_keys, canonical_index)
+            self._assign_preview_dedupe_keys(
+                key_to_index,
+                self._preview_item_dedupe_keys(merged_item),
+                canonical_index,
+            )
+
+        return [item for item in canonical_items if item is not None], duplicates_removed
+
+    def _prepare_preview_item_for_dedupe(self, item: DiscoveryPreviewItem) -> DiscoveryPreviewItem:
+        matched_search_terms = unique_preserve_order(
+            term for term in [*item.matched_search_terms, item.search_term] if term
+        )
+        candidate = self._recover_preview_candidate_contact_fields(
+            item.candidate,
+            raw_payload=item.raw_payload,
+            source_url=item.source_url,
+        )
+        source_url = (
+            canonicalize_url(item.source_url)
+            or candidate.google_maps_url
+            or candidate.source_url
+            or item.source_url
+        )
+        return item.model_copy(
+            update={
+                "search_term": matched_search_terms[0] if matched_search_terms else item.search_term,
+                "matched_search_terms": matched_search_terms,
+                "source_url": source_url,
+                "candidate": candidate,
+            }
+        )
+
+    def _assign_preview_dedupe_keys(
+        self,
+        key_to_index: dict[str, int],
+        dedupe_keys: list[str],
+        canonical_index: int,
+    ) -> None:
+        for key in dedupe_keys:
+            key_to_index[key] = canonical_index
+
+    def _preview_item_dedupe_keys(self, item: DiscoveryPreviewItem) -> list[str]:
+        candidate = item.candidate
+        dedupe_keys: list[str] = []
+        place_id = self._non_empty_text(candidate.google_place_id)
+        if place_id:
+            dedupe_keys.append(f"place:{place_id}")
+
+        maps_url = self._normalized_preview_maps_url(candidate.google_maps_url or item.source_url)
+        if maps_url:
+            dedupe_keys.append(f"maps:{maps_url}")
+
+        domain = normalize_domain(candidate.domain) or normalize_domain(candidate.website)
+        if domain:
+            dedupe_keys.append(f"domain:{domain}")
+
+        phone = self._normalized_preview_phone(candidate)
+        if phone:
+            dedupe_keys.append(f"phone:{phone}")
+
+        normalized_name = self._normalized_preview_name(candidate)
+        normalized_address = self._normalized_preview_address(candidate)
+        if normalized_name and normalized_address:
+            dedupe_keys.append(f"name_address:{normalized_name}|{normalized_address}")
+
+        normalized_city = normalize_text(candidate.city)
+        if normalized_name and normalized_city:
+            dedupe_keys.append(f"name_city:{normalized_name}|{normalized_city}")
+
+        return dedupe_keys
+
+    def _merge_preview_items(
+        self,
+        current: DiscoveryPreviewItem,
+        incoming: DiscoveryPreviewItem,
+    ) -> DiscoveryPreviewItem:
+        merged_candidate = self._merge_preview_candidates(current.candidate, incoming.candidate)
+        merged_search_terms = unique_preserve_order(
+            term
+            for term in [
+                *self._preview_item_search_terms(current),
+                *self._preview_item_search_terms(incoming),
+            ]
+            if term
+        )
+
+        return current.model_copy(
+            update={
+                "search_term": merged_search_terms[0] if merged_search_terms else current.search_term,
+                "matched_search_terms": merged_search_terms,
+                "provider_record_id": self._prefer_richer_text(current.provider_record_id, incoming.provider_record_id),
+                "source_url": self._prefer_canonical_url(current.source_url, incoming.source_url),
+                "raw_payload": _merge_payload_dicts(current.raw_payload, incoming.raw_payload),
+                "candidate": merged_candidate,
+                "exclusion": self._merge_preview_exclusion_metadata(current.exclusion, incoming.exclusion),
+                "enrichment": self._merge_preview_enrichment_metadata(current.enrichment, incoming.enrichment),
+            }
+        )
+
+    def _merge_preview_candidates(
+        self,
+        current: DiscoveryLeadCandidate,
+        incoming: DiscoveryLeadCandidate,
+    ) -> DiscoveryLeadCandidate:
+        website = self._canonical_business_website(
+            self._prefer_richer_text(current.website, incoming.website)
+        )
+        domain = normalize_domain(self._prefer_richer_text(current.domain, incoming.domain)) or normalize_domain(website)
+
+        return current.model_copy(
+            update={
+                "business_name": self._prefer_richer_text(current.business_name, incoming.business_name),
+                "normalized_business_name": self._prefer_richer_text(
+                    current.normalized_business_name,
+                    incoming.normalized_business_name,
+                ),
+                "category": self._prefer_richer_text(current.category, incoming.category),
+                "address": self._prefer_richer_text(current.address, incoming.address),
+                "neighborhood": self._prefer_richer_text(current.neighborhood, incoming.neighborhood),
+                "city": self._prefer_richer_text(current.city, incoming.city),
+                "state": self._prefer_richer_text(current.state, incoming.state),
+                "postal_code": self._prefer_richer_text(current.postal_code, incoming.postal_code),
+                "latitude": current.latitude if current.latitude is not None else incoming.latitude,
+                "longitude": current.longitude if current.longitude is not None else incoming.longitude,
+                "website": website,
+                "domain": domain,
+                "email": self._prefer_richer_text(current.email, incoming.email),
+                "phone": self._prefer_richer_text(current.phone, incoming.phone),
+                "whatsapp": self._prefer_richer_text(current.whatsapp, incoming.whatsapp),
+                "instagram": self._prefer_richer_text(current.instagram, incoming.instagram),
+                "google_maps_url": self._prefer_canonical_url(current.google_maps_url, incoming.google_maps_url),
+                "google_place_id": self._prefer_richer_text(current.google_place_id, incoming.google_place_id),
+                "source_provider": self._prefer_richer_text(current.source_provider, incoming.source_provider),
+                "source_url": self._prefer_canonical_url(current.source_url, incoming.source_url),
+            }
+        )
+
+    def _merge_preview_exclusion_metadata(
+        self,
+        current: DiscoveryExclusionMetadata,
+        incoming: DiscoveryExclusionMetadata,
+    ) -> DiscoveryExclusionMetadata:
+        if current.is_blocked and not incoming.is_blocked:
+            return current
+        if incoming.is_blocked and not current.is_blocked:
+            return incoming
+        if incoming.is_blocked and current.is_blocked:
+            return current.model_copy(
+                update={
+                    "rule_id": current.rule_id or incoming.rule_id,
+                    "rule_type": self._prefer_richer_text(current.rule_type, incoming.rule_type),
+                    "pattern": self._prefer_richer_text(current.pattern, incoming.pattern),
+                    "reason": self._prefer_richer_text(current.reason, incoming.reason),
+                }
+            )
+        return current
+
+    def _merge_preview_enrichment_metadata(
+        self,
+        current: DiscoveryPreviewEnrichmentMetadata | None,
+        incoming: DiscoveryPreviewEnrichmentMetadata | None,
+    ) -> DiscoveryPreviewEnrichmentMetadata | None:
+        if current is None:
+            return incoming
+        if incoming is None:
+            return current
+        if len(incoming.extracted_contacts) > len(current.extracted_contacts):
+            return incoming
+        if len(incoming.attempted_pages) > len(current.attempted_pages):
+            return incoming
+        if incoming.error_message and not current.error_message:
+            return incoming
+        return current
+
+    def _preview_item_search_terms(self, item: DiscoveryPreviewItem) -> list[str]:
+        return unique_preserve_order(term for term in [*item.matched_search_terms, item.search_term] if term)
+
+    def _normalized_preview_name(self, candidate: DiscoveryLeadCandidate) -> str | None:
+        return normalize_text(candidate.normalized_business_name) or normalize_text(candidate.business_name)
+
+    def _normalized_preview_address(self, candidate: DiscoveryLeadCandidate) -> str | None:
+        return normalize_text(candidate.address)
+
+    def _normalized_preview_maps_url(self, value: str | None) -> str | None:
+        return canonicalize_url(value)
+
+    def _normalized_preview_phone(self, candidate: DiscoveryLeadCandidate) -> str | None:
+        return normalize_phone_br(candidate.phone) or normalize_phone_br(candidate.whatsapp)
+
+    def _non_empty_text(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    def _prefer_canonical_url(self, current: str | None, incoming: str | None) -> str | None:
+        return self._prefer_richer_text(
+            canonicalize_url(current),
+            canonicalize_url(incoming),
+        )
+
+    def _prefer_richer_text(self, current: str | None, incoming: str | None) -> str | None:
+        current_text = self._non_empty_text(current)
+        incoming_text = self._non_empty_text(incoming)
+        if not current_text:
+            return incoming_text
+        if not incoming_text:
+            return current_text
+
+        current_normalized = normalize_text(current_text)
+        incoming_normalized = normalize_text(incoming_text)
+        if current_normalized and incoming_normalized and current_normalized == incoming_normalized:
+            return incoming_text if len(incoming_text) > len(current_text) else current_text
+        if (
+            current_normalized
+            and incoming_normalized
+            and current_normalized in incoming_normalized
+            and len(incoming_text) > len(current_text)
+        ):
+            return incoming_text
+        return current_text
 
     def evaluate_preview_exclusions(self, preview: DiscoveryPreviewResponse) -> DiscoveryPreviewResponse:
         exclusion_service = ExclusionRuleService(self.db, organization_id=self.lead_repository.organization_id)
@@ -689,6 +972,7 @@ class DiscoveryService:
                         action=ActivityAction.DISCOVERED,
                         metadata_json={
                             "search_term": item.search_term,
+                            "matched_search_terms": self._preview_item_search_terms(item),
                             "provider": preview.provider,
                             "import_batch_id": batch.id,
                             "provider_record_id": item.provider_record_id,
@@ -703,7 +987,7 @@ class DiscoveryService:
 
                 response_leads[lead.id] = LeadSummary.model_validate(lead)
 
-            batch.record_count = preview.total_provider_results
+            batch.record_count = len(preview.items)
             batch.status = ImportBatchStatus.COMPLETED
             batch.completed_at = utcnow()
             self.db.commit()
@@ -840,6 +1124,7 @@ class DiscoveryService:
                         action=ActivityAction.DISCOVERED,
                         metadata_json={
                             "search_term": item.search_term,
+                            "matched_search_terms": self._preview_item_search_terms(item),
                             "provider": annotated_preview.provider,
                             "import_batch_id": batch.id,
                             "provider_record_id": item.provider_record_id,

@@ -428,6 +428,7 @@ export type DiscoveryExclusionMetadata = {
 export type DiscoveryPreviewItem = {
   client_result_id: string | null;
   search_term: string;
+  matched_search_terms: string[];
   provider_record_id: string | null;
   source_url: string | null;
   raw_payload: Record<string, unknown>;
@@ -440,6 +441,7 @@ export type DiscoveryPreviewResponse = {
   provider: string;
   resolved_location: ResolvedLocation;
   total_provider_results: number;
+  duplicates_removed: number;
   items: DiscoveryPreviewItem[];
 };
 
