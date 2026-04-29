@@ -4,10 +4,12 @@ import requests
 from sqlalchemy import func, select
 
 from app.config import Settings
+from app.enums import LeadSourceType
 from app.models.activity_log import ActivityLog
 from app.models.import_batch import ImportBatch
 from app.models.lead import Lead
 from app.models.raw_discovery_record import RawDiscoveryRecord
+from app.repositories.lead_repository import LeadRepository
 from app.schemas.discovery import (
     DiscoveryLeadCandidate,
     DiscoveryPreviewEnrichmentMetadata,
@@ -1064,3 +1066,289 @@ def test_discovery_preview_deduplicates_by_domain_when_place_id_is_missing(db_se
     assert item.candidate.domain == "casanovamoveis.com.br"
     assert item.candidate.email == "contato@casanovamoveis.com.br"
     assert item.candidate.address == "Avenida Brasil, 1200"
+
+
+def test_discovery_preview_marks_existing_saved_leads_and_counts_hidden(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    repository = LeadRepository(db_session)
+    existing_lead, created = repository.upsert_from_discovery(
+        _candidate(
+            "Oficina Santana",
+            category="oficina mecanica",
+            phone="+5511999991111",
+            city="Santana de Parnaiba",
+        )
+    )
+    assert created is True
+    db_session.commit()
+
+    request = DiscoverySearchRequest(
+        raw_query="oficina mecanica em Santana de Parnaiba",
+        search_terms=["oficina mecanica"],
+        location_query="Santana de Parnaiba, SP",
+        radius_m=3000,
+        max_results_per_term=10,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "_resolve_location",
+        lambda payload: GeocodedLocation(
+            label="Santana de Parnaiba, SP",
+            latitude=-23.4438,
+            longitude=-46.9178,
+        ),
+    )
+
+    provider_results = [
+        ProviderLeadResult(
+            candidate=_candidate(
+                "Oficina Santana",
+                category="oficina mecanica",
+                phone="+5511999991111",
+                city="Santana de Parnaiba",
+            ),
+            raw_payload={"id": "place-oficina-santana"},
+            provider_record_id="place-oficina-santana",
+            source_url="https://maps.google.com/?q=Oficina+Santana",
+        ),
+        ProviderLeadResult(
+            candidate=_candidate(
+                "Auto Center Novo",
+                category="auto center",
+                phone="+5511999992222",
+                city="Santana de Parnaiba",
+            ),
+            raw_payload={"id": "place-auto-center-novo"},
+            provider_record_id="place-auto-center-novo",
+            source_url="https://maps.google.com/?q=Auto+Center+Novo",
+        ),
+    ]
+
+    monkeypatch.setattr(
+        service.provider,
+        "search",
+        lambda **kwargs: provider_results,
+    )
+
+    preview = service.preview(request)
+
+    assert preview.total_provider_results == 2
+    assert preview.duplicates_removed == 0
+    assert preview.existing_leads_hidden_count == 1
+    by_name = {item.candidate.business_name: item for item in preview.items}
+    assert by_name["Oficina Santana"].is_existing_lead is True
+    assert by_name["Oficina Santana"].existing_lead_id == existing_lead.id
+    assert by_name["Oficina Santana"].matched_existing_by == "google_place_id"
+    assert by_name["Auto Center Novo"].is_existing_lead is False
+    assert by_name["Auto Center Novo"].existing_lead_id is None
+
+
+def test_discovery_import_preview_is_idempotent_for_existing_saved_leads(db_session) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    request = DiscoverySearchRequest(
+        raw_query="oficina mecanica em Santana de Parnaiba",
+        search_terms=["oficina mecanica"],
+        location_query="Santana de Parnaiba, SP",
+        radius_m=3000,
+        max_results_per_term=10,
+    )
+    preview = DiscoveryPreviewResponse(
+        provider="google_places",
+        resolved_location=ResolvedLocation(
+            label="Santana de Parnaiba, SP",
+            latitude=-23.4438,
+            longitude=-46.9178,
+        ),
+        total_provider_results=1,
+        items=[
+            DiscoveryPreviewItem(
+                client_result_id="preview-oficina-santana",
+                search_term="oficina mecanica",
+                provider_record_id="place-oficina-santana",
+                source_url="https://maps.google.com/?q=Oficina+Santana",
+                raw_payload={"id": "place-oficina-santana"},
+                candidate=_candidate(
+                    "Oficina Santana",
+                    category="oficina mecanica",
+                    phone="+5511999991111",
+                    city="Santana de Parnaiba",
+                ),
+            )
+        ],
+    )
+
+    first_response = service.import_preview(
+        request=request,
+        preview=preview,
+        selected_client_result_ids=["preview-oficina-santana"],
+    )
+    second_response = service.import_preview(
+        request=request,
+        preview=preview,
+        selected_client_result_ids=["preview-oficina-santana"],
+    )
+
+    assert first_response.created_count == 1
+    assert first_response.saved_items == 1
+    assert first_response.skipped_existing_count == 0
+    assert second_response.created_count == 0
+    assert second_response.saved_items == 0
+    assert second_response.skipped_existing_count == 1
+    assert second_response.skipped_items[0].existing_lead_id == first_response.saved_lead_ids[0]
+    assert db_session.scalar(select(func.count(Lead.id))) == 1
+    assert db_session.scalar(select(func.count(RawDiscoveryRecord.id))) == 1
+
+
+def test_lead_repository_matches_existing_saved_leads_by_domain_phone_and_name_address(db_session) -> None:
+    repository = LeadRepository(db_session)
+
+    domain_lead, created_domain = repository.upsert_from_discovery(
+        _candidate(
+            "Clinica Bella",
+            category="clinica de estetica",
+            phone="+5511981111111",
+            city="Sao Paulo",
+        ).model_copy(
+            update={
+                "google_place_id": None,
+                "website": "https://clinicabella.com.br",
+                "domain": "clinicabella.com.br",
+            }
+        )
+    )
+    phone_lead, created_phone = repository.upsert_from_discovery(
+        _candidate(
+            "Restaurante Sabor da Vila",
+            category="restaurante",
+            phone="+5511982222222",
+            city="Campinas",
+        ).model_copy(update={"google_place_id": None, "website": None, "domain": None})
+    )
+    address_lead, created_address = repository.upsert_from_discovery(
+        _candidate(
+            "Moveis Horizonte",
+            category="loja de moveis",
+            phone="+5511983333333",
+            city="Belo Horizonte",
+        ).model_copy(
+            update={
+                "google_place_id": None,
+                "website": None,
+                "domain": None,
+                "phone": None,
+                "whatsapp": None,
+                "address": "Avenida Brasil, 1200",
+                "source_url": None,
+                "google_maps_url": None,
+            }
+        )
+    )
+    assert created_domain is True
+    assert created_phone is True
+    assert created_address is True
+    db_session.commit()
+
+    domain_match = repository.find_existing_match(
+        _candidate(
+            "Clinica Bella Nova Busca",
+            category="clinica de estetica",
+            phone="+5511984444444",
+            city="Sao Paulo",
+        ).model_copy(
+            update={
+                "google_place_id": None,
+                "website": "clinicabella.com.br",
+                "domain": None,
+            }
+        )
+    )
+    phone_match = repository.find_existing_match(
+        _candidate(
+            "Sabor da Vila Delivery",
+            category="restaurante",
+            phone="+55 (11) 98222-2222",
+            city="Campinas",
+        ).model_copy(update={"google_place_id": None, "website": None, "domain": None})
+    )
+    address_match = repository.find_existing_match(
+        _candidate(
+            "Moveis Horizonte",
+            category="loja de moveis",
+            phone="+5511985555555",
+            city="Belo Horizonte",
+        ).model_copy(
+            update={
+                "google_place_id": None,
+                "website": None,
+                "domain": None,
+                "address": "Avenida Brasil, 1200",
+                "source_url": None,
+                "google_maps_url": None,
+            }
+        )
+    )
+
+    assert domain_match is not None
+    assert domain_match.lead.id == domain_lead.id
+    assert domain_match.matched_by == "domain"
+    assert phone_match is not None
+    assert phone_match.lead.id == phone_lead.id
+    assert phone_match.matched_by == "phone"
+    assert address_match is not None
+    assert address_match.lead.id == address_lead.id
+    assert address_match.matched_by == "name_address"
+
+
+def test_lead_repository_does_not_merge_ambiguous_name_city_matches(db_session) -> None:
+    repository = LeadRepository(db_session)
+    db_session.add_all(
+        [
+            Lead(
+                organization_id=repository.organization_id,
+                business_name="Oficina Popular",
+                normalized_business_name=normalize_business_name("Oficina Popular") or "oficina popular",
+                category="oficina mecanica",
+                city="Curitiba",
+                state="PR",
+                phone="+5511971111111",
+                address="Rua A, 100",
+                lead_source_type=LeadSourceType.GOOGLE_PLACES,
+            ),
+            Lead(
+                organization_id=repository.organization_id,
+                business_name="Oficina Popular",
+                normalized_business_name=normalize_business_name("Oficina Popular") or "oficina popular",
+                category="oficina mecanica",
+                city="Curitiba",
+                state="PR",
+                phone="+5511972222222",
+                address="Rua B, 200",
+                lead_source_type=LeadSourceType.GOOGLE_PLACES,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    match = repository.find_existing_match(
+        _candidate(
+            "Oficina Popular",
+            category="reparo automotivo",
+            phone="+5511973333333",
+            city="Curitiba",
+        ).model_copy(
+            update={
+                "google_place_id": None,
+                "website": None,
+                "domain": None,
+                "address": None,
+                "neighborhood": None,
+                "source_url": None,
+                "google_maps_url": None,
+            }
+        )
+    )
+
+    assert match is None

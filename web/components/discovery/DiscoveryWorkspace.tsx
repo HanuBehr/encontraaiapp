@@ -128,6 +128,7 @@ export function DiscoveryWorkspace() {
   const [searchRequest, setSearchRequest] = useState<DiscoverySearchRequest | null>(null);
   const [preview, setPreview] = useState<DiscoveryPreviewResponse | null>(null);
   const [blockedFilter, setBlockedFilter] = useState<LeadBlockedFilter>("exclude");
+  const [hideExistingLeads, setHideExistingLeads] = useState(true);
   const [websiteFilter, setWebsiteFilter] = useState<WebsiteFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [newlyBlockedIds, setNewlyBlockedIds] = useState<Record<string, boolean>>({});
@@ -146,26 +147,31 @@ export function DiscoveryWorkspace() {
   const [isPreviewPending, setIsPreviewPending] = useState(false);
 
   function applyPreviewResponse(data: DiscoveryPreviewResponse) {
-    const totalCount = data.items.length;
-    const websiteReadyCount = data.items.filter((item) => hasWebsiteForCandidate(item.candidate)).length;
+    const newItems = data.items.filter((item) => !item.is_existing_lead);
+    const totalCount = newItems.length;
+    const websiteReadyCount = newItems.filter((item) => hasWebsiteForCandidate(item.candidate)).length;
     const noWebsiteCount = Math.max(totalCount - websiteReadyCount, 0);
-    const recoverableNoWebsiteCount = data.items.filter(
-      (item) => !item.exclusion.is_blocked && !hasWebsiteForCandidate(item.candidate) && hasWebsiteRecoveryLookupId(item),
+    const recoverableNoWebsiteCount = newItems.filter(
+      (item) =>
+        !item.exclusion.is_blocked &&
+        !hasWebsiteForCandidate(item.candidate) &&
+        hasWebsiteRecoveryLookupId(item),
     ).length;
     setPreview(data);
-    setSelectedIds(selectAllUnblocked(data.items));
+    setSelectedIds(selectAllSavable(data.items));
     setNewlyBlockedIds({});
     setLastImport(null);
     setPreviewError(null);
     setActionMessage(
-      totalCount === 0
+      totalCount === 0 && data.existing_leads_hidden_count === 0
         ? NO_DISCOVERY_RESULTS_UI_MESSAGE
         : buildPreviewReadyMessage({
-            totalCount,
+            newCount: totalCount,
             websiteReadyCount,
             noWebsiteCount,
             recoverableNoWebsiteCount,
             duplicatesRemoved: data.duplicates_removed,
+            existingLeadsHiddenCount: data.existing_leads_hidden_count,
           }),
     );
   }
@@ -179,7 +185,7 @@ export function DiscoveryWorkspace() {
           .map((item) => [item.client_result_id as string, item.exclusion.is_blocked]),
       );
       setPreview(response.preview);
-      setSelectedIds((current) => pruneBlockedSelection(current, response.preview.items));
+      setSelectedIds((current) => pruneUnsavableSelection(current, response.preview.items));
       setNewlyBlockedIds(collectNewlyBlockedIds(response.preview.items, previousBlocked));
       setLastImport(null);
       setActionMessage(buildEnrichmentMessage(response));
@@ -195,7 +201,7 @@ export function DiscoveryWorkspace() {
           .map((item) => [item.client_result_id as string, item.exclusion.is_blocked]),
       );
       setPreview(response.preview);
-      setSelectedIds((current) => pruneBlockedSelection(current, response.preview.items));
+      setSelectedIds((current) => pruneUnsavableSelection(current, response.preview.items));
       setNewlyBlockedIds(collectNewlyBlockedIds(response.preview.items, previousBlocked));
       setLastImport(null);
       setActionMessage(buildWebsiteRecoveryMessage(response));
@@ -215,7 +221,7 @@ export function DiscoveryWorkspace() {
     },
     onSuccess: ({ response, preview: nextPreview }) => {
       setPreview(nextPreview);
-      setSelectedIds((current) => pruneBlockedSelection(current, nextPreview.items));
+      setSelectedIds((current) => pruneUnsavableSelection(current, nextPreview.items));
       setNewlyBlockedIds({});
       setBlockDraft(null);
       const blockedCount = response.reapply_summary?.blocked ?? 0;
@@ -227,9 +233,14 @@ export function DiscoveryWorkspace() {
     mutationFn: importDiscoveryPreview,
     onSuccess: (response) => {
       setLastImport(response);
-      setActionMessage(
-        `Lote ${response.batch_id} salvo. ${response.created_leads} lead(s) criados, ${response.updated_leads} atualizados e ${response.skipped_blocked} ignorados por bloqueio.`,
-      );
+      const messageParts = [`Lote ${response.batch_id} salvo. ${response.created_count} lead(s) novo(s) salvos.`];
+      if (response.skipped_existing_count > 0) {
+        messageParts.push(`${response.skipped_existing_count} já existiam e foram ignorados.`);
+      }
+      if (response.skipped_blocked > 0) {
+        messageParts.push(`${response.skipped_blocked} foram ignorados por bloqueio.`);
+      }
+      setActionMessage(messageParts.join(" "));
       setSelectedIds({});
     },
   });
@@ -242,19 +253,27 @@ export function DiscoveryWorkspace() {
         : blockedFilter === "only"
           ? items.filter((item) => item.exclusion.is_blocked)
           : items.filter((item) => !item.exclusion.is_blocked);
+    const existingFiltered = hideExistingLeads
+      ? blockedFiltered.filter((item) => !item.is_existing_lead)
+      : blockedFiltered;
 
     if (websiteFilter === "has_website") {
-      return blockedFiltered.filter((item) => hasWebsiteForCandidate(item.candidate));
+      return existingFiltered.filter((item) => hasWebsiteForCandidate(item.candidate));
     }
     if (websiteFilter === "no_website") {
-      return blockedFiltered.filter((item) => !hasWebsiteForCandidate(item.candidate));
+      return existingFiltered.filter((item) => !hasWebsiteForCandidate(item.candidate));
     }
-    return blockedFiltered;
-  }, [blockedFilter, preview?.items, websiteFilter]);
+    return existingFiltered;
+  }, [blockedFilter, hideExistingLeads, preview?.items, websiteFilter]);
 
   const selectedClientResultIds = useMemo(() => {
     return (preview?.items ?? [])
-      .filter((item) => item.client_result_id && selectedIds[item.client_result_id] && !item.exclusion.is_blocked)
+      .filter(
+        (item) =>
+          item.client_result_id &&
+          selectedIds[item.client_result_id] &&
+          isSavablePreviewItem(item),
+      )
       .map((item) => item.client_result_id as string);
   }, [preview?.items, selectedIds]);
 
@@ -264,7 +283,7 @@ export function DiscoveryWorkspace() {
         (item) =>
           item.client_result_id &&
           selectedIds[item.client_result_id] &&
-          !item.exclusion.is_blocked &&
+          isSavablePreviewItem(item) &&
           hasWebsiteForCandidate(item.candidate),
       )
       .map((item) => item.client_result_id as string);
@@ -276,7 +295,7 @@ export function DiscoveryWorkspace() {
         (item) =>
           item.client_result_id &&
           selectedIds[item.client_result_id] &&
-          !item.exclusion.is_blocked &&
+          isSavablePreviewItem(item) &&
           !hasWebsiteForCandidate(item.candidate),
       )
       .map((item) => item.client_result_id as string);
@@ -288,7 +307,7 @@ export function DiscoveryWorkspace() {
         (item) =>
           item.client_result_id &&
           selectedIds[item.client_result_id] &&
-          !item.exclusion.is_blocked &&
+          isSavablePreviewItem(item) &&
           !hasWebsiteForCandidate(item.candidate) &&
           hasWebsiteRecoveryLookupId(item),
       )
@@ -296,16 +315,23 @@ export function DiscoveryWorkspace() {
   }, [preview?.items, selectedIds]);
 
   const visibleSelectableIds = visibleItems
-    .filter((item) => !item.exclusion.is_blocked && item.client_result_id)
+    .filter((item) => item.client_result_id && isSavablePreviewItem(item))
     .map((item) => item.client_result_id as string);
   const visibleEnrichableIds = visibleItems
-    .filter((item) => !item.exclusion.is_blocked && item.client_result_id && hasWebsiteForCandidate(item.candidate))
+    .filter(
+      (item) =>
+        item.client_result_id &&
+        isSavablePreviewItem(item) &&
+        hasWebsiteForCandidate(item.candidate),
+    )
     .map((item) => item.client_result_id as string);
   const allVisibleSelected =
     visibleSelectableIds.length > 0 && visibleSelectableIds.every((clientId) => selectedIds[clientId]);
-  const previewCount = preview?.items.length ?? 0;
+  const previewCount = preview?.items.filter((item) => !item.is_existing_lead).length ?? 0;
+  const existingPreviewCount = preview?.items.filter((item) => item.is_existing_lead).length ?? 0;
   const blockedCount = preview?.items.filter((item) => item.exclusion.is_blocked).length ?? 0;
-  const websiteReadyCount = preview?.items.filter((item) => hasWebsiteForCandidate(item.candidate)).length ?? 0;
+  const websiteReadyCount =
+    preview?.items.filter((item) => !item.is_existing_lead && hasWebsiteForCandidate(item.candidate)).length ?? 0;
   const recoverySelectionMissingLookupCount =
     selectedNoWebsiteClientResultIds.length - selectedRecoverableClientResultIds.length;
   const parsedNaturalLanguageQuery = useMemo(
@@ -584,9 +610,9 @@ export function DiscoveryWorkspace() {
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center sm:min-w-[480px] sm:grid-cols-4">
-          <Metric label="Prévia" value={previewCount.toLocaleString()} />
+          <Metric label="Novas" value={previewCount.toLocaleString()} />
           <Metric label="Com site" value={websiteReadyCount.toLocaleString()} />
-          <Metric label="Bloqueadas" value={blockedCount.toLocaleString()} />
+          <Metric label="Já salvas" value={existingPreviewCount.toLocaleString()} />
           <Metric label="Selecionadas" value={selectedClientResultIds.length.toLocaleString()} />
         </div>
       </section>
@@ -819,10 +845,19 @@ export function DiscoveryWorkspace() {
           <div>
             <p className="text-sm font-semibold text-neutral-950">Prévia da busca</p>
             <p className="mt-1 text-sm text-neutral-500">
-              Resultados bloqueados ficam ocultos por padrão. Só os itens selecionados serão salvos em Leads.
+              Resultados bloqueados e empresas já salvas ficam ocultos por padrão. Só os itens selecionados serão salvos em Leads.
             </p>
           </div>
           <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-end">
+            <label className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                checked={hideExistingLeads}
+                onChange={(event) => setHideExistingLeads(event.target.checked)}
+                className="h-4 w-4 rounded border-neutral-300"
+              />
+              <span>Ocultar já salvos</span>
+            </label>
             <label className="block w-full lg:w-44">
               <span className="text-xs font-medium text-neutral-600">Filtro de bloqueio</span>
               <select
@@ -893,18 +928,20 @@ export function DiscoveryWorkspace() {
             {selectedEnrichableClientResultIds.length.toLocaleString()}. Visíveis prontas:{" "}
             {visibleEnrichableIds.length.toLocaleString()}. A recuperação de sites verifica até{" "}
             {WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} empresas sem site por vez. Recuperáveis agora:{" "}
-            {selectedRecoverableClientResultIds.length.toLocaleString()}.
+            {selectedRecoverableClientResultIds.length.toLocaleString()}. Bloqueadas na prévia:{" "}
+            {blockedCount.toLocaleString()}.
           </p>
         ) : null}
 
         {preview ? (
           <DiscoveryPreviewTable
             items={visibleItems}
-            emptyMessage={
-              (preview.items?.length ?? 0) === 0
-                ? NO_DISCOVERY_RESULTS_UI_MESSAGE
-                : "Nenhuma empresa corresponde aos filtros atuais de bloqueio e site."
-            }
+            emptyMessage={buildPreviewEmptyMessage({
+              preview,
+              hideExistingLeads,
+              blockedFilter,
+              websiteFilter,
+            })}
             selectedIds={selectedIds}
             newlyBlockedIds={newlyBlockedIds}
             allVisibleSelected={allVisibleSelected}
@@ -1010,6 +1047,7 @@ function DiscoveryPreviewTable({
             items.map((item) => {
               const clientResultId = item.client_result_id ?? "";
               const blocked = item.exclusion.is_blocked;
+              const existing = item.is_existing_lead;
               const domain = domainForCandidate(item.candidate);
               const hasWebsite = hasWebsiteForCandidate(item.candidate);
               const contactFormUrl = firstExtractedContactUrl(item, "contact_form");
@@ -1020,7 +1058,7 @@ function DiscoveryPreviewTable({
                       type="checkbox"
                       aria-label={`Select ${item.candidate.business_name}`}
                       checked={Boolean(clientResultId && selectedIds[clientResultId])}
-                      disabled={blocked || !clientResultId}
+                      disabled={!clientResultId || !isSavablePreviewItem(item)}
                       onChange={(event) => onToggleSelection(clientResultId, event.target.checked)}
                       className="h-4 w-4 rounded border-neutral-300 disabled:cursor-not-allowed disabled:opacity-40"
                     />
@@ -1029,6 +1067,7 @@ function DiscoveryPreviewTable({
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-neutral-950">{item.candidate.business_name}</p>
                       {blocked ? <BlockedBadge /> : null}
+                      {existing ? <OutcomeBadge tone="warning">Já salvo</OutcomeBadge> : null}
                       {hasWebsite ? (
                         <OutcomeBadge tone="info">Com site</OutcomeBadge>
                       ) : (
@@ -1129,6 +1168,13 @@ function DiscoveryPreviewTable({
                           {item.exclusion.reason ?? "Corresponde a uma regra de exclusão ativa."}
                         </p>
                       </div>
+                    ) : existing ? (
+                      <div>
+                        <p className="font-medium text-amber-900">Já salvo</p>
+                        <p className="mt-1 max-w-xs text-xs text-amber-800">
+                          Encontrado antes e mantido fora do save. Match por {existingLeadMatchLabel(item.matched_existing_by)}.
+                        </p>
+                      </div>
                     ) : (
                       <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
                         Pronta para salvar
@@ -1191,7 +1237,7 @@ function SaveBar({
           <p className="text-xs font-semibold uppercase text-cyan-700">Salvar em leads</p>
           <h2 className="mt-1 text-base font-semibold text-neutral-950">Salvar leads selecionados</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Linhas bloqueadas são ignoradas automaticamente. Depois de salvar, o lote abre direto em Leads.
+            Linhas bloqueadas e empresas já salvas são ignoradas automaticamente. Depois de salvar, o lote abre direto em Leads.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-[140px_180px]">
@@ -1215,7 +1261,7 @@ function SaveBar({
           <div>
             <p className="text-sm font-semibold text-emerald-950">Lote {lastImport.batch_id} salvo</p>
             <p className="mt-1 text-sm text-emerald-800">
-              {lastImport.created_leads} criado(s), {lastImport.updated_leads} atualizado(s) e {lastImport.skipped_blocked} ignorado(s).
+              {lastImport.created_count} criado(s), {lastImport.skipped_existing_count} já existiam e {lastImport.skipped_blocked} ignorado(s) por bloqueio.
             </p>
           </div>
           <Link
@@ -1627,18 +1673,18 @@ function buildManualAreaLocationQuery(form: DiscoveryFormState) {
   return [form.neighborhood.trim(), form.city.trim(), form.postalCode.trim()].filter(Boolean).join(", ") || null;
 }
 
-function selectAllUnblocked(items: DiscoveryPreviewItem[]) {
+function selectAllSavable(items: DiscoveryPreviewItem[]) {
   return items.reduce<Record<string, boolean>>((selection, item) => {
-    if (item.client_result_id && !item.exclusion.is_blocked) {
+    if (item.client_result_id && isSavablePreviewItem(item)) {
       selection[item.client_result_id] = true;
     }
     return selection;
   }, {});
 }
 
-function pruneBlockedSelection(selection: Record<string, boolean>, items: DiscoveryPreviewItem[]) {
+function pruneUnsavableSelection(selection: Record<string, boolean>, items: DiscoveryPreviewItem[]) {
   const allowedIds = new Set(
-    items.filter((item) => item.client_result_id && !item.exclusion.is_blocked).map((item) => item.client_result_id),
+    items.filter((item) => item.client_result_id && isSavablePreviewItem(item)).map((item) => item.client_result_id),
   );
   return Object.entries(selection).reduce<Record<string, boolean>>((next, [clientId, selected]) => {
     if (selected && allowedIds.has(clientId)) {
@@ -1690,26 +1736,57 @@ function buildEnrichmentMessage(response: DiscoveryPreviewEnrichmentResponse) {
 }
 
 function buildPreviewReadyMessage({
-  totalCount,
+  newCount,
   websiteReadyCount,
   noWebsiteCount,
   recoverableNoWebsiteCount,
   duplicatesRemoved,
+  existingLeadsHiddenCount,
 }: {
-  totalCount: number;
+  newCount: number;
   websiteReadyCount: number;
   noWebsiteCount: number;
   recoverableNoWebsiteCount: number;
   duplicatesRemoved: number;
+  existingLeadsHiddenCount: number;
 }) {
-  let message = `Prévia pronta. ${totalCount.toLocaleString()} empresa(s) encontradas: ${websiteReadyCount.toLocaleString()} com site ou domínio e ${noWebsiteCount.toLocaleString()} sem site.`;
+  let message = `Prévia pronta. ${newCount.toLocaleString()} empresa(s) nova(s) encontradas: ${websiteReadyCount.toLocaleString()} com site ou domínio e ${noWebsiteCount.toLocaleString()} sem site.`;
   if (duplicatesRemoved > 0) {
     message += ` ${duplicatesRemoved.toLocaleString()} duplicata(s) removida(s) da prévia.`;
+  }
+  if (existingLeadsHiddenCount > 0) {
+    message += ` ${existingLeadsHiddenCount.toLocaleString()} empresa(s) já salvas ocultadas.`;
   }
   if (noWebsiteCount > 0 && recoverableNoWebsiteCount > 0) {
     message += ` ${recoverableNoWebsiteCount.toLocaleString()} sem site podem passar por recuperação agora.`;
   }
   return message;
+}
+
+function buildPreviewEmptyMessage({
+  preview,
+  hideExistingLeads,
+  blockedFilter,
+  websiteFilter,
+}: {
+  preview: DiscoveryPreviewResponse;
+  hideExistingLeads: boolean;
+  blockedFilter: LeadBlockedFilter;
+  websiteFilter: WebsiteFilter;
+}) {
+  if ((preview.items?.length ?? 0) === 0) {
+    return NO_DISCOVERY_RESULTS_UI_MESSAGE;
+  }
+  if (hideExistingLeads && preview.items.every((item) => item.is_existing_lead || item.exclusion.is_blocked)) {
+    return "Todas as empresas desta busca já estavam salvas ou bloqueadas. Desative 'Ocultar já salvos' para revisar mesmo assim.";
+  }
+  if (hideExistingLeads && preview.existing_leads_hidden_count > 0) {
+    return "Nenhuma empresa nova corresponde aos filtros atuais. Desative 'Ocultar já salvos' para revisar empresas encontradas antes.";
+  }
+  if (blockedFilter !== "include" || websiteFilter !== "all") {
+    return "Nenhuma empresa corresponde aos filtros atuais de bloqueio e site.";
+  }
+  return "Nenhuma empresa disponível para esta prévia.";
 }
 
 function buildWebsiteRecoveryMessage(response: DiscoveryPreviewWebsiteRecoveryResponse) {
@@ -1735,6 +1812,10 @@ function buildWebsiteRecoveryMessage(response: DiscoveryPreviewWebsiteRecoveryRe
 
 function hasWebsiteForCandidate(candidate: DiscoveryLeadCandidate) {
   return Boolean(candidate.website || domainForCandidate(candidate));
+}
+
+function isSavablePreviewItem(item: DiscoveryPreviewItem) {
+  return !item.exclusion.is_blocked && !item.is_existing_lead;
 }
 
 function previewSearchTermsLabel(item: DiscoveryPreviewItem) {
@@ -1774,6 +1855,27 @@ function domainForCandidate(candidate: DiscoveryLeadCandidate) {
 function firstExtractedContactUrl(item: DiscoveryPreviewItem, contactType: string) {
   const contact = item.enrichment?.extracted_contacts.find((entry) => entry.contact_type === contactType);
   return contact?.normalized_value ?? contact?.raw_value ?? null;
+}
+
+function existingLeadMatchLabel(matchedExistingBy: string | null) {
+  switch (matchedExistingBy) {
+    case "google_place_id":
+      return "place id do Google";
+    case "google_maps_url":
+      return "Google Maps";
+    case "domain":
+      return "domínio";
+    case "phone":
+      return "telefone";
+    case "name_address":
+      return "nome + endereço";
+    case "name_neighborhood_city":
+      return "nome + bairro + cidade";
+    case "name_city":
+      return "nome + cidade";
+    default:
+      return "dados da empresa";
+  }
 }
 
 function parseCoordinate(value: string) {

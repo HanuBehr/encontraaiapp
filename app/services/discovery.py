@@ -236,7 +236,12 @@ class DiscoveryService:
         if normalized_name and normalized_address:
             dedupe_keys.append(f"name_address:{normalized_name}|{normalized_address}")
 
+        normalized_neighborhood = normalize_text(candidate.neighborhood)
         normalized_city = normalize_text(candidate.city)
+        if normalized_name and normalized_neighborhood and normalized_city:
+            dedupe_keys.append(
+                f"name_neighborhood_city:{normalized_name}|{normalized_neighborhood}|{normalized_city}"
+            )
         if normalized_name and normalized_city:
             dedupe_keys.append(f"name_city:{normalized_name}|{normalized_city}")
 
@@ -426,7 +431,7 @@ class DiscoveryService:
                 )
             )
 
-        return preview.model_copy(update={"items": annotated_items})
+        return self._annotate_existing_leads(preview.model_copy(update={"items": annotated_items}))
 
     def _preview_item_client_result_id(self, item: DiscoveryPreviewItem, index: int) -> str:
         if item.client_result_id:
@@ -451,6 +456,35 @@ class DiscoveryService:
                 },
             )
             return fallback_client_result_id
+
+    def _annotate_existing_leads(self, preview: DiscoveryPreviewResponse) -> DiscoveryPreviewResponse:
+        # TODO: if unsaved preview history becomes persistent, annotate "already seen" separately
+        # from "already saved" so the product can filter both without conflating them.
+        matcher = self.lead_repository.build_existing_lead_matcher()
+        existing_leads_hidden_count = 0
+        annotated_items: list[DiscoveryPreviewItem] = []
+
+        for item in preview.items:
+            existing_match = self.lead_repository.find_existing_match(item.candidate, matcher=matcher)
+            is_existing_lead = existing_match is not None
+            if is_existing_lead:
+                existing_leads_hidden_count += 1
+            annotated_items.append(
+                item.model_copy(
+                    update={
+                        "is_existing_lead": is_existing_lead,
+                        "existing_lead_id": existing_match.lead.id if existing_match is not None else None,
+                        "matched_existing_by": existing_match.matched_by if existing_match is not None else None,
+                    }
+                )
+            )
+
+        return preview.model_copy(
+            update={
+                "items": annotated_items,
+                "existing_leads_hidden_count": existing_leads_hidden_count,
+            }
+        )
 
     def _recover_preview_candidate_contact_fields(
         self,
@@ -1033,14 +1067,30 @@ class DiscoveryService:
         selected_items = [indexed_items[client_id] for client_id in dict.fromkeys(selected_client_result_ids)]
         skipped_items: list[DiscoveryImportSkippedItem] = []
         import_items: list[DiscoveryPreviewItem] = []
+        skipped_blocked_count = 0
+        skipped_existing_count = 0
         for item in selected_items:
             if skip_blocked and item.exclusion.is_blocked:
+                skipped_blocked_count += 1
                 skipped_items.append(
                     DiscoveryImportSkippedItem(
                         client_result_id=item.client_result_id or "",
                         business_name=item.candidate.business_name,
                         reason=item.exclusion.reason or "Matched an active exclusion rule.",
                         exclusion=item.exclusion,
+                    )
+                )
+                continue
+            if item.is_existing_lead:
+                skipped_existing_count += 1
+                skipped_items.append(
+                    DiscoveryImportSkippedItem(
+                        client_result_id=item.client_result_id or "",
+                        business_name=item.candidate.business_name,
+                        reason="Esta empresa já estava salva e foi ignorada.",
+                        exclusion=item.exclusion,
+                        existing_lead_id=item.existing_lead_id,
+                        matched_existing_by=item.matched_existing_by,
                     )
                 )
                 continue
@@ -1070,7 +1120,24 @@ class DiscoveryService:
 
         try:
             for item in import_items:
-                lead, created = self.lead_repository.upsert_from_discovery(item.candidate)
+                lead, created = self.lead_repository.upsert_from_discovery(
+                    item.candidate,
+                    merge_existing=False,
+                )
+                if not created:
+                    existing_match = self.lead_repository.find_existing_match(item.candidate)
+                    skipped_existing_count += 1
+                    skipped_items.append(
+                        DiscoveryImportSkippedItem(
+                            client_result_id=item.client_result_id or "",
+                            business_name=item.candidate.business_name,
+                            reason="Esta empresa já estava salva e foi ignorada.",
+                            exclusion=item.exclusion,
+                            existing_lead_id=lead.id,
+                            matched_existing_by=existing_match.matched_by if existing_match is not None else item.matched_existing_by,
+                        )
+                    )
+                    continue
                 self.db.flush()
 
                 raw_record = RawDiscoveryRecord(
@@ -1177,8 +1244,11 @@ class DiscoveryService:
             resolved_location=annotated_preview.resolved_location,
             total_preview_items=len(annotated_preview.items),
             selected_items=len(selected_items),
-            saved_items=len(import_items),
-            skipped_blocked=len(skipped_items),
+            saved_items=len(unique_saved_lead_ids),
+            skipped_blocked=skipped_blocked_count,
+            skipped_existing_count=skipped_existing_count,
+            merged_existing_count=0,
+            created_count=len(created_ids),
             created_leads=len(created_ids),
             updated_leads=len(updated_ids),
             saved_lead_ids=unique_saved_lead_ids,

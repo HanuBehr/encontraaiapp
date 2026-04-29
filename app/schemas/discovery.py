@@ -86,6 +86,9 @@ class DiscoveryPreviewItem(BaseModel):
     raw_payload: dict[str, Any] = Field(default_factory=dict)
     candidate: DiscoveryLeadCandidate
     exclusion: DiscoveryExclusionMetadata = Field(default_factory=DiscoveryExclusionMetadata)
+    is_existing_lead: bool = False
+    existing_lead_id: int | None = None
+    matched_existing_by: str | None = None
     enrichment: "DiscoveryPreviewEnrichmentMetadata | None" = None
 
 
@@ -94,6 +97,7 @@ class DiscoveryPreviewResponse(BaseModel):
     resolved_location: ResolvedLocation
     total_provider_results: int
     duplicates_removed: int = 0
+    existing_leads_hidden_count: int = 0
     items: list[DiscoveryPreviewItem]
 
 
@@ -191,6 +195,8 @@ class DiscoveryImportSkippedItem(BaseModel):
     business_name: str
     reason: str
     exclusion: DiscoveryExclusionMetadata
+    existing_lead_id: int | None = None
+    matched_existing_by: str | None = None
 
 
 class DiscoveryImportResponse(BaseModel):
@@ -202,6 +208,9 @@ class DiscoveryImportResponse(BaseModel):
     selected_items: int
     saved_items: int
     skipped_blocked: int
+    skipped_existing_count: int = 0
+    merged_existing_count: int = 0
+    created_count: int = 0
     created_leads: int
     updated_leads: int
     saved_lead_ids: list[int]

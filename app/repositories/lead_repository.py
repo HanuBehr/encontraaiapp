@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
@@ -18,7 +19,7 @@ from app.models.sales_rep import SalesRep
 from app.repositories.organization_repository import get_or_create_default_organization
 from app.schemas.discovery import DiscoveryLeadCandidate
 from app.schemas.lead import LeadBlockedFilter, LeadListFilters
-from app.services.normalization import normalize_brazilian_state
+from app.services.normalization import canonicalize_url, normalize_brazilian_state, normalize_domain, normalize_phone_br, normalize_text
 
 
 CONTACT_FIELD_MAP: dict[ContactType, str] = {
@@ -42,6 +43,215 @@ LEAD_SORT_COLUMNS = {
     "company_size_fit": Lead.company_size_fit,
     "trade_type": Lead.trade_type,
 }
+
+
+@dataclass(frozen=True)
+class ExistingLeadMatch:
+    lead: Lead
+    matched_by: str
+
+
+@dataclass(frozen=True)
+class _LeadMatchFingerprint:
+    lead: Lead
+    place_id: str | None
+    maps_url: str | None
+    domain: str | None
+    phone_values: tuple[str, ...]
+    normalized_name: str | None
+    normalized_address: str | None
+    normalized_city: str | None
+    normalized_neighborhood: str | None
+
+
+class _ExistingLeadMatcher:
+    def __init__(self, leads: Iterable[Lead]) -> None:
+        ordered_leads = sorted(leads, key=lambda lead: lead.id)
+        self._by_place_id: dict[str, list[_LeadMatchFingerprint]] = {}
+        self._by_maps_url: dict[str, list[_LeadMatchFingerprint]] = {}
+        self._by_domain: dict[str, list[_LeadMatchFingerprint]] = {}
+        self._by_phone: dict[str, list[_LeadMatchFingerprint]] = {}
+        self._by_name_address: dict[str, list[_LeadMatchFingerprint]] = {}
+        self._by_name_neighborhood_city: dict[str, list[_LeadMatchFingerprint]] = {}
+        self._by_name_city: dict[str, list[_LeadMatchFingerprint]] = {}
+
+        for lead in ordered_leads:
+            fingerprint = self._fingerprint_for_lead(lead)
+            self._index(self._by_place_id, fingerprint.place_id, fingerprint)
+            self._index(self._by_maps_url, fingerprint.maps_url, fingerprint)
+            self._index(self._by_domain, fingerprint.domain, fingerprint)
+            for phone_value in fingerprint.phone_values:
+                self._index(self._by_phone, phone_value, fingerprint)
+            if fingerprint.normalized_name and fingerprint.normalized_address:
+                self._index(
+                    self._by_name_address,
+                    f"{fingerprint.normalized_name}|{fingerprint.normalized_address}",
+                    fingerprint,
+                )
+            if (
+                fingerprint.normalized_name
+                and fingerprint.normalized_neighborhood
+                and fingerprint.normalized_city
+            ):
+                self._index(
+                    self._by_name_neighborhood_city,
+                    (
+                        f"{fingerprint.normalized_name}|"
+                        f"{fingerprint.normalized_neighborhood}|"
+                        f"{fingerprint.normalized_city}"
+                    ),
+                    fingerprint,
+                )
+            if fingerprint.normalized_name and fingerprint.normalized_city:
+                self._index(
+                    self._by_name_city,
+                    f"{fingerprint.normalized_name}|{fingerprint.normalized_city}",
+                    fingerprint,
+                )
+
+    def match(self, candidate: DiscoveryLeadCandidate) -> ExistingLeadMatch | None:
+        place_id = _non_empty_text(candidate.google_place_id)
+        if place_id:
+            match = self._pick_strong(self._by_place_id.get(place_id, []), "google_place_id")
+            if match is not None:
+                return match
+
+        maps_url = canonicalize_url(candidate.google_maps_url or candidate.source_url)
+        if maps_url:
+            match = self._pick_strong(self._by_maps_url.get(maps_url, []), "google_maps_url")
+            if match is not None:
+                return match
+
+        normalized_city = normalize_text(candidate.city)
+        normalized_name = normalize_text(candidate.normalized_business_name) or normalize_text(candidate.business_name)
+        normalized_address = normalize_text(candidate.address)
+        normalized_neighborhood = normalize_text(candidate.neighborhood)
+
+        domain = normalize_domain(candidate.domain) or normalize_domain(candidate.website)
+        if domain:
+            match = self._pick_contact_like(
+                self._by_domain.get(domain, []),
+                normalized_city=normalized_city,
+                matched_by="domain",
+            )
+            if match is not None:
+                return match
+
+        candidate_phone_values = _unique_non_empty(
+            normalize_phone_br(candidate.phone),
+            normalize_phone_br(candidate.whatsapp),
+        )
+        for phone_value in candidate_phone_values:
+            match = self._pick_contact_like(
+                self._by_phone.get(phone_value, []),
+                normalized_city=normalized_city,
+                matched_by="phone",
+            )
+            if match is not None:
+                return match
+
+        if normalized_name and normalized_address:
+            match = self._pick_exactish(
+                self._by_name_address.get(f"{normalized_name}|{normalized_address}", []),
+                matched_by="name_address",
+            )
+            if match is not None:
+                return match
+
+        if normalized_name and normalized_neighborhood and normalized_city:
+            match = self._pick_exactish(
+                self._by_name_neighborhood_city.get(
+                    f"{normalized_name}|{normalized_neighborhood}|{normalized_city}",
+                    [],
+                ),
+                matched_by="name_neighborhood_city",
+            )
+            if match is not None:
+                return match
+
+        if normalized_name and normalized_city:
+            match = self._pick_name_city(self._by_name_city.get(f"{normalized_name}|{normalized_city}", []))
+            if match is not None:
+                return match
+
+        return None
+
+    @staticmethod
+    def _fingerprint_for_lead(lead: Lead) -> _LeadMatchFingerprint:
+        return _LeadMatchFingerprint(
+            lead=lead,
+            place_id=_non_empty_text(lead.google_place_id),
+            maps_url=canonicalize_url(lead.google_maps_url or lead.source_url),
+            domain=normalize_domain(lead.domain) or normalize_domain(lead.website),
+            phone_values=tuple(
+                _unique_non_empty(
+                    normalize_phone_br(lead.phone),
+                    normalize_phone_br(lead.whatsapp),
+                )
+            ),
+            normalized_name=normalize_text(lead.normalized_business_name) or normalize_text(lead.business_name),
+            normalized_address=normalize_text(lead.address),
+            normalized_city=normalize_text(lead.city),
+            normalized_neighborhood=normalize_text(lead.neighborhood),
+        )
+
+    @staticmethod
+    def _index(
+        index: dict[str, list[_LeadMatchFingerprint]],
+        key: str | None,
+        fingerprint: _LeadMatchFingerprint,
+    ) -> None:
+        if not key:
+            return
+        index.setdefault(key, []).append(fingerprint)
+
+    @staticmethod
+    def _pick_strong(
+        matches: list[_LeadMatchFingerprint],
+        matched_by: str,
+    ) -> ExistingLeadMatch | None:
+        if not matches:
+            return None
+        return ExistingLeadMatch(lead=matches[0].lead, matched_by=matched_by)
+
+    @staticmethod
+    def _pick_contact_like(
+        matches: list[_LeadMatchFingerprint],
+        *,
+        normalized_city: str | None,
+        matched_by: str,
+    ) -> ExistingLeadMatch | None:
+        compatible_matches = [
+            match
+            for match in matches
+            if _cities_are_compatible(match.normalized_city, normalized_city)
+        ]
+        if not compatible_matches:
+            return None
+        if len(compatible_matches) == 1:
+            return ExistingLeadMatch(lead=compatible_matches[0].lead, matched_by=matched_by)
+
+        if _all_same_normalized_name(compatible_matches):
+            return ExistingLeadMatch(lead=compatible_matches[0].lead, matched_by=matched_by)
+        return None
+
+    @staticmethod
+    def _pick_exactish(
+        matches: list[_LeadMatchFingerprint],
+        *,
+        matched_by: str,
+    ) -> ExistingLeadMatch | None:
+        if not matches:
+            return None
+        if len(matches) == 1 or _all_same_normalized_address(matches):
+            return ExistingLeadMatch(lead=matches[0].lead, matched_by=matched_by)
+        return None
+
+    @staticmethod
+    def _pick_name_city(matches: list[_LeadMatchFingerprint]) -> ExistingLeadMatch | None:
+        if len(matches) != 1:
+            return None
+        return ExistingLeadMatch(lead=matches[0].lead, matched_by="name_city")
 
 
 class LeadRepository:
@@ -352,8 +562,32 @@ class LeadRepository:
             recent_leads,
         )
 
-    def upsert_from_discovery(self, candidate: DiscoveryLeadCandidate) -> tuple[Lead, bool]:
-        lead = self._find_existing(candidate)
+    def build_existing_lead_matcher(self) -> _ExistingLeadMatcher:
+        query = (
+            select(Lead)
+            .where(*self._organization_conditions(), Lead.is_duplicate.is_(False))
+            .order_by(Lead.id.asc())
+        )
+        return _ExistingLeadMatcher(self.db.execute(query).scalars().all())
+
+    def find_existing_match(
+        self,
+        candidate: DiscoveryLeadCandidate,
+        *,
+        matcher: _ExistingLeadMatcher | None = None,
+    ) -> ExistingLeadMatch | None:
+        resolved_matcher = matcher or self.build_existing_lead_matcher()
+        return resolved_matcher.match(candidate)
+
+    def upsert_from_discovery(
+        self,
+        candidate: DiscoveryLeadCandidate,
+        *,
+        matcher: _ExistingLeadMatcher | None = None,
+        merge_existing: bool = True,
+    ) -> tuple[Lead, bool]:
+        existing_match = self.find_existing_match(candidate, matcher=matcher)
+        lead = existing_match.lead if existing_match is not None else None
         created = lead is None
         normalized_state = normalize_brazilian_state(candidate.state) or candidate.state
 
@@ -385,6 +619,9 @@ class LeadRepository:
             self.db.add(lead)
             self.db.flush()
             self._apply_exclusion_rules(lead)
+            return lead, created
+
+        if not merge_existing:
             return lead, created
 
         if lead.organization_id is None and self._include_unassigned_leads:
@@ -679,31 +916,6 @@ class LeadRepository:
         )
         return [(int(row.id), str(row.name)) for row in self.db.execute(query).all()]
 
-    def _find_existing(self, candidate: DiscoveryLeadCandidate) -> Lead | None:
-        organization_conditions = self._organization_conditions()
-        if candidate.google_place_id:
-            query = select(Lead).where(*organization_conditions, Lead.google_place_id == candidate.google_place_id)
-            lead = self.db.execute(query).scalar_one_or_none()
-            if lead is not None:
-                return lead
-
-        if candidate.domain and candidate.city:
-            query = select(Lead).where(
-                *organization_conditions,
-                Lead.domain == candidate.domain,
-                Lead.city == candidate.city,
-            )
-            lead = self.db.execute(query).scalar_one_or_none()
-            if lead is not None:
-                return lead
-
-        query = select(Lead).where(
-            *organization_conditions,
-            Lead.normalized_business_name == candidate.normalized_business_name,
-            or_(Lead.city == candidate.city, Lead.city.is_(None)),
-        )
-        return self.db.execute(query).scalar_one_or_none()
-
     @staticmethod
     def _fill_if_missing(lead: Lead, field_name: str, new_value: object) -> None:
         if new_value in (None, "", [], {}):
@@ -716,3 +928,35 @@ class LeadRepository:
         from app.services.exclusion_rules import ExclusionRuleService
 
         ExclusionRuleService(self.db, organization_id=lead.organization_id or self.organization_id).apply_to_lead(lead)
+
+
+def _all_same_normalized_address(matches: list[_LeadMatchFingerprint]) -> bool:
+    addresses = {match.normalized_address for match in matches}
+    return len(addresses) <= 1
+
+
+def _all_same_normalized_name(matches: list[_LeadMatchFingerprint]) -> bool:
+    names = {match.normalized_name for match in matches}
+    return len(names) == 1
+
+
+def _cities_are_compatible(existing_city: str | None, candidate_city: str | None) -> bool:
+    return not existing_city or not candidate_city or existing_city == candidate_city
+
+
+def _non_empty_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _unique_non_empty(*values: str | None) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered

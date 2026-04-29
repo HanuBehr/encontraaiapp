@@ -434,6 +434,9 @@ export type DiscoveryPreviewItem = {
   raw_payload: Record<string, unknown>;
   candidate: DiscoveryLeadCandidate;
   exclusion: DiscoveryExclusionMetadata;
+  is_existing_lead: boolean;
+  existing_lead_id: number | null;
+  matched_existing_by: string | null;
   enrichment: DiscoveryPreviewEnrichmentMetadata | null;
 };
 
@@ -442,6 +445,7 @@ export type DiscoveryPreviewResponse = {
   resolved_location: ResolvedLocation;
   total_provider_results: number;
   duplicates_removed: number;
+  existing_leads_hidden_count: number;
   items: DiscoveryPreviewItem[];
 };
 
@@ -531,6 +535,9 @@ export type DiscoveryImportResponse = {
   selected_items: number;
   saved_items: number;
   skipped_blocked: number;
+  skipped_existing_count: number;
+  merged_existing_count: number;
+  created_count: number;
   created_leads: number;
   updated_leads: number;
   saved_lead_ids: number[];
@@ -540,6 +547,8 @@ export type DiscoveryImportResponse = {
     business_name: string;
     reason: string;
     exclusion: DiscoveryExclusionMetadata;
+    existing_lead_id: number | null;
+    matched_existing_by: string | null;
   }>;
 };
 
