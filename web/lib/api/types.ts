@@ -36,6 +36,7 @@ export type LeadSortBy =
 
 export type LeadSortDir = "asc" | "desc";
 export type LeadBlockedFilter = "exclude" | "include" | "only";
+export type CNPJMatchStatus = "unknown" | "matched" | "needs_review" | "not_found" | "error";
 export type ExclusionRuleType = "exact_name" | "business_name_contains" | "domain";
 
 export type SalesRegionRead = {
@@ -83,6 +84,11 @@ export type LeadSummary = {
   whatsapp: string | null;
   instagram: string | null;
   website: string | null;
+  cnpj: string | null;
+  legal_name: string | null;
+  cnpj_match_status: CNPJMatchStatus;
+  cnpj_match_confidence: number | null;
+  cnpj_last_enriched_at: string | null;
   lead_score: number;
   status: LeadStatus;
   lead_source_type: LeadSourceType;
@@ -166,6 +172,8 @@ export type LeadDetail = LeadSummary & {
   latitude: number | null;
   longitude: number | null;
   domain: string | null;
+  cnpj_source_provider: string | null;
+  cnpj_metadata_json: Record<string, unknown>;
   google_maps_url: string | null;
   google_place_id: string | null;
   source_provider: string | null;
@@ -314,6 +322,34 @@ export type LeadBatchEnrichmentResponse = {
     error_message: string | null;
   }>;
   summary: LeadBatchEnrichmentSummary;
+};
+
+export type LeadBatchCNPJEnrichmentResponse = {
+  processed: number;
+  results: Array<{
+    lead_id: number;
+    business_name: string | null;
+    success: boolean;
+    cnpj: string | null;
+    legal_name: string | null;
+    match_status: CNPJMatchStatus;
+    match_confidence: number | null;
+    fields_updated: string[];
+    skipped_reason: string | null;
+    error_message: string | null;
+    last_enriched_at: string | null;
+  }>;
+  summary: {
+    scope_label: string | null;
+    requested: number;
+    processed: number;
+    matched_count: number;
+    needs_review_count: number;
+    not_found_count: number;
+    skipped_known_count: number;
+    error_count: number;
+    errors: string[];
+  };
 };
 
 export type LeadBatchAssignmentResponse = {

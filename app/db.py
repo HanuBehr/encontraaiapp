@@ -77,6 +77,7 @@ def init_db() -> None:
     if engine.dialect.name == "sqlite":
         _ensure_sqlite_lead_quality_columns()
         _ensure_sqlite_lead_exclusion_columns()
+        _ensure_sqlite_lead_cnpj_columns()
 
 
 def _ensure_sqlite_lead_quality_columns() -> None:
@@ -119,6 +120,35 @@ def _ensure_sqlite_lead_exclusion_columns() -> None:
         "ix_leads_org_is_blocked": "organization_id, is_blocked",
         "ix_leads_blocked_rule_id": "blocked_rule_id",
         "ix_leads_blocked_at": "blocked_at",
+    }
+    with engine.begin() as connection:
+        existing_columns = {
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(leads)").fetchall()
+        }
+        for name, definition in columns.items():
+            if name not in existing_columns:
+                connection.exec_driver_sql(f"ALTER TABLE leads ADD COLUMN {name} {definition}")
+
+        for name, column_list in indexes.items():
+            connection.exec_driver_sql(
+                f"CREATE INDEX IF NOT EXISTS {name} ON leads ({column_list})"
+            )
+
+
+def _ensure_sqlite_lead_cnpj_columns() -> None:
+    columns = {
+        "cnpj": "VARCHAR(32)",
+        "legal_name": "VARCHAR(255)",
+        "cnpj_match_status": "VARCHAR(40) NOT NULL DEFAULT 'unknown'",
+        "cnpj_match_confidence": "FLOAT",
+        "cnpj_last_enriched_at": "DATETIME",
+        "cnpj_source_provider": "VARCHAR(100)",
+        "cnpj_metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+    }
+    indexes = {
+        "ix_leads_org_cnpj": "organization_id, cnpj",
+        "ix_leads_cnpj_last_enriched_at": "cnpj_last_enriched_at",
     }
     with engine.begin() as connection:
         existing_columns = {

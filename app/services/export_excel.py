@@ -166,10 +166,12 @@ class ExcelExportService:
         category = lead.category
         market_segment = lead.market_segment.name if lead.market_segment else None
         market_subsegment = lead.market_subsegment.name if lead.market_subsegment else None
+        confirmed_cnpj = lead.cnpj if lead.cnpj_match_status == "matched" else None
+        confirmed_legal_name = lead.legal_name if lead.cnpj_match_status == "matched" else None
         return {
             "Nome": lead.business_name,
-            "CNPJ": None,
-            "Razão Social": None,
+            "CNPJ": confirmed_cnpj,
+            "Razão Social": confirmed_legal_name,
             "Categoria": category,
             "Origem": self._humanize_source(lead.lead_source_type.value if lead.lead_source_type else lead.source_provider),
             "Usuário responsável": self._assigned_owner(lead),

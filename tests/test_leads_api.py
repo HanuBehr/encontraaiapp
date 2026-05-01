@@ -12,6 +12,8 @@ def _seed_lead(
     city: str,
     email: str | None = None,
     whatsapp: str | None = None,
+    cnpj: str | None = None,
+    legal_name: str | None = None,
     status: LeadStatus = LeadStatus.NEW,
     do_not_contact: bool = False,
     company_size_fit: CompanySizeFit = CompanySizeFit.UNKNOWN,
@@ -28,6 +30,8 @@ def _seed_lead(
         lead_source_type=LeadSourceType.GOOGLE_PLACES,
         email=email,
         whatsapp=whatsapp,
+        cnpj=cnpj,
+        legal_name=legal_name,
         status=status,
         do_not_contact=do_not_contact,
         company_size_fit=company_size_fit.value,
@@ -119,11 +123,20 @@ def test_list_leads_blocked_filter_and_metadata(client, db_session) -> None:
 
 
 def test_get_and_update_lead(client, db_session) -> None:
-    lead = _seed_lead(db_session, business_name="Auto Eletrica Z", city="Santos")
+    lead = _seed_lead(
+        db_session,
+        business_name="Auto Eletrica Z",
+        city="Santos",
+        cnpj="37335118000180",
+        legal_name="Auto Eletrica Z LTDA",
+    )
 
     detail_response = client.get(f"/leads/{lead.id}")
     assert detail_response.status_code == 200
     assert detail_response.json()["business_name"] == "Auto Eletrica Z"
+    assert detail_response.json()["cnpj"] == "37335118000180"
+    assert detail_response.json()["legal_name"] == "Auto Eletrica Z LTDA"
+    assert detail_response.json()["cnpj_match_status"] == "unknown"
 
     update_response = client.patch(
         f"/leads/{lead.id}",

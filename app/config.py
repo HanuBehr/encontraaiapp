@@ -43,6 +43,14 @@ class Settings(BaseSettings):
         default="https://maps.googleapis.com/maps/api/geocode/json",
         alias="GOOGLE_GEOCODE_BASE_URL",
     )
+    cnpja_api_key: str | None = Field(default=None, alias="CNPJA_API_KEY")
+    cnpja_api_base_url: str | None = Field(default=None, alias="CNPJA_API_BASE_URL")
+    cnpja_open_api_base_url: str = Field(
+        default="https://open.cnpja.com",
+        alias="CNPJA_OPEN_API_BASE_URL",
+    )
+    cnpja_search_endpoint: str | None = Field(default=None, alias="CNPJA_SEARCH_ENDPOINT")
+    cnpja_enable_company_search: bool = Field(default=False, alias="CNPJA_ENABLE_COMPANY_SEARCH")
 
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
@@ -67,6 +75,18 @@ class Settings(BaseSettings):
     @property
     def google_places_enabled(self) -> bool:
         return bool(self.google_api_key)
+
+    @property
+    def cnpja_commercial_configured(self) -> bool:
+        return bool(self.cnpja_api_key and self.cnpja_api_base_url)
+
+    @property
+    def cnpja_company_search_configured(self) -> bool:
+        return bool(
+            self.cnpja_enable_company_search
+            and self.cnpja_api_key
+            and self.cnpja_search_endpoint
+        )
 
     @property
     def smtp_configured(self) -> bool:

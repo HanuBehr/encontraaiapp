@@ -1,7 +1,6 @@
 from app import models  # registers all SQLAlchemy models
-from app.db import engine
-from app.models.base import Base
+from app.db import init_db
 
-Base.metadata.create_all(bind=engine)
+init_db()
 
 print("Database tables created successfully.")

@@ -56,6 +56,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   const lead = detailQuery.data;
   const latestEnrichment = lead.enrichments[0];
   const latestEnrichmentAudit = getLatestEnrichmentAudit(lead);
+  const cnpjReviewHint = getCnpjReviewHint(lead);
 
   return (
     <aside className="rounded-md border border-neutral-200 bg-white">
@@ -85,6 +86,22 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
             <InfoItem label="Score" value={String(lead.lead_score)} />
             <InfoItem label="Origem" value={labelToken(lead.lead_source_type)} />
           </InfoGrid>
+        </DetailSection>
+
+        <DetailSection title="Cadastro">
+          <InfoGrid>
+            <InfoItem label="CNPJ" value={lead.cnpj ?? "Sem CNPJ"} />
+            <InfoItem label="Razão Social" value={lead.legal_name} />
+            <InfoItem label="Status CNPJ" value={cnpjStatusLabel(lead.cnpj_match_status)} />
+            <InfoItem label="Confiança" value={formatConfidence(lead.cnpj_match_confidence)} />
+            <InfoItem label="Última consulta" value={formatDateTime(lead.cnpj_last_enriched_at)} />
+            <InfoItem label="Provedor" value={labelToken(lead.cnpj_source_provider)} />
+          </InfoGrid>
+          {cnpjReviewHint ? (
+            <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {cnpjReviewHint}
+            </p>
+          ) : null}
         </DetailSection>
 
         <DetailSection title="Melhores contatos">
@@ -349,6 +366,20 @@ function labelToken(value?: string | null) {
   return formatLeadLabel(value);
 }
 
+function cnpjStatusLabel(value?: string | null) {
+  if (!value || value === "unknown") {
+    return "Não consultado";
+  }
+  return labelToken(value);
+}
+
+function formatConfidence(value?: number | null) {
+  if (typeof value !== "number") {
+    return "Não informado";
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) {
     return null;
@@ -364,6 +395,19 @@ function formatDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function getCnpjReviewHint(lead: LeadDetail) {
+  if (lead.cnpj_match_status !== "needs_review") {
+    return null;
+  }
+
+  const metadata = asRecord(lead.cnpj_metadata_json);
+  if (!metadata || !asRecord(metadata.candidate_summary)) {
+    return null;
+  }
+
+  return "Possível CNPJ encontrado, precisa revisão.";
 }
 
 type EnrichmentAuditData = {

@@ -34,6 +34,7 @@ LeadSortBy = Literal[
 ]
 LeadSortDir = Literal["asc", "desc"]
 LeadBlockedFilter = Literal["exclude", "include", "only"]
+CNPJMatchStatus = Literal["unknown", "matched", "needs_review", "not_found", "error"]
 
 
 class SalesRegionRead(ORMBaseModel):
@@ -81,6 +82,11 @@ class LeadSummary(ORMBaseModel):
     whatsapp: str | None = None
     instagram: str | None = None
     website: str | None = None
+    cnpj: str | None = None
+    legal_name: str | None = None
+    cnpj_match_status: CNPJMatchStatus = "unknown"
+    cnpj_match_confidence: float | None = None
+    cnpj_last_enriched_at: datetime | None = None
     lead_score: int
     status: LeadStatus
     lead_source_type: LeadSourceType
@@ -164,6 +170,8 @@ class LeadDetail(LeadSummary):
     latitude: float | None = None
     longitude: float | None = None
     domain: str | None = None
+    cnpj_source_provider: str | None = None
+    cnpj_metadata_json: dict[str, Any] = Field(default_factory=dict)
     instagram: str | None = None
     google_maps_url: str | None = None
     google_place_id: str | None = None
@@ -312,6 +320,11 @@ class LeadBatchEnrichmentRequest(BaseModel):
     lead_ids: list[int] = Field(min_length=1)
 
 
+class LeadBatchCNPJEnrichmentRequest(BaseModel):
+    lead_ids: list[int] = Field(min_length=1)
+    force: bool = False
+
+
 class EnrichmentAttemptedPage(BaseModel):
     url: str
     page_type: str | None = None
@@ -375,6 +388,38 @@ class LeadBatchEnrichmentResponse(BaseModel):
     processed: int
     results: list[EnrichmentRunResult]
     summary: LeadBatchEnrichmentSummary = Field(default_factory=LeadBatchEnrichmentSummary)
+
+
+class CNPJEnrichmentRunResult(BaseModel):
+    lead_id: int
+    business_name: str | None = None
+    success: bool = True
+    cnpj: str | None = None
+    legal_name: str | None = None
+    match_status: CNPJMatchStatus = "unknown"
+    match_confidence: float | None = None
+    fields_updated: list[str] = Field(default_factory=list)
+    skipped_reason: str | None = None
+    error_message: str | None = None
+    last_enriched_at: datetime | None = None
+
+
+class LeadBatchCNPJEnrichmentSummary(BaseModel):
+    scope_label: str | None = None
+    requested: int = 0
+    processed: int = 0
+    matched_count: int = 0
+    needs_review_count: int = 0
+    not_found_count: int = 0
+    skipped_known_count: int = 0
+    error_count: int = 0
+    errors: list[str] = Field(default_factory=list)
+
+
+class LeadBatchCNPJEnrichmentResponse(BaseModel):
+    processed: int
+    results: list[CNPJEnrichmentRunResult]
+    summary: LeadBatchCNPJEnrichmentSummary = Field(default_factory=LeadBatchCNPJEnrichmentSummary)
 
 
 class LeadAssignmentSuggestionRead(BaseModel):

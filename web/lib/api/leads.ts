@@ -1,6 +1,7 @@
 import { getJson, postBlob, postJson } from "@/lib/api/client";
 import type {
   LeadBatchAssignmentResponse,
+  LeadBatchCNPJEnrichmentResponse,
   LeadBatchEnrichmentResponse,
   LeadDetail,
   LeadImportBatchResponse,
@@ -35,6 +36,16 @@ export function enrichLeadBatch(leadIds: number[]) {
   return postJson<LeadBatchEnrichmentResponse, { lead_ids: number[] }>("/leads/batch/enrich", {
     lead_ids: leadIds,
   });
+}
+
+export function enrichLeadBatchCnpj(leadIds: number[], force = false) {
+  return postJson<LeadBatchCNPJEnrichmentResponse, { lead_ids: number[]; force: boolean }>(
+    "/leads/batch/enrich-cnpj",
+    {
+      lead_ids: leadIds,
+      force,
+    },
+  );
 }
 
 export function assignLeadBatch(scope: LeadScopeRequest) {

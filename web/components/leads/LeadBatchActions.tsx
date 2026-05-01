@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   assignLeadBatch,
+  enrichLeadBatchCnpj,
   enrichLeadBatch,
   exportExcelForScope,
   getLatestImportBatch,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/api/leads";
 import type {
   LeadBatchAssignmentResponse,
+  LeadBatchCNPJEnrichmentResponse,
   LeadBatchEnrichmentResponse,
   LeadListParams,
   LeadScopeRequest,
@@ -19,7 +21,7 @@ import type {
 import { formatUserFacingError, sanitizeUserFacingMessage } from "@/lib/ui/messages";
 
 type ActionScope = "selected" | "current" | "latest";
-type ActionKind = "enrich" | "assign" | "export";
+type ActionKind = "enrich" | "cnpj" | "assign" | "export";
 type ActionMutationInput = {
   kind: ActionKind;
   scope: ActionScope;
@@ -45,6 +47,12 @@ type ActionResult =
       scopeLabel: string;
       requested: number;
       summary: LeadBatchEnrichmentResponse["summary"];
+    }
+  | {
+      kind: "cnpj";
+      scopeLabel: string;
+      requested: number;
+      summary: LeadBatchCNPJEnrichmentResponse["summary"];
     }
   | {
       kind: "assign";
@@ -100,6 +108,19 @@ export function LeadBatchActions({
           throw new Error("Nenhum lead encontrado nesse escopo.");
         }
         const response = await enrichLeadBatch(resolvedScope.leadIds);
+        return {
+          kind,
+          scopeLabel: resolvedScope.scopeLabel,
+          requested: resolvedScope.requested,
+          summary: response.summary,
+        } satisfies ActionResult;
+      }
+
+      if (kind === "cnpj") {
+        if (resolvedScope.leadIds.length === 0) {
+          throw new Error("Nenhum lead encontrado nesse escopo.");
+        }
+        const response = await enrichLeadBatchCnpj(resolvedScope.leadIds);
         return {
           kind,
           scopeLabel: resolvedScope.scopeLabel,
@@ -164,9 +185,9 @@ export function LeadBatchActions({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase text-cyan-700">Ações em lote</p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">Enriquecer e exportar</h2>
+          <h2 className="mt-1 text-base font-semibold text-neutral-950">Enriquecer, revisar e exportar</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Escolha um escopo para enriquecer, atribuir ou exportar os leads sem sair da lista.
+            Escolha um escopo para enriquecer contatos, consultar CNPJ, atribuir ou exportar os leads sem sair da lista.
           </p>
           <p className="mt-1 text-xs text-neutral-500">
             O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
@@ -204,9 +225,12 @@ export function LeadBatchActions({
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
               Enriquecer
+            </ActionButton>
+            <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
+              Enriquecer CNPJ
             </ActionButton>
             <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
               Atribuir
@@ -346,6 +370,34 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
     );
   }
 
+  if (result.kind === "cnpj") {
+    const hasErrors = result.summary.error_count > 0;
+    return (
+      <ResultBox
+        title={`${hasErrors ? "Enriquecimento CNPJ concluído com alertas" : "Enriquecimento CNPJ concluído"} - ${formatScopeLabel(result.scopeLabel)}`}
+      >
+        <ResultNarrative text={buildCnpjNarrative(result.summary)} />
+        <ResultMetric label="Solicitados" value={result.requested} />
+        <ResultMetric label="Processados" value={result.summary.processed} />
+        <ResultMetric label="Preenchidos" value={result.summary.matched_count} />
+        <ResultMetric label="Precisam revisão" value={result.summary.needs_review_count} />
+        <ResultMetric label="Sem correspondência" value={result.summary.not_found_count} />
+        <ResultMetric label="Já tinham CNPJ" value={result.summary.skipped_known_count} />
+        <ResultMetric label="Erros" value={result.summary.error_count} />
+        {hasErrors ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
+            <p className="text-xs font-semibold uppercase text-amber-900">Erros do lote</p>
+            <ul className="mt-2 space-y-1 text-sm text-amber-900">
+              {result.summary.errors.slice(0, 3).map((message) => (
+                <li key={message}>{sanitizeUserFacingMessage(message, "Falha ao enriquecer CNPJ em parte do lote.")}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </ResultBox>
+    );
+  }
+
   if (result.kind === "assign") {
     return (
       <ResultBox title={`Atribuição concluída - ${formatScopeLabel(result.scopeLabel)}`}>
@@ -438,6 +490,9 @@ function actionLabel(kind: ActionKind) {
   if (kind === "enrich") {
     return "Enriquecer";
   }
+  if (kind === "cnpj") {
+    return "Enriquecer CNPJ";
+  }
   if (kind === "assign") {
     return "Atribuir";
   }
@@ -512,6 +567,14 @@ function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"
   }
 
   return `Processamos ${summary.processed.toLocaleString()} leads e encontramos ${summary.contacts_added.toLocaleString()} novos contatos em ${newPublicChannelCount.toLocaleString()} canais públicos.`;
+}
+
+function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"]) {
+  if (summary.processed === 0) {
+    return "Nenhum lead foi processado nesta consulta de CNPJ.";
+  }
+
+  return `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.`;
 }
 
 function formatScopeLabel(scopeLabel: string) {

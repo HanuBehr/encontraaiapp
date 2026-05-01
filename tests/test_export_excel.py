@@ -111,6 +111,9 @@ def test_excel_export_matches_empresas_template(db_session) -> None:
         organization=organization,
         business_name="Oficina Export",
         normalized_business_name=normalize_business_name("Oficina Export") or "oficina export",
+        cnpj="37335118000180",
+        legal_name="Oficina Export LTDA",
+        cnpj_match_status="matched",
         category="oficina mecanica",
         address="Rua das Tintas, 100",
         city="Sao Paulo",
@@ -187,8 +190,8 @@ def test_excel_export_matches_empresas_template(db_session) -> None:
     assert "lead_score" not in lead_headers
     assert "review_count" not in lead_headers
     assert lead_row["Nome"] == "Oficina Export"
-    assert lead_row["CNPJ"] is None
-    assert lead_row["Razão Social"] is None
+    assert lead_row["CNPJ"] == "37335118000180"
+    assert lead_row["Razão Social"] == "Oficina Export LTDA"
     assert lead_row["Categoria"] == "oficina mecanica"
     assert lead_row["Origem"] == "Google Places"
     assert lead_row["Usuário responsável"] == "Vendas2"

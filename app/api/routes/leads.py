@@ -8,6 +8,8 @@ from app.config import Settings
 from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TradeType
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.lead import (
+    LeadBatchCNPJEnrichmentRequest,
+    LeadBatchCNPJEnrichmentResponse,
     LeadAssignmentRunResult,
     LeadAssignmentSuggestionRead,
     LeadBatchAssignmentRequest,
@@ -28,10 +30,12 @@ from app.schemas.lead import (
     LeadSortDir,
     LeadUpdateRequest,
 )
+from app.services.cnpj_enrichment import CNPJEnrichmentService
 from app.services.crm import CRMService
 from app.services.enrichment import EnrichmentService
 from app.services.lead_assignment import LeadAssignmentService
 from app.services.lead_scope import LeadScopeResolver, ResolvedLeadScope
+from app.services.providers.cnpja import CNPJAProviderError
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -153,6 +157,26 @@ def enrich_lead_batch(
     return response
 
 
+@router.post("/batch/enrich-cnpj", response_model=LeadBatchCNPJEnrichmentResponse)
+def enrich_lead_batch_cnpj(
+    payload: LeadBatchCNPJEnrichmentRequest,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> LeadBatchCNPJEnrichmentResponse:
+    service = CNPJEnrichmentService(db=db, settings=settings)
+    try:
+        return service.enrich_lead_ids(
+            payload.lead_ids,
+            force=payload.force,
+            actor="api",
+            scope_label="api lead ids",
+        )
+    except CNPJAProviderError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/batch/assign", response_model=LeadBatchAssignmentResponse)
 def assign_lead_batch(
     payload: LeadBatchAssignmentRequest,
@@ -244,6 +268,27 @@ def enrich_single_lead(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return response
+
+
+@router.post("/{lead_id}/enrich-cnpj", response_model=LeadBatchCNPJEnrichmentResponse)
+def enrich_single_lead_cnpj(
+    lead_id: int,
+    force: bool = Query(default=False),
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> LeadBatchCNPJEnrichmentResponse:
+    service = CNPJEnrichmentService(db=db, settings=settings)
+    try:
+        return service.enrich_lead_ids(
+            [lead_id],
+            force=force,
+            actor="api",
+            scope_label="api single lead",
+        )
+    except CNPJAProviderError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 def _scope_response(resolved: ResolvedLeadScope) -> LeadScopeResolveResponse:

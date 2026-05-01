@@ -30,6 +30,7 @@ class Lead(TimestampMixin, Base):
         Index("ix_leads_org_city_state", "organization_id", "city", "state"),
         Index("ix_leads_org_status_city", "organization_id", "status", "city"),
         Index("ix_leads_org_google_place_id", "organization_id", "google_place_id", unique=True),
+        Index("ix_leads_org_cnpj", "organization_id", "cnpj"),
         Index("ix_leads_org_sales_region", "organization_id", "sales_region_id"),
         Index("ix_leads_org_market_segment", "organization_id", "market_segment_id"),
         Index("ix_leads_org_market_subsegment", "organization_id", "market_subsegment_id"),
@@ -64,6 +65,13 @@ class Lead(TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(32))
     whatsapp: Mapped[str | None] = mapped_column(String(32))
     instagram: Mapped[str | None] = mapped_column(String(255))
+    cnpj: Mapped[str | None] = mapped_column(String(32), index=True)
+    legal_name: Mapped[str | None] = mapped_column(String(255))
+    cnpj_match_status: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
+    cnpj_match_confidence: Mapped[float | None] = mapped_column(Float)
+    cnpj_last_enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    cnpj_source_provider: Mapped[str | None] = mapped_column(String(100))
+    cnpj_metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     google_maps_url: Mapped[str | None] = mapped_column(String(500))
     google_place_id: Mapped[str | None] = mapped_column(String(128), index=True)
     source_provider: Mapped[str | None] = mapped_column(String(100))

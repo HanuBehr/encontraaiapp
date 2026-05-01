@@ -8,6 +8,10 @@ export const MISSING_GOOGLE_API_KEY_DETAIL =
   "GOOGLE_API_KEY must be configured to use location-based discovery.";
 export const MISSING_GOOGLE_API_KEY_UI_MESSAGE =
   "Configure GOOGLE_API_KEY no backend para usar a busca por localização.";
+export const MISSING_CNPJA_API_KEY_DETAIL =
+  "CNPJA_API_KEY must be configured to use batch CNPJ enrichment.";
+export const MISSING_CNPJA_API_KEY_UI_MESSAGE =
+  "Configure CNPJA_API_KEY no backend para usar enriquecimento CNPJ em lote.";
 export const NO_DISCOVERY_RESULTS_UI_MESSAGE =
   "Nenhuma empresa encontrada para essa busca. Tente outro nicho, cidade ou raio.";
 
@@ -32,6 +36,9 @@ export function formatUserFacingError(
   if (error instanceof ApiError) {
     if (error.detail === MISSING_GOOGLE_API_KEY_DETAIL) {
       return MISSING_GOOGLE_API_KEY_UI_MESSAGE;
+    }
+    if (error.detail === MISSING_CNPJA_API_KEY_DETAIL) {
+      return MISSING_CNPJA_API_KEY_UI_MESSAGE;
     }
     if (isTimeoutLikeError(error)) {
       return LONG_RUNNING_OPERATION_TIMEOUT_UI_MESSAGE;
