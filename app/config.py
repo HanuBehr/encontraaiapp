@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -48,6 +49,14 @@ class Settings(BaseSettings):
     cnpja_open_api_base_url: str = Field(
         default="https://open.cnpja.com",
         alias="CNPJA_OPEN_API_BASE_URL",
+    )
+    cnpj_lookup_provider: Literal["cnpja_open", "cnpj_ws"] = Field(
+        default="cnpja_open",
+        alias="CNPJ_LOOKUP_PROVIDER",
+    )
+    cnpj_ws_base_url: str = Field(
+        default="https://publica.cnpj.ws",
+        alias="CNPJ_WS_BASE_URL",
     )
     cnpja_search_endpoint: str | None = Field(default=None, alias="CNPJA_SEARCH_ENDPOINT")
     cnpja_enable_company_search: bool = Field(default=False, alias="CNPJA_ENABLE_COMPANY_SEARCH")

@@ -102,6 +102,9 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
               {cnpjReviewHint}
             </p>
           ) : null}
+          <p className="mt-3 text-xs text-neutral-500">
+            Consulta pública disponível apenas quando o CNPJ já está informado no lead.
+          </p>
         </DetailSection>
 
         <DetailSection title="Melhores contatos">

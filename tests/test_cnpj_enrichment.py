@@ -6,9 +6,10 @@ from app.config import Settings
 from app.models.lead import Lead
 from app.schemas.lead import LeadDetail
 from app.services.cnpj_enrichment import (
+    CNPJA_OPEN_PUBLIC_BATCH_LIMIT_MESSAGE,
     CNPJEnrichmentService,
     INVALID_LEAD_CNPJ_REASON,
-    MISSING_COMPANY_SEARCH_REASON,
+    MISSING_LEAD_CNPJ_PUBLIC_REASON,
     NEEDS_REVIEW_REASON,
     SKIPPED_KNOWN_CNPJ_REASON,
 )
@@ -16,10 +17,11 @@ from app.services.normalization import normalize_business_name
 from app.services.providers.cnpja import (
     CNPJAProvider,
     CNPJAProviderError,
+    CNPJANotFoundError,
     CNPJLookupResult,
-    MISSING_CNPJA_API_KEY_BATCH_MESSAGE,
     normalize_cnpj,
 )
+from app.services.providers.cnpj_ws import CNPJWSProvider
 
 
 class FakeResponse:
@@ -40,9 +42,11 @@ class FakeResponse:
 class FakeHTTPSession:
     def __init__(self, responses: dict[str, FakeResponse]) -> None:
         self.responses = responses
+        self.get_calls: list[tuple[str, dict]] = []
         self.post_calls: list[tuple[str, dict]] = []
 
     def get(self, url: str, **kwargs) -> FakeResponse:
+        self.get_calls.append((url, kwargs))
         return self.responses[url]
 
     def post(self, url: str, **kwargs) -> FakeResponse:
@@ -105,6 +109,7 @@ def _settings(**overrides) -> Settings:
         "DATABASE_URL": "sqlite://",
         "EXPORT_DIR": "./data/exports",
         "GOOGLE_API_KEY": "",
+        "CNPJ_LOOKUP_PROVIDER": "cnpja_open",
     }
     base.update(overrides)
     return Settings(**base)
@@ -154,6 +159,7 @@ def _lookup_result(
     postal_code: str | None = "13000-000",
     website: str | None = "https://oficina-cnpj.com.br",
     phones: list[str] | None = None,
+    source_provider: str = "cnpja",
 ) -> CNPJLookupResult:
     return CNPJLookupResult(
         cnpj=cnpj,
@@ -169,9 +175,9 @@ def _lookup_result(
         phones=phones or ["1133334444"],
         emails=["contato@oficina.com.br"],
         primary_activity="Oficina mecanica",
-        source_provider="cnpja",
+        source_provider=source_provider,
         provider_record_id=cnpj,
-        metadata={"queried_via": "cnpja"},
+        metadata={"queried_via": source_provider},
     )
 
 
@@ -227,6 +233,85 @@ def test_lookup_known_cnpj_maps_open_api_payload() -> None:
     assert result.emails == ["contato@oficina.com.br"]
 
 
+def test_cnpj_ws_provider_builds_known_cnpj_url_and_maps_response() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://publica.cnpj.ws/cnpj/37335118000180": FakeResponse(
+                payload={
+                    "razao_social": "Oficina CNPJ LTDA",
+                    "estabelecimento": {
+                        "cnpj": "37.335.118/0001-80",
+                        "nome_fantasia": "Oficina CNPJ",
+                        "situacao_cadastral": "Ativa",
+                        "cep": "13000-000",
+                        "logradouro": "Rua Alfa",
+                        "numero": "10",
+                        "bairro": "Centro",
+                        "email": "contato@oficina.com.br",
+                        "ddd1": "11",
+                        "telefone1": "33334444",
+                        "atividade_principal": {"descricao": "Oficina mecanica"},
+                        "cidade": {"nome": "Campinas"},
+                        "estado": {"sigla": "SP"},
+                    },
+                }
+            )
+        }
+    )
+    provider = CNPJWSProvider(_settings(), http_session=session)
+
+    result = provider.lookup_known_cnpj("37.335.118/0001-80")
+
+    assert session.get_calls[0][0] == "https://publica.cnpj.ws/cnpj/37335118000180"
+    assert result.cnpj == "37335118000180"
+    assert result.legal_name == "Oficina CNPJ LTDA"
+    assert result.trade_name == "Oficina CNPJ"
+    assert result.registration_status == "Ativa"
+    assert result.address == "Rua Alfa, 10"
+    assert result.city == "Campinas"
+    assert result.state == "SP"
+    assert result.postal_code == "13000-000"
+    assert result.phones == ["1133334444"]
+    assert result.emails == ["contato@oficina.com.br"]
+    assert result.primary_activity == "Oficina mecanica"
+    assert result.source_provider == "cnpj_ws"
+    assert result.metadata["neighborhood"] == "Centro"
+
+
+def test_cnpj_ws_provider_rejects_invalid_cnpj_before_request() -> None:
+    session = FakeHTTPSession({})
+    provider = CNPJWSProvider(_settings(), http_session=session)
+
+    with pytest.raises(CNPJANotFoundError, match="Invalid CNPJ"):
+        provider.lookup_known_cnpj("123")
+
+    assert session.get_calls == []
+
+
+def test_cnpj_ws_provider_404_returns_not_found_safely() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://publica.cnpj.ws/cnpj/37335118000180": FakeResponse(status_code=404),
+        }
+    )
+    provider = CNPJWSProvider(_settings(), http_session=session)
+
+    with pytest.raises(CNPJANotFoundError):
+        provider.lookup_known_cnpj("37335118000180")
+
+
+def test_cnpj_ws_provider_429_returns_rate_limit_error_safely() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://publica.cnpj.ws/cnpj/37335118000180": FakeResponse(status_code=429),
+        }
+    )
+    provider = CNPJWSProvider(_settings(), http_session=session)
+
+    with pytest.raises(CNPJAProviderError, match="CNPJ.ws request hit the upstream usage limit"):
+        provider.lookup_known_cnpj("37335118000180")
+
+
 def test_cnpj_batch_large_without_api_key_fails_safely(db_session) -> None:
     leads = [_lead(cnpj=f"3733511800018{index}") for index in range(4)]
     db_session.add_all(leads)
@@ -234,7 +319,7 @@ def test_cnpj_batch_large_without_api_key_fails_safely(db_session) -> None:
 
     service = CNPJEnrichmentService(db_session, _settings())
 
-    with pytest.raises(CNPJAProviderError, match="CNPJA_API_KEY"):
+    with pytest.raises(CNPJAProviderError, match="CNPJA open lookup supports at most 3"):
         service.enrich_lead_ids([lead.id for lead in leads], actor="test")
 
 
@@ -259,6 +344,50 @@ def test_cnpj_enrichment_skips_confirmed_cnpj_unless_force(db_session) -> None:
     assert fake_provider.lookup_calls == ["37335118000180"]
     assert forced.summary.matched_count == 1
     assert forced.results[0].match_status == "matched"
+
+
+def test_known_cnpj_enrichment_can_use_cnpj_ws_provider(db_session) -> None:
+    lead = _lead(cnpj="37335118000180")
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    session = FakeHTTPSession(
+        {
+            "https://publica.cnpj.ws/cnpj/37335118000180": FakeResponse(
+                payload={
+                    "razao_social": "Oficina CNPJ LTDA",
+                    "estabelecimento": {
+                        "cnpj": "37335118000180",
+                        "nome_fantasia": "Oficina CNPJ",
+                        "situacao_cadastral": "Ativa",
+                        "cep": "13000-000",
+                        "logradouro": "Rua Alfa",
+                        "numero": "10",
+                        "cidade": {"nome": "Campinas"},
+                        "estado": {"sigla": "SP"},
+                    },
+                }
+            )
+        }
+    )
+    provider = CNPJAProvider(
+        _settings(CNPJ_LOOKUP_PROVIDER="cnpj_ws"),
+        http_session=session,
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(CNPJ_LOOKUP_PROVIDER="cnpj_ws"),
+        provider=provider,
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test", force=True)
+    db_session.refresh(lead)
+
+    assert response.summary.matched_count == 1
+    assert lead.cnpj == "37335118000180"
+    assert lead.legal_name == "Oficina CNPJ LTDA"
+    assert lead.cnpj_source_provider == "cnpj_ws"
 
 
 def test_cnpj_enrichment_does_not_overwrite_good_data_with_blanks(db_session) -> None:
@@ -303,6 +432,29 @@ def test_lead_without_cnpj_attempts_provider_search_when_enabled(db_session) -> 
     assert fake_provider.search_calls[0]["business_name"] == "Loja Exemplo"
     assert fake_provider.search_calls[0]["city"] == "Campinas"
     assert fake_provider.search_calls[0]["state"] == "SP"
+
+
+def test_lead_without_cnpj_does_not_call_public_lookup_and_returns_clear_reason(db_session) -> None:
+    lead = _lead(cnpj=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider()
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(CNPJ_LOOKUP_PROVIDER="cnpj_ws"),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.not_found_count == 1
+    assert response.results[0].skipped_reason == MISSING_LEAD_CNPJ_PUBLIC_REASON
+    assert fake_provider.lookup_calls == []
+    assert fake_provider.search_calls == []
+    assert lead.cnpj_match_status == "not_found"
 
 
 def test_high_confidence_candidate_fills_cnpj_and_legal_name(db_session) -> None:
@@ -452,26 +604,6 @@ def test_different_city_state_match_does_not_auto_fill(db_session) -> None:
     assert lead.cnpj_match_status == "not_found"
 
 
-def test_missing_provider_search_config_marks_not_found_safely(db_session) -> None:
-    lead = _lead(cnpj=None)
-    db_session.add(lead)
-    db_session.commit()
-    db_session.refresh(lead)
-
-    service = CNPJEnrichmentService(
-        db_session,
-        _settings(),
-        provider=FakeCNPJAProvider(),  # type: ignore[arg-type]
-    )
-
-    response = service.enrich_lead_ids([lead.id], actor="test")
-    db_session.refresh(lead)
-
-    assert response.summary.not_found_count == 1
-    assert response.results[0].skipped_reason == MISSING_COMPANY_SEARCH_REASON
-    assert lead.cnpj_match_status == "not_found"
-
-
 def test_invalid_saved_cnpj_stays_needs_review(db_session) -> None:
     lead = _lead(cnpj="123", match_status="unknown")
     db_session.add(lead)
@@ -518,7 +650,7 @@ def test_cnpj_batch_endpoint_without_key_returns_safe_error(client, db_session) 
     response = client.post("/leads/batch/enrich-cnpj", json={"lead_ids": [lead.id for lead in leads]})
 
     assert response.status_code == 503
-    assert response.json()["detail"] == MISSING_CNPJA_API_KEY_BATCH_MESSAGE
+    assert response.json()["detail"] == CNPJA_OPEN_PUBLIC_BATCH_LIMIT_MESSAGE
 
 
 def test_no_cpf_fields_were_added() -> None:

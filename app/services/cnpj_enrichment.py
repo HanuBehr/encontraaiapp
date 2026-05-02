@@ -28,17 +28,24 @@ from app.services.providers.cnpja import (
     CNPJAProviderError,
     CNPJANotFoundError,
     CNPJLookupResult,
-    MISSING_CNPJA_API_KEY_BATCH_MESSAGE,
     normalize_cnpj,
 )
 
 
 SKIPPED_KNOWN_CNPJ_REASON = "Lead already has a confirmed CNPJ."
-MISSING_COMPANY_SEARCH_REASON = "Lead has no known CNPJ and company search is not configured."
+MISSING_LEAD_CNPJ_PUBLIC_REASON = (
+    "CNPJ ausente no lead. APIs públicas consultam apenas CNPJs já conhecidos."
+)
 INVALID_LEAD_CNPJ_REASON = "Lead has a saved CNPJ that needs review before lookup."
 NO_PROVIDER_MATCH_REASON = "No confident CNPJ match found for this lead."
 NEEDS_REVIEW_REASON = "Possible CNPJ found, needs review."
 OPEN_API_BATCH_LIMIT = 3
+CNPJA_OPEN_PUBLIC_BATCH_LIMIT_MESSAGE = (
+    "CNPJA open lookup supports at most 3 known-CNPJ lookups per minute. Reduce the batch size or retry later."
+)
+CNPJ_WS_PUBLIC_BATCH_LIMIT_MESSAGE = (
+    "CNPJ.ws public API supports at most 3 known-CNPJ lookups per minute. Reduce the batch size or retry later."
+)
 HIGH_CONFIDENCE_SCORE = 80
 MEDIUM_CONFIDENCE_SCORE = 60
 CLEAR_WINNER_GAP = 10
@@ -155,11 +162,9 @@ class CNPJEnrichmentService:
 
             pending_searches.append(_PendingSearch(lead_id=lead.id))
 
-        if (
-            not self.settings.cnpja_commercial_configured
-            and len(pending_lookups) > OPEN_API_BATCH_LIMIT
-        ):
-            raise CNPJAProviderError(MISSING_CNPJA_API_KEY_BATCH_MESSAGE, status_code=503)
+        batch_limit_error = self._get_public_lookup_batch_limit_error(len(pending_lookups))
+        if batch_limit_error is not None:
+            raise batch_limit_error
 
         for search in pending_searches:
             lead = lead_map[search.lead_id]
@@ -197,7 +202,7 @@ class CNPJEnrichmentService:
                 actor=actor,
                 match_status="not_found",
                 match_confidence=None,
-                source_provider="cnpja",
+                source_provider=self.settings.cnpj_lookup_provider,
                 skipped_reason="No provider match found for the saved CNPJ.",
                 error_message=None,
             )
@@ -235,8 +240,8 @@ class CNPJEnrichmentService:
                 actor=actor,
                 match_status="not_found",
                 match_confidence=None,
-                source_provider=lead.cnpj_source_provider or "cnpja",
-                skipped_reason=MISSING_COMPANY_SEARCH_REASON,
+                source_provider=lead.cnpj_source_provider or self.settings.cnpj_lookup_provider,
+                skipped_reason=MISSING_LEAD_CNPJ_PUBLIC_REASON,
                 error_message=None,
             )
             return CNPJEnrichmentRunResult(
@@ -246,7 +251,7 @@ class CNPJEnrichmentService:
                 cnpj=None,
                 legal_name=lead.legal_name,
                 match_status="not_found",
-                skipped_reason=MISSING_COMPANY_SEARCH_REASON,
+                skipped_reason=MISSING_LEAD_CNPJ_PUBLIC_REASON,
                 last_enriched_at=lead.cnpj_last_enriched_at,
             )
 
@@ -528,7 +533,7 @@ class CNPJEnrichmentService:
             actor=actor,
             match_status="error",
             match_confidence=None,
-            source_provider=lead.cnpj_source_provider or "cnpja",
+            source_provider=lead.cnpj_source_provider or self.settings.cnpj_lookup_provider,
             skipped_reason=None,
             error_message=error_message,
         )
@@ -666,6 +671,13 @@ class CNPJEnrichmentService:
             return None
         digits = "".join(character for character in value if character.isdigit())
         return digits or None
+
+    def _get_public_lookup_batch_limit_error(self, pending_lookup_count: int) -> CNPJAProviderError | None:
+        if pending_lookup_count <= OPEN_API_BATCH_LIMIT:
+            return None
+        if self.settings.cnpj_lookup_provider == "cnpj_ws":
+            return CNPJAProviderError(CNPJ_WS_PUBLIC_BATCH_LIMIT_MESSAGE, status_code=503)
+        return CNPJAProviderError(CNPJA_OPEN_PUBLIC_BATCH_LIMIT_MESSAGE, status_code=503)
 
     def _is_high_confidence_match(self, candidate: _ScoredCandidate, *, top_gap: int) -> bool:
         has_strong_identity = candidate.strong_name_match or (

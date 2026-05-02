@@ -78,12 +78,16 @@ class CNPJAProvider:
         if normalized_cnpj is None:
             raise CNPJANotFoundError("Invalid CNPJ.")
 
-        if self.settings.cnpja_commercial_configured:
-            payload = self._commercial_lookup(normalized_cnpj, strategy=strategy)
-            source_provider = "cnpja"
-        else:
-            payload = self._open_lookup(normalized_cnpj)
-            source_provider = "cnpja_open"
+        if self.settings.cnpj_lookup_provider == "cnpj_ws":
+            from app.services.providers.cnpj_ws import CNPJWSProvider
+
+            return CNPJWSProvider(
+                self.settings,
+                http_session=self.http,
+            ).lookup_known_cnpj(normalized_cnpj, strategy=strategy)
+
+        payload = self._open_lookup(normalized_cnpj)
+        source_provider = "cnpja_open"
 
         return self._normalize_lookup_payload(
             payload,
