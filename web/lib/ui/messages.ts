@@ -12,6 +12,10 @@ export const MISSING_CNPJA_API_KEY_DETAIL =
   "CNPJA_API_KEY must be configured to use batch CNPJ enrichment.";
 export const MISSING_CNPJA_API_KEY_UI_MESSAGE =
   "Configure CNPJA_API_KEY no backend para usar enriquecimento CNPJ em lote.";
+export const CNPJ_WEBSITE_BATCH_LIMIT_DETAIL =
+  "Website-based CNPJ enrichment works better in smaller batches. Select fewer leads and retry.";
+export const CNPJ_WEBSITE_BATCH_LIMIT_UI_MESSAGE =
+  "A consulta CNPJ por site roda melhor em lotes menores. Selecione menos empresas por vez.";
 export const NO_DISCOVERY_RESULTS_UI_MESSAGE =
   "Nenhuma empresa encontrada para essa busca. Tente outro nicho, cidade ou raio.";
 
@@ -39,6 +43,9 @@ export function formatUserFacingError(
     }
     if (error.detail === MISSING_CNPJA_API_KEY_DETAIL) {
       return MISSING_CNPJA_API_KEY_UI_MESSAGE;
+    }
+    if (error.detail === CNPJ_WEBSITE_BATCH_LIMIT_DETAIL) {
+      return CNPJ_WEBSITE_BATCH_LIMIT_UI_MESSAGE;
     }
     if (isTimeoutLikeError(error)) {
       return LONG_RUNNING_OPERATION_TIMEOUT_UI_MESSAGE;

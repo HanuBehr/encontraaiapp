@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import time
 from typing import Any
@@ -74,6 +75,7 @@ class PageExtractionResult:
     confidence_scores: dict[str, float]
     material_signals: dict[str, dict[str, Any]]
     candidate_page_urls: list[str]
+    visible_text: str
 
 
 @dataclass(slots=True)
@@ -92,6 +94,7 @@ class CrawledPageResult:
     confidence_scores: dict[str, Any]
     material_signals: dict[str, Any]
     evidences: list[ExtractedEvidence]
+    page_text: str | None = None
     note: str | None = None
 
 
@@ -103,6 +106,7 @@ class PublicWebsiteCrawlResult:
     page_results: list[CrawledPageResult]
     material_signals: dict[str, dict[str, Any]]
     skipped_reason: str | None = None
+    stop_reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -111,6 +115,7 @@ class CrawlProfile:
     max_discovered_contact_pages: int
     request_timeout_seconds: int
     robots_timeout_seconds: int
+    max_elapsed_seconds: float | None = None
 
 
 def _decode_cloudflare_email(encoded_value: str | None) -> str | None:
@@ -380,6 +385,7 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
         confidence_scores=confidence_scores,
         material_signals=material_signals,
         candidate_page_urls=unique_preserve_order(candidate_page_urls),
+        visible_text=text,
     )
 
 
@@ -421,6 +427,16 @@ class EnrichmentService:
     PREVIEW_MAX_DISCOVERED_CONTACT_PAGES = 2
     PREVIEW_REQUEST_TIMEOUT_SECONDS = 6
     PREVIEW_ROBOTS_TIMEOUT_SECONDS = 4
+    CNPJ_PAGE_PATHS = (
+        "/",
+        "/contato",
+        "/sobre",
+        "/politica-de-privacidade",
+    )
+    CNPJ_MAX_DISCOVERED_CONTACT_PAGES = 0
+    CNPJ_REQUEST_TIMEOUT_SECONDS = 4
+    CNPJ_ROBOTS_TIMEOUT_SECONDS = 2
+    CNPJ_MAX_ELAPSED_SECONDS = 8.0
 
     def __init__(
         self,
@@ -667,11 +683,24 @@ class EnrichmentService:
         )
         return updated_candidate, metadata
 
+    def crawl_public_website_for_cnpj(
+        self,
+        website_url: str | None,
+        *,
+        stop_after_page: Callable[[CrawledPageResult], bool] | None = None,
+    ) -> PublicWebsiteCrawlResult:
+        return self._crawl_public_website(
+            website_url,
+            profile=self._cnpj_crawl_profile(),
+            stop_after_page=stop_after_page,
+        )
+
     def _crawl_public_website(
         self,
         website_url: str | None,
         *,
         profile: CrawlProfile | None = None,
+        stop_after_page: Callable[[CrawledPageResult], bool] | None = None,
     ) -> PublicWebsiteCrawlResult:
         crawl_profile = profile or self._default_crawl_profile()
         candidate_pages = self._build_candidate_urls_from_website(
@@ -686,6 +715,7 @@ class EnrichmentService:
                 page_results=[],
                 material_signals={},
                 skipped_reason="No public website.",
+                stop_reason=None,
             )
 
         pages_attempted = 0
@@ -697,8 +727,16 @@ class EnrichmentService:
         discovered_contact_pages = 0
         page_index = 0
         base_website_url = candidate_pages[0].url
+        started_at = time.monotonic()
+        stop_reason: str | None = None
 
         while page_index < len(candidate_pages):
+            if (
+                crawl_profile.max_elapsed_seconds is not None
+                and time.monotonic() - started_at >= crawl_profile.max_elapsed_seconds
+            ):
+                stop_reason = "timeout_budget_exhausted"
+                break
             candidate_page = candidate_pages[page_index]
             page_url = candidate_page.url
             page_index += 1
@@ -725,6 +763,7 @@ class EnrichmentService:
                         confidence_scores={},
                         material_signals={},
                         evidences=[],
+                        page_text=None,
                         note=note,
                     )
                 )
@@ -737,6 +776,24 @@ class EnrichmentService:
                     timeout=crawl_profile.request_timeout_seconds,
                     allow_redirects=True,
                 )
+            except requests.Timeout:
+                note = "Request timed out."
+                attempted_page.note = note
+                page_results.append(
+                    CrawledPageResult(
+                        source_url=page_url,
+                        page_type=page_type,
+                        http_status=None,
+                        robots_allowed=True,
+                        extracted_fields={},
+                        confidence_scores={},
+                        material_signals={},
+                        evidences=[],
+                        page_text=None,
+                        note=note,
+                    )
+                )
+                continue
             except requests.RequestException as exc:
                 note = f"Request failed: {exc}"
                 attempted_page.note = note
@@ -750,6 +807,7 @@ class EnrichmentService:
                         confidence_scores={},
                         material_signals={},
                         evidences=[],
+                        page_text=None,
                         note=note,
                     )
                 )
@@ -772,26 +830,30 @@ class EnrichmentService:
                         confidence_scores={},
                         material_signals={},
                         evidences=[],
+                        page_text=None,
                         note=note,
                     )
                 )
                 continue
 
             extraction = extract_public_page_data(response.text, response.url)
-            page_results.append(
-                CrawledPageResult(
-                    source_url=response.url,
-                    page_type=page_type,
-                    http_status=response.status_code,
-                    robots_allowed=True,
-                    extracted_fields=extraction.extracted_fields,
-                    confidence_scores=extraction.confidence_scores,
-                    material_signals=extraction.material_signals,
-                    evidences=extraction.evidences,
-                    note=None,
-                )
+            crawled_page = CrawledPageResult(
+                source_url=response.url,
+                page_type=page_type,
+                http_status=response.status_code,
+                robots_allowed=True,
+                extracted_fields=extraction.extracted_fields,
+                confidence_scores=extraction.confidence_scores,
+                material_signals=extraction.material_signals,
+                evidences=extraction.evidences,
+                page_text=extraction.visible_text,
+                note=None,
             )
+            page_results.append(crawled_page)
             aggregated_signals = self._merge_material_signals(aggregated_signals, extraction.material_signals)
+            if stop_after_page is not None and stop_after_page(crawled_page):
+                stop_reason = "stop_after_page"
+                break
             for discovered_url in extraction.candidate_page_urls:
                 if discovered_contact_pages >= crawl_profile.max_discovered_contact_pages:
                     break
@@ -811,6 +873,7 @@ class EnrichmentService:
             attempted_pages=attempted_pages,
             page_results=page_results,
             material_signals=aggregated_signals,
+            stop_reason=stop_reason,
         )
 
     def enrich_batch(self, lead_ids: list[int], *, actor: str = "system") -> list[EnrichmentRunResult]:
@@ -1054,6 +1117,15 @@ class EnrichmentService:
             robots_timeout_seconds=self.PREVIEW_ROBOTS_TIMEOUT_SECONDS,
         )
 
+    def _cnpj_crawl_profile(self) -> CrawlProfile:
+        return CrawlProfile(
+            page_paths=self.CNPJ_PAGE_PATHS,
+            max_discovered_contact_pages=self.CNPJ_MAX_DISCOVERED_CONTACT_PAGES,
+            request_timeout_seconds=self.CNPJ_REQUEST_TIMEOUT_SECONDS,
+            robots_timeout_seconds=self.CNPJ_ROBOTS_TIMEOUT_SECONDS,
+            max_elapsed_seconds=self.CNPJ_MAX_ELAPSED_SECONDS,
+        )
+
     def _create_enrichment_record(
         self,
         *,
@@ -1093,6 +1165,10 @@ class EnrichmentService:
             for hint in ("contato", "contact", "fale", "atendimento", "suporte", "sac")
         ):
             return "contact"
+        if any(hint in normalized_path for hint in ("politica", "privacy")):
+            return "privacy"
+        if any(hint in normalized_path for hint in ("termos", "terms")):
+            return "terms"
         if any(
             hint in normalized_path
             for hint in ("sobre", "about", "empresa", "institucional", "quem", "historia")

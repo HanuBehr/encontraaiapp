@@ -398,6 +398,7 @@ class CNPJEnrichmentRunResult(BaseModel):
     legal_name: str | None = None
     match_status: CNPJMatchStatus = "unknown"
     match_confidence: float | None = None
+    reason_code: str | None = None
     fields_updated: list[str] = Field(default_factory=list)
     skipped_reason: str | None = None
     error_message: str | None = None
@@ -412,6 +413,14 @@ class LeadBatchCNPJEnrichmentSummary(BaseModel):
     needs_review_count: int = 0
     not_found_count: int = 0
     skipped_known_count: int = 0
+    no_website_count: int = 0
+    no_cnpj_on_website_count: int = 0
+    website_timeout_count: int = 0
+    website_unreachable_count: int = 0
+    validation_failed_count: int = 0
+    low_confidence_count: int = 0
+    provider_rate_limited_count: int = 0
+    provider_error_count: int = 0
     error_count: int = 0
     errors: list[str] = Field(default_factory=list)
 

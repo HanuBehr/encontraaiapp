@@ -334,6 +334,7 @@ export type LeadBatchCNPJEnrichmentResponse = {
     legal_name: string | null;
     match_status: CNPJMatchStatus;
     match_confidence: number | null;
+    reason_code: string | null;
     fields_updated: string[];
     skipped_reason: string | null;
     error_message: string | null;
@@ -347,6 +348,14 @@ export type LeadBatchCNPJEnrichmentResponse = {
     needs_review_count: number;
     not_found_count: number;
     skipped_known_count: number;
+    no_website_count: number;
+    no_cnpj_on_website_count: number;
+    website_timeout_count: number;
+    website_unreachable_count: number;
+    validation_failed_count: number;
+    low_confidence_count: number;
+    provider_rate_limited_count: number;
+    provider_error_count: number;
     error_count: number;
     errors: string[];
   };

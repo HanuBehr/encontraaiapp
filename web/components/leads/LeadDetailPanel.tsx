@@ -56,7 +56,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   const lead = detailQuery.data;
   const latestEnrichment = lead.enrichments[0];
   const latestEnrichmentAudit = getLatestEnrichmentAudit(lead);
-  const cnpjReviewHint = getCnpjReviewHint(lead);
+  const cnpjStatusHint = getCnpjStatusHint(lead);
 
   return (
     <aside className="rounded-md border border-neutral-200 bg-white">
@@ -97,13 +97,13 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
             <InfoItem label="Última consulta" value={formatDateTime(lead.cnpj_last_enriched_at)} />
             <InfoItem label="Provedor" value={labelToken(lead.cnpj_source_provider)} />
           </InfoGrid>
-          {cnpjReviewHint ? (
+          {cnpjStatusHint ? (
             <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {cnpjReviewHint}
+              {cnpjStatusHint}
             </p>
           ) : null}
           <p className="mt-3 text-xs text-neutral-500">
-            Consulta pública disponível apenas quando o CNPJ já está informado no lead.
+            Funciona quando o lead já tem CNPJ informado ou quando o CNPJ aparece no site da empresa. Nem todos os sites exibem CNPJ publicamente.
           </p>
         </DetailSection>
 
@@ -400,17 +400,41 @@ function formatDateTime(value?: string | null) {
   }).format(date);
 }
 
-function getCnpjReviewHint(lead: LeadDetail) {
-  if (lead.cnpj_match_status !== "needs_review") {
-    return null;
-  }
-
+function getCnpjStatusHint(lead: LeadDetail) {
   const metadata = asRecord(lead.cnpj_metadata_json);
-  if (!metadata || !asRecord(metadata.candidate_summary)) {
-    return null;
+  const reasonCode = typeof metadata?.reason_code === "string" ? metadata.reason_code : null;
+  const hasCandidateSummary = Boolean(asRecord(metadata?.candidate_summary));
+
+  if (lead.cnpj_match_status === "needs_review" && hasCandidateSummary) {
+    return "Possível CNPJ encontrado, precisa revisão.";
   }
 
-  return "Possível CNPJ encontrado, precisa revisão.";
+  if (reasonCode === "no_cnpj_on_website") {
+    return "CNPJ não encontrado no site.";
+  }
+  if (reasonCode === "skipped_no_website") {
+    return "Este lead não tem site público para consulta de CNPJ.";
+  }
+  if (reasonCode === "website_unreachable") {
+    return "Site sem resposta.";
+  }
+  if (reasonCode === "website_timeout") {
+    return "O site demorou demais para responder.";
+  }
+  if (reasonCode === "cnpj_provider_rate_limited") {
+    return "Consulta pública limitada/rate limit.";
+  }
+  if (reasonCode === "provider_error") {
+    return "Falha temporária na consulta pública de CNPJ.";
+  }
+  if (reasonCode === "cnpj_validation_failed") {
+    return "Um CNPJ foi encontrado, mas a validação pública não confirmou a empresa.";
+  }
+  if (reasonCode === "low_confidence") {
+    return "Um possível CNPJ foi encontrado, mas sem confiança suficiente para preencher automaticamente.";
+  }
+
+  return null;
 }
 
 type EnrichmentAuditData = {

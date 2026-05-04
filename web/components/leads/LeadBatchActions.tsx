@@ -190,6 +190,9 @@ export function LeadBatchActions({
             Escolha um escopo para enriquecer contatos, consultar CNPJ, atribuir ou exportar os leads sem sair da lista.
           </p>
           <p className="mt-1 text-xs text-neutral-500">
+            Funciona quando o lead já tem CNPJ informado ou quando o CNPJ aparece no site da empresa. Nem todos os sites exibem CNPJ publicamente.
+          </p>
+          <p className="mt-1 text-xs text-neutral-500">
             O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
           </p>
           {searchActive ? (
@@ -572,6 +575,46 @@ function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"
 function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"]) {
   if (summary.processed === 0) {
     return "Nenhum lead foi processado nesta consulta de CNPJ.";
+  }
+
+  if (summary.error_count > 0 && summary.matched_count === 0 && summary.needs_review_count === 0 && summary.not_found_count === 0) {
+    if (summary.provider_rate_limited_count > 0) {
+      return "A consulta pública de CNPJ atingiu o limite de uso. Tente novamente com menos empresas por vez.";
+    }
+    return "A consulta CNPJ encontrou erro de provedor em parte do lote. Tente novamente em alguns instantes.";
+  }
+
+  if (summary.matched_count === 0 && summary.needs_review_count === 0 && summary.not_found_count > 0) {
+    const reasons = [
+      summary.no_website_count ? `${summary.no_website_count.toLocaleString()} sem site` : null,
+      summary.no_cnpj_on_website_count
+        ? `${summary.no_cnpj_on_website_count.toLocaleString()} sem CNPJ visível no site`
+        : null,
+      summary.website_timeout_count
+        ? `${summary.website_timeout_count.toLocaleString()} sites demoraram demais`
+        : null,
+      summary.website_unreachable_count
+        ? `${summary.website_unreachable_count.toLocaleString()} sites sem resposta`
+        : null,
+      summary.validation_failed_count
+        ? `${summary.validation_failed_count.toLocaleString()} com CNPJ sem validação pública`
+        : null,
+      summary.low_confidence_count
+        ? `${summary.low_confidence_count.toLocaleString()} com baixa confiança`
+        : null,
+      summary.provider_rate_limited_count
+        ? `${summary.provider_rate_limited_count.toLocaleString()} limitados pela consulta pública`
+        : null,
+      summary.provider_error_count
+        ? `${summary.provider_error_count.toLocaleString()} com erro de provedor`
+        : null,
+    ].filter(Boolean);
+
+    if (reasons.length === 0) {
+      return "0 CNPJs confirmados. Nenhum CNPJ foi encontrado nos sites verificados.";
+    }
+
+    return `0 CNPJs confirmados. ${summary.not_found_count.toLocaleString()} sem correspondência: ${reasons.join(", ")}.`;
   }
 
   return `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.`;
