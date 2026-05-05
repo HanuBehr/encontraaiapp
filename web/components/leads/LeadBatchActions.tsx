@@ -577,6 +577,15 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
     return "Nenhum lead foi processado nesta consulta de CNPJ.";
   }
 
+  if (
+    summary.matched_count === 0 &&
+    summary.needs_review_count === 0 &&
+    summary.not_found_count === 0 &&
+    summary.company_search_pending_retry_count > 0
+  ) {
+    return `Busca CNPJ limitada pelo provedor. ${summary.company_search_pending_retry_count.toLocaleString()} empresa(s) ficaram para tentar novamente em cerca de 1 minuto.`;
+  }
+
   if (summary.error_count > 0 && summary.matched_count === 0 && summary.needs_review_count === 0 && summary.not_found_count === 0) {
     if (summary.provider_rate_limited_count > 0) {
       return "A consulta pública de CNPJ atingiu o limite de uso. Tente novamente com menos empresas por vez.";
@@ -584,10 +593,17 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
     if (summary.company_search_rate_limited_count > 0) {
       return "A busca cadastral paga atingiu o limite do provedor. Tente novamente em alguns instantes.";
     }
+    if (summary.company_search_pending_retry_count > 0) {
+      return "Busca CNPJ limitada pelo provedor. Aguarde cerca de 1 minuto e tente novamente.";
+    }
     return "A consulta CNPJ encontrou erro de provedor em parte do lote. Tente novamente em alguns instantes.";
   }
 
   if (summary.matched_count === 0 && summary.needs_review_count === 0 && summary.not_found_count > 0) {
+    const genericCompanySearchNoCandidateCount = Math.max(
+      0,
+      summary.company_search_no_candidates_count - summary.company_search_zero_candidates_count,
+    );
     const reasons = [
       summary.no_website_count ? `${summary.no_website_count.toLocaleString()} sem site` : null,
       summary.no_cnpj_on_website_count
@@ -614,11 +630,17 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
       summary.company_search_not_configured_count
         ? `${summary.company_search_not_configured_count.toLocaleString()} com busca paga não configurada`
         : null,
-      summary.company_search_no_candidates_count
-        ? `${summary.company_search_no_candidates_count.toLocaleString()} sem candidatos na busca cadastral`
+      summary.company_search_zero_candidates_count
+        ? `${summary.company_search_zero_candidates_count.toLocaleString()} sem candidatos retornados pela CNPJá`
+        : null,
+      genericCompanySearchNoCandidateCount
+        ? `${genericCompanySearchNoCandidateCount.toLocaleString()} sem candidatos na busca cadastral`
         : null,
       summary.company_search_low_confidence_count
         ? `${summary.company_search_low_confidence_count.toLocaleString()} com baixa confiança na busca cadastral`
+        : null,
+      summary.company_search_pending_retry_count
+        ? `${summary.company_search_pending_retry_count.toLocaleString()} aguardando nova tentativa por limite do provedor`
         : null,
       summary.company_search_rate_limited_count
         ? `${summary.company_search_rate_limited_count.toLocaleString()} limitados pela busca cadastral`

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any
 
 import requests
@@ -10,11 +11,39 @@ from app.services.normalization import (
     format_street_address,
     normalize_brazilian_state,
     normalize_domain,
+    normalize_text,
 )
 
 
 MISSING_CNPJA_API_KEY_BATCH_MESSAGE = "CNPJA_API_KEY must be configured to use batch CNPJ enrichment."
 COMPANY_SEARCH_NOT_CONFIGURED_MESSAGE = "CNPJA company search is not configured for lead matching."
+_NAME_SPLIT_RE = re.compile(r"[|/\-,()]+")
+_WHITESPACE_RE = re.compile(r"\s+")
+_SEARCH_CONNECTOR_WORDS = {"de", "da", "do", "das", "dos", "e"}
+_SEARCH_LIGHT_NOISE_PHRASES = (
+    "banho e tosa",
+    "banho",
+    "tosa",
+    "delivery",
+    "unidade",
+    "ltda",
+    "me",
+    "eireli",
+)
+_SEARCH_HEAVY_NOISE_PHRASES = (
+    "pet shop",
+    "loja",
+    "comercio",
+    "comercio varejista",
+    "materiais de construcao",
+    "oficina",
+    "mecanica",
+    "auto",
+    "autos",
+    "centro automotivo",
+    "clinica",
+    "restaurante",
+)
 
 
 class CNPJAProviderError(RuntimeError):
@@ -70,6 +99,7 @@ class CNPJAProvider:
     ) -> None:
         self.settings = settings
         self.http = http_session or requests.Session()
+        self.last_company_search_metadata: dict[str, Any] | None = None
 
     def lookup_known_cnpj(
         self,
@@ -111,12 +141,14 @@ class CNPJAProvider:
         address: str | None = None,
         neighborhood: str | None = None,
     ) -> list[CNPJLookupResult]:
+        self.last_company_search_metadata = None
         if (
             self.settings.cnpj_company_search_enabled
             and self.settings.cnpj_company_search_provider == "cnpja_commercial"
         ):
             return self._search_companies_commercial(
                 business_name=business_name,
+                category=None,
                 city=city,
                 state=state,
                 postal_code=postal_code,
@@ -222,6 +254,7 @@ class CNPJAProvider:
         self,
         *,
         business_name: str,
+        category: str | None = None,
         city: str | None = None,
         state: str | None = None,
         postal_code: str | None = None,
@@ -236,46 +269,96 @@ class CNPJAProvider:
         if not self.settings.cnpja_company_search_configured:
             return []
 
-        search_term = _first_text(business_name)
-        if not search_term or len(search_term.strip()) < self.MIN_SEARCH_TERM_LENGTH:
+        search_variants = build_company_search_name_variants(
+            business_name,
+            category=category,
+            max_variants=self.settings.cnpja_name_variant_limit,
+        )
+        if not search_variants:
             return []
 
         base_url = (self.settings.cnpja_api_base_url or "").rstrip("/")
         if not base_url or not self.settings.cnpja_api_key:
             return []
 
-        response = self.http.get(
-            f"{base_url}/office",
-            headers={
-                "Authorization": self.settings.cnpja_api_key,
-                "Accept": "application/json",
-            },
-            params=self._build_commercial_search_params(
-                business_name=search_term,
+        search_attempts = max(1, self.settings.cnpja_max_search_attempts_per_lead)
+        names_clauses = [",".join(search_variants)]
+        if search_attempts > 1 and search_variants:
+            names_clauses.append(search_variants[0])
+        names_clauses = names_clauses[:search_attempts]
+
+        search_attempt_metadata: list[dict[str, Any]] = []
+        matches: list[CNPJLookupResult] = []
+        shared_metadata = self._build_commercial_search_shared_metadata(
+            search_variants=search_variants,
+            state=state,
+            postal_code=postal_code,
+            phone=phone,
+            whatsapp=whatsapp,
+            neighborhood=neighborhood,
+        )
+
+        for names_clause in names_clauses:
+            params = self._build_commercial_search_params(
+                names_in=names_clause,
                 state=state,
                 postal_code=postal_code,
                 phone=phone,
                 whatsapp=whatsapp,
                 neighborhood=neighborhood,
-            ),
-            timeout=self.REQUEST_TIMEOUT_SECONDS,
-        )
-        payload = self._json_value_or_raise(response)
+            )
+            response = self.http.get(
+                f"{base_url}/office",
+                headers={
+                    "Authorization": self.settings.cnpja_api_key,
+                    "Accept": "application/json",
+                },
+                params=params,
+                timeout=self.REQUEST_TIMEOUT_SECONDS,
+            )
+            payload = self._json_value_or_raise(response)
+            raw_candidates = self._extract_search_candidates(payload)
+            search_attempt_metadata.append(
+                {
+                    "names_in": names_clause,
+                    "candidate_count": len(raw_candidates),
+                    "limit": params.get("limit"),
+                    "state": params.get("address.state.in"),
+                    "postal_code": params.get("address.zip.in"),
+                    "district": params.get("address.district.in"),
+                    "phone_area": params.get("phones.area.in"),
+                }
+            )
 
-        matches: list[CNPJLookupResult] = []
-        for candidate_payload in self._extract_search_candidates(payload):
-            try:
-                matches.append(
-                    self._normalize_lookup_payload(
-                        candidate_payload,
-                        source_provider="cnpja_commercial",
-                        requested_cnpj="",
-                        strategy=None,
+            for candidate_payload in raw_candidates:
+                try:
+                    matches.append(
+                        self._normalize_lookup_payload(
+                            candidate_payload,
+                            source_provider="cnpja_commercial",
+                            requested_cnpj="",
+                            strategy=None,
+                        )
                     )
-                )
-            except CNPJANotFoundError:
-                continue
-        return matches
+                except CNPJANotFoundError:
+                    continue
+
+            if matches:
+                self.last_company_search_metadata = {
+                    **shared_metadata,
+                    "search_attempts": search_attempt_metadata,
+                    "cnpja_zero_candidates": False,
+                    "returned_candidates": len(matches),
+                }
+                return matches
+
+        self.last_company_search_metadata = {
+            **shared_metadata,
+            "search_attempts": search_attempt_metadata,
+            "cnpja_zero_candidates": True,
+            "returned_candidates": 0,
+        }
+        return []
 
     def _commercial_lookup(self, cnpj: str, *, strategy: str | None) -> dict[str, Any]:
         base_url = (self.settings.cnpja_api_base_url or "").rstrip("/")
@@ -490,7 +573,7 @@ class CNPJAProvider:
     def _build_commercial_search_params(
         self,
         *,
-        business_name: str,
+        names_in: str,
         state: str | None,
         postal_code: str | None,
         phone: str | None,
@@ -499,7 +582,7 @@ class CNPJAProvider:
     ) -> dict[str, str]:
         params: dict[str, str] = {
             "limit": str(self._normalize_search_limit()),
-            "names.in": business_name,
+            "names.in": names_in,
             "status.id.in": "2",
         }
 
@@ -520,6 +603,25 @@ class CNPJAProvider:
             params["phones.area.in"] = area_code
 
         return params
+
+    def _build_commercial_search_shared_metadata(
+        self,
+        *,
+        search_variants: list[str],
+        state: str | None,
+        postal_code: str | None,
+        phone: str | None,
+        whatsapp: str | None,
+        neighborhood: str | None,
+    ) -> dict[str, Any]:
+        return {
+            "provider": "cnpja_commercial",
+            "searched_names": search_variants,
+            "searched_state": normalize_brazilian_state(state),
+            "searched_zip": _normalize_postal_code(postal_code),
+            "searched_district": _first_text(neighborhood),
+            "searched_phone_area": _extract_area_code(phone) or _extract_area_code(whatsapp),
+        }
 
     def _normalize_search_limit(self) -> int:
         configured = self.settings.cnpja_company_search_limit
@@ -589,3 +691,150 @@ def _extract_area_code(value: str | None) -> str | None:
     if len(digits) == 10:
         return digits[:2]
     return digits[-10:-8]
+
+
+def build_company_search_name_variants(
+    business_name: str,
+    category: str | None = None,
+    *,
+    max_variants: int = 4,
+) -> list[str]:
+    base_full_variant = _clean_company_search_text(business_name)
+    chunk_variants = [
+        _clean_company_search_text(chunk)
+        for chunk in _NAME_SPLIT_RE.split(business_name)
+    ]
+
+    extra_noise_phrases: set[str] = set()
+    normalized_category = normalize_text(category)
+    if normalized_category:
+        extra_noise_phrases.add(normalized_category)
+
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def register(candidate: str | None) -> None:
+        if not candidate:
+            return
+        normalized_candidate = normalize_text(candidate)
+        if normalized_candidate is None:
+            return
+        formatted_candidate = _format_company_search_variant(normalized_candidate)
+        if not _is_meaningful_company_search_variant(normalized_candidate):
+            return
+        if normalized_candidate in seen:
+            return
+        seen.add(normalized_candidate)
+        variants.append(formatted_candidate)
+
+    if base_full_variant:
+        register(base_full_variant)
+        register(_trim_trailing_location_phrase(base_full_variant))
+        register(_extract_trailing_location_variant(base_full_variant))
+
+    for variant in chunk_variants:
+        normalized_variant = normalize_text(variant)
+        if normalized_variant is None:
+            continue
+        register(normalized_variant)
+        register(
+            _strip_company_search_noise(
+                normalized_variant,
+                phrases=set(_SEARCH_LIGHT_NOISE_PHRASES) | extra_noise_phrases,
+            )
+        )
+        register(
+            _strip_company_search_noise(
+                normalized_variant,
+                phrases=set(_SEARCH_LIGHT_NOISE_PHRASES)
+                | set(_SEARCH_HEAVY_NOISE_PHRASES)
+                | extra_noise_phrases,
+            )
+        )
+        register(_trim_trailing_location_phrase(normalized_variant))
+        register(_extract_trailing_location_variant(normalized_variant))
+
+    if max_variants < 1:
+        return []
+    return variants[:max_variants]
+
+
+def _clean_company_search_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    collapsed = value.replace("'", "").replace("’", "")
+    collapsed = _NAME_SPLIT_RE.sub(" ", collapsed)
+    collapsed = _WHITESPACE_RE.sub(" ", collapsed).strip()
+    return normalize_text(collapsed)
+
+
+def _strip_company_search_noise(value: str | None, *, phrases: set[str] | tuple[str, ...]) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    candidate = f" {normalized} "
+    removed_phrase = False
+    for phrase in phrases:
+        normalized_phrase = normalize_text(phrase)
+        if normalized_phrase and f" {normalized_phrase} " in candidate:
+            candidate = candidate.replace(f" {normalized_phrase} ", " ")
+            removed_phrase = True
+    if not removed_phrase:
+        return normalized
+    tokens = [
+        token
+        for token in candidate.split()
+        if token not in _SEARCH_CONNECTOR_WORDS
+    ]
+    return " ".join(tokens) or None
+
+
+def _trim_trailing_location_phrase(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    tokens = normalized.split()
+    if len(tokens) < 3:
+        return normalized
+    if tokens[-2] in {"de", "da", "do", "das", "dos"} and len(tokens[-1]) >= 4:
+        return " ".join(tokens[:-2]) or None
+    return normalized
+
+
+def _extract_trailing_location_variant(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    tokens = normalized.split()
+    if len(tokens) < 3:
+        return None
+    if tokens[-2] in {"de", "da", "do", "das", "dos"} and len(tokens[-1]) >= 4:
+        return tokens[-1]
+    return None
+
+
+def _is_meaningful_company_search_variant(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    if normalized is None or len(normalized) < 3:
+        return False
+    tokens = [token for token in normalized.split() if token not in _SEARCH_CONNECTOR_WORDS]
+    if not tokens:
+        return False
+    generic_terms = {
+        token
+        for phrase in (*_SEARCH_LIGHT_NOISE_PHRASES, *_SEARCH_HEAVY_NOISE_PHRASES)
+        for token in normalize_text(phrase).split()
+    }
+    return any(token not in generic_terms for token in tokens)
+
+
+def _format_company_search_variant(value: str) -> str:
+    words: list[str] = []
+    for token in value.split():
+        if len(token) <= 2 and token not in _SEARCH_CONNECTOR_WORDS:
+            words.append(token.upper())
+        elif token in _SEARCH_CONNECTOR_WORDS:
+            words.append(token)
+        else:
+            words.append(token.capitalize())
+    return " ".join(words)

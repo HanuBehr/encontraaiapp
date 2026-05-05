@@ -98,6 +98,21 @@ class Settings(BaseSettings):
     )
     cnpja_search_max_age: int = Field(default=45, alias="CNPJA_SEARCH_MAX_AGE")
     cnpja_company_search_limit: int = Field(default=10, alias="CNPJA_COMPANY_SEARCH_LIMIT")
+    cnpja_name_variant_limit: int = Field(default=4, alias="CNPJA_NAME_VARIANT_LIMIT")
+    cnpja_max_search_attempts_per_lead: int = Field(
+        default=1,
+        alias="CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD",
+    )
+    cnpja_rate_limit_per_minute: int = Field(default=10, alias="CNPJA_RATE_LIMIT_PER_MINUTE")
+    cnpja_batch_size: int = Field(default=8, alias="CNPJA_BATCH_SIZE")
+    cnpja_rate_limit_cooldown_seconds: int = Field(
+        default=65,
+        alias="CNPJA_RATE_LIMIT_COOLDOWN_SECONDS",
+    )
+    cnpja_stop_batch_on_rate_limit: bool = Field(
+        default=True,
+        alias="CNPJA_STOP_BATCH_ON_RATE_LIMIT",
+    )
 
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")

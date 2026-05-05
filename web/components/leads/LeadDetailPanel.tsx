@@ -427,6 +427,9 @@ function getCnpjStatusHint(lead: LeadDetail) {
   if (reasonCode === "company_search_not_configured") {
     return "Busca cadastral paga não configurada.";
   }
+  if (reasonCode === "cnpja_zero_candidates") {
+    return "A CNPJá não retornou candidatos para este lead.";
+  }
   if (reasonCode === "company_search_no_candidates") {
     return "Nenhum candidato encontrado na busca cadastral.";
   }
@@ -438,6 +441,9 @@ function getCnpjStatusHint(lead: LeadDetail) {
   }
   if (reasonCode === "company_search_rate_limited") {
     return "Busca cadastral temporariamente limitada pelo provedor.";
+  }
+  if (reasonCode === "company_search_pending_retry") {
+    return "Busca cadastral pausada por limite do provedor. Tente novamente em cerca de 1 minuto.";
   }
   if (reasonCode === "company_search_provider_error") {
     return "Falha temporária na busca cadastral paga.";

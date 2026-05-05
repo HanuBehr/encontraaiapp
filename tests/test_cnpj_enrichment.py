@@ -24,6 +24,7 @@ from app.services.providers.cnpja import (
     CNPJAProviderError,
     CNPJANotFoundError,
     CNPJLookupResult,
+    build_company_search_name_variants,
     normalize_cnpj,
 )
 from app.services.providers.cnpjota import CNPJotaProvider
@@ -113,6 +114,9 @@ class FakeCNPJAProvider:
         lookup_error: Exception | None = None,
         search_results: list[CNPJLookupResult] | None = None,
         search_error: Exception | None = None,
+        search_results_sequence: list[list[CNPJLookupResult] | Exception] | None = None,
+        search_metadata: dict[str, object] | None = None,
+        search_metadata_sequence: list[dict[str, object] | None] | None = None,
         http_session: FakeHTTPSession | None = None,
     ) -> None:
         self.lookup_result = lookup_result or _lookup_result()
@@ -121,6 +125,10 @@ class FakeCNPJAProvider:
         self.lookup_error = lookup_error
         self.search_results = search_results or []
         self.search_error = search_error
+        self.search_results_sequence = search_results_sequence or []
+        self.search_metadata = search_metadata
+        self.search_metadata_sequence = search_metadata_sequence or []
+        self.last_company_search_metadata: dict[str, object] | None = None
         self.http = http_session
         self.lookup_calls: list[str] = []
         self.search_calls: list[dict[str, str | None]] = []
@@ -160,8 +168,18 @@ class FakeCNPJAProvider:
                 "neighborhood": neighborhood,
             }
         )
+        current_call_index = len(self.search_calls) - 1
+        if current_call_index < len(self.search_metadata_sequence):
+            self.last_company_search_metadata = self.search_metadata_sequence[current_call_index]
+        else:
+            self.last_company_search_metadata = self.search_metadata
         if self.search_error is not None:
             raise self.search_error
+        if current_call_index < len(self.search_results_sequence):
+            planned_result = self.search_results_sequence[current_call_index]
+            if isinstance(planned_result, Exception):
+                raise planned_result
+            return planned_result
         return self.search_results
 
 
@@ -172,6 +190,14 @@ def _settings(**overrides) -> Settings:
         "EXPORT_DIR": "./data/exports",
         "GOOGLE_API_KEY": "",
         "CNPJ_LOOKUP_PROVIDER": "cnpja_open",
+        "CNPJ_COMPANY_SEARCH_ENABLED": False,
+        "CNPJ_COMPANY_SEARCH_PROVIDER": "cnpja_commercial",
+        "CNPJA_API_KEY": "",
+        "CNPJA_API_BASE_URL": "",
+        "CNPJA_ENABLE_COMPANY_SEARCH": False,
+        "CNPJA_SEARCH_ENDPOINT": "",
+        "CNPJ_WS_PREMIUM_TOKEN": "",
+        "CNPJOTA_TOKEN": "",
     }
     base.update(overrides)
     return Settings(**base)
@@ -278,6 +304,31 @@ def test_extract_cnpj_rejects_cpf_length_values() -> None:
 def test_extract_cnpj_rejects_invalid_check_digits() -> None:
     text = "CNPJ 37.335.118/0001-81"
     assert extract_cnpj_candidates_from_text(text) == []
+
+
+def test_build_company_search_name_variants_strips_noisy_google_name_terms() -> None:
+    assert build_company_search_name_variants("Baby's Pet Shop e Banho e Tosa") == [
+        "Babys Pet Shop e Banho e Tosa",
+        "Babys Pet Shop",
+        "Babys",
+    ]
+
+
+def test_build_company_search_name_variants_splits_separators_and_dedupes() -> None:
+    assert build_company_search_name_variants("Pet Shop Bela Vista | Banho Carinhoso", max_variants=4) == [
+        "Pet Shop Bela Vista Banho Carinhoso",
+        "Pet Shop Bela Vista",
+        "Bela Vista",
+        "Banho Carinhoso",
+    ]
+
+
+def test_build_company_search_name_variants_keeps_low_priority_brand_fallbacks_limited() -> None:
+    assert build_company_search_name_variants("Pet Space do Bixiga", max_variants=4) == [
+        "Pet Space do Bixiga",
+        "Pet Space",
+        "Bixiga",
+    ]
 
 
 def test_lookup_known_cnpj_maps_open_api_payload() -> None:
@@ -476,6 +527,43 @@ def test_cnpja_commercial_search_builds_office_endpoint_and_auth_header() -> Non
     assert results[0].emails == ["contato@casafalci.com.br"]
     assert results[0].primary_activity == "Comercio varejista"
     assert results[0].source_provider == "cnpja_commercial"
+
+
+def test_cnpja_commercial_search_sends_comma_separated_name_variants() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://api.cnpja.com/office": FakeResponse(payload={"records": []})
+        },
+        default_status_code=None,
+    )
+    provider = CNPJAProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJA_NAME_VARIANT_LIMIT=4,
+        ),
+        http_session=session,
+    )
+
+    results = provider.search_companies(
+        business_name="Pet Shop Bela Vista | Banho Carinhoso",
+        state="SP",
+    )
+
+    assert results == []
+    assert session.get_calls[0][1]["params"]["names.in"] == (
+        "Pet Shop Bela Vista Banho Carinhoso,Pet Shop Bela Vista,Bela Vista,Banho Carinhoso"
+    )
+    assert provider.last_company_search_metadata is not None
+    assert provider.last_company_search_metadata["cnpja_zero_candidates"] is True
+    assert provider.last_company_search_metadata["searched_names"] == [
+        "Pet Shop Bela Vista Banho Carinhoso",
+        "Pet Shop Bela Vista",
+        "Bela Vista",
+        "Banho Carinhoso",
+    ]
 
 
 def test_website_cnpj_batch_limit_fails_fast_for_large_selection(db_session) -> None:
@@ -1904,6 +1992,126 @@ def test_cnpja_commercial_different_city_state_does_not_autofill(db_session) -> 
     assert response.summary.not_found_count == 1
     assert response.summary.company_search_low_confidence_count == 1
     assert lead.cnpj is None
+
+
+def test_cnpja_zero_candidate_response_is_not_reported_as_provider_error(db_session) -> None:
+    lead = _lead(cnpj=None, website=None, business_name="Pet Space do Bixiga")
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[],
+        search_metadata={
+            "provider": "cnpja_commercial",
+            "cnpja_zero_candidates": True,
+            "searched_names": ["Pet Space do Bixiga", "Pet Space", "Bixiga"],
+            "searched_state": "SP",
+            "searched_district": "Bela Vista",
+        },
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.company_search_no_candidates_count == 1
+    assert response.summary.company_search_zero_candidates_count == 1
+    assert response.summary.company_search_provider_error_count == 0
+    assert response.results[0].reason_code == "cnpja_zero_candidates"
+    assert lead.cnpj_metadata_json["crawl_summary"]["company_search"]["searched_names"] == [
+        "Pet Space do Bixiga",
+        "Pet Space",
+        "Bixiga",
+    ]
+
+
+def test_cnpja_rate_limit_stops_remaining_paid_searches_in_batch(db_session) -> None:
+    leads = [_lead(cnpj=None, website=None, business_name=f"Empresa {index}") for index in range(2)]
+    db_session.add_all(leads)
+    db_session.commit()
+    for lead in leads:
+        db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results_sequence=[
+            CNPJAProviderError(
+                "CNPJA request hit the upstream usage limit. Retry shortly.",
+                status_code=503,
+            ),
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJA_STOP_BATCH_ON_RATE_LIMIT=True,
+            CNPJA_BATCH_SIZE=8,
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id for lead in leads], actor="test")
+
+    assert len(fake_provider.search_calls) == 1
+    assert response.summary.company_search_rate_limited_count == 1
+    assert response.summary.company_search_pending_retry_count == 1
+    assert response.summary.not_found_count == 0
+    assert {result.reason_code for result in response.results} == {
+        "company_search_rate_limited",
+        "company_search_pending_retry",
+    }
+
+
+def test_cnpja_batch_size_limit_prevents_extra_paid_calls(db_session) -> None:
+    leads = [_lead(cnpj=None, website=None, business_name=f"Empresa {index}") for index in range(2)]
+    db_session.add_all(leads)
+    db_session.commit()
+    for lead in leads:
+        db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[],
+        search_metadata={
+            "provider": "cnpja_commercial",
+            "cnpja_zero_candidates": True,
+            "searched_names": ["Empresa 0"],
+        },
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJA_BATCH_SIZE=1,
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id for lead in leads], actor="test")
+
+    assert len(fake_provider.search_calls) == 1
+    assert response.summary.company_search_zero_candidates_count == 1
+    assert response.summary.company_search_pending_retry_count == 1
+    assert response.summary.not_found_count == 1
+    assert sorted(result.reason_code for result in response.results) == [
+        "cnpja_zero_candidates",
+        "company_search_pending_retry",
+    ]
 
 
 def test_company_search_high_confidence_candidate_fills_cnpj(db_session) -> None:

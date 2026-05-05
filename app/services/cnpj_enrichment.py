@@ -76,19 +76,25 @@ REASON_MATCHED = "matched"
 REASON_PROVIDER_ERROR = "provider_error"
 REASON_COMPANY_SEARCH_NOT_CONFIGURED = "company_search_not_configured"
 REASON_COMPANY_SEARCH_NO_CANDIDATES = "company_search_no_candidates"
+REASON_CNPJA_ZERO_CANDIDATES = "cnpja_zero_candidates"
 REASON_COMPANY_SEARCH_LOW_CONFIDENCE = "company_search_low_confidence"
 REASON_COMPANY_SEARCH_NEEDS_REVIEW = "company_search_needs_review"
 REASON_COMPANY_SEARCH_MATCHED = "company_search_matched"
 REASON_COMPANY_SEARCH_PROVIDER_ERROR = "company_search_provider_error"
 REASON_COMPANY_SEARCH_RATE_LIMITED = "company_search_rate_limited"
 REASON_COMPANY_SEARCH_PREVIEW_ONLY = "company_search_preview_only"
+REASON_COMPANY_SEARCH_PENDING_RETRY = "company_search_pending_retry"
 
 COMPANY_SEARCH_NOT_CONFIGURED_REASON = "Paid company search is not configured for this environment."
 COMPANY_SEARCH_NO_CANDIDATES_REASON = "No paid company-search candidates were found for this lead."
+CNPJA_ZERO_CANDIDATES_REASON = "CNPJá returned zero company-search candidates for this lead."
 COMPANY_SEARCH_LOW_CONFIDENCE_REASON = (
     "Paid company search found candidates, but confidence was too low to fill automatically."
 )
 COMPANY_SEARCH_PROVIDER_ERROR_REASON = "Paid company search failed temporarily."
+COMPANY_SEARCH_RATE_LIMIT_RETRY_REASON = (
+    "Busca CNPJ limitada pelo provedor. Aguarde cerca de 1 minuto e tente novamente."
+)
 
 
 @dataclass(slots=True)
@@ -192,6 +198,8 @@ class CNPJEnrichmentService:
         self.provider = provider or CNPJAProvider(settings)
         self._lookup_cache: dict[str, _LookupCacheEntry] = {}
         self._website_candidate_cache: dict[str, _WebsiteExtractionCacheEntry] = {}
+        self._company_search_attempts_in_batch = 0
+        self._company_search_rate_limited_in_batch = False
         self.enrichment_service = EnrichmentService(
             db,
             settings,
@@ -209,6 +217,8 @@ class CNPJEnrichmentService:
         requested_ids = [int(lead_id) for lead_id in dict.fromkeys(lead_ids)]
         self._lookup_cache = {}
         self._website_candidate_cache = {}
+        self._company_search_attempts_in_batch = 0
+        self._company_search_rate_limited_in_batch = False
         lead_map = {lead.id: lead for lead in self.repository.get_by_ids(requested_ids)}
         results: list[CNPJEnrichmentRunResult] = []
         errors: list[str] = []
@@ -383,6 +393,13 @@ class CNPJEnrichmentService:
                     skipped_reason=COMPANY_SEARCH_NOT_CONFIGURED_REASON,
                     attempt_metadata=website_outcome.attempt_metadata,
                 )
+            pending_retry_result = self._maybe_defer_company_search_for_batch(
+                lead,
+                actor=actor,
+                attempt_metadata=website_outcome.attempt_metadata,
+            )
+            if pending_retry_result is not None:
+                return pending_retry_result
             return self._enrich_missing_cnpj_via_company_search(
                 lead,
                 actor=actor,
@@ -409,6 +426,7 @@ class CNPJEnrichmentService:
         errors: list[str],
         attempt_metadata: dict[str, Any] | None,
     ) -> CNPJEnrichmentRunResult:
+        provider_attempt_metadata: dict[str, Any] | None = None
         try:
             candidates = self.provider.search_companies(
                 business_name=lead.business_name,
@@ -421,24 +439,49 @@ class CNPJEnrichmentService:
                 address=lead.address,
                 neighborhood=lead.neighborhood,
             )
+            provider_attempt_metadata = getattr(self.provider, "last_company_search_metadata", None)
         except CNPJAProviderError as exc:
+            provider_attempt_metadata = getattr(self.provider, "last_company_search_metadata", None)
+            reason_code = self._provider_reason_code(str(exc), company_search=True)
+            if (
+                reason_code == REASON_COMPANY_SEARCH_RATE_LIMITED
+                and self._uses_cnpja_commercial_company_search()
+                and self.settings.cnpja_stop_batch_on_rate_limit
+            ):
+                self._company_search_rate_limited_in_batch = True
             return self._record_error(
                 lead,
                 actor=actor,
                 error_message=str(exc),
                 errors=errors,
                 source_provider=self._company_search_source_provider(),
-                reason_code=self._provider_reason_code(str(exc), company_search=True),
+                reason_code=reason_code,
+                attempt_metadata=self._merge_attempt_metadata(
+                    attempt_metadata,
+                    provider_attempt_metadata,
+                ),
             )
 
+        merged_attempt_metadata = self._merge_attempt_metadata(
+            attempt_metadata,
+            provider_attempt_metadata,
+        )
         if not candidates:
             return self._finalize_missing_cnpj_result(
                 lead,
                 actor=actor,
                 source_provider=self._company_search_source_provider(),
-                reason_code=REASON_COMPANY_SEARCH_NO_CANDIDATES,
-                skipped_reason=COMPANY_SEARCH_NO_CANDIDATES_REASON,
-                attempt_metadata=attempt_metadata,
+                reason_code=(
+                    REASON_CNPJA_ZERO_CANDIDATES
+                    if self._is_cnpja_zero_candidates(provider_attempt_metadata)
+                    else REASON_COMPANY_SEARCH_NO_CANDIDATES
+                ),
+                skipped_reason=(
+                    CNPJA_ZERO_CANDIDATES_REASON
+                    if self._is_cnpja_zero_candidates(provider_attempt_metadata)
+                    else COMPANY_SEARCH_NO_CANDIDATES_REASON
+                ),
+                attempt_metadata=merged_attempt_metadata,
             )
 
         scored_candidates = sorted(
@@ -467,7 +510,7 @@ class CNPJEnrichmentService:
                 match_confidence=self._score_to_confidence(best_candidate.score),
                 matched_by="company_search",
                 candidate_summary=candidate_summary,
-                attempt_metadata=attempt_metadata,
+                attempt_metadata=merged_attempt_metadata,
                 reason_code=REASON_COMPANY_SEARCH_MATCHED,
             )
 
@@ -484,7 +527,7 @@ class CNPJEnrichmentService:
                 matched_by="company_search",
                 candidate_summary=candidate_summary,
                 reason_code=REASON_COMPANY_SEARCH_PREVIEW_ONLY,
-                attempt_metadata=attempt_metadata,
+                attempt_metadata=merged_attempt_metadata,
             )
             return CNPJEnrichmentRunResult(
                 lead_id=lead.id,
@@ -512,7 +555,7 @@ class CNPJEnrichmentService:
                 matched_by="company_search",
                 candidate_summary=candidate_summary,
                 reason_code=REASON_COMPANY_SEARCH_NEEDS_REVIEW,
-                attempt_metadata=attempt_metadata,
+                attempt_metadata=merged_attempt_metadata,
             )
             return CNPJEnrichmentRunResult(
                 lead_id=lead.id,
@@ -535,7 +578,7 @@ class CNPJEnrichmentService:
             skipped_reason=COMPANY_SEARCH_LOW_CONFIDENCE_REASON,
             matched_by="company_search",
             candidate_summary=candidate_summary,
-            attempt_metadata=attempt_metadata,
+            attempt_metadata=merged_attempt_metadata,
         )
 
     def _evaluate_website_cnpj_candidates(
@@ -729,6 +772,100 @@ class CNPJEnrichmentService:
             reason_code=reason_code,
             skipped_reason=skipped_reason,
             last_enriched_at=lead.cnpj_last_enriched_at,
+        )
+
+    def _maybe_defer_company_search_for_batch(
+        self,
+        lead,
+        *,
+        actor: str,
+        attempt_metadata: dict[str, Any] | None,
+    ) -> CNPJEnrichmentRunResult | None:
+        if not self._uses_cnpja_commercial_company_search():
+            return None
+
+        if self._company_search_rate_limited_in_batch and self.settings.cnpja_stop_batch_on_rate_limit:
+            return self._build_company_search_pending_retry_result(
+                lead,
+                actor=actor,
+                attempt_metadata=attempt_metadata,
+            )
+
+        safe_batch_size = max(1, self.settings.cnpja_batch_size)
+        if self._company_search_attempts_in_batch >= safe_batch_size:
+            return self._build_company_search_pending_retry_result(
+                lead,
+                actor=actor,
+                attempt_metadata=attempt_metadata,
+            )
+
+        self._company_search_attempts_in_batch += 1
+        return None
+
+    def _build_company_search_pending_retry_result(
+        self,
+        lead,
+        *,
+        actor: str,
+        attempt_metadata: dict[str, Any] | None,
+    ) -> CNPJEnrichmentRunResult:
+        merged_attempt_metadata = self._merge_attempt_metadata(
+            attempt_metadata,
+            {
+                "provider": "cnpja_commercial",
+                "pending_retry": True,
+                "cooldown_seconds": self.settings.cnpja_rate_limit_cooldown_seconds,
+                "batch_size": self.settings.cnpja_batch_size,
+            },
+        )
+        self._mark_attempt(
+            lead,
+            actor=actor,
+            match_status="unknown",
+            match_confidence=None,
+            source_provider="cnpja_commercial",
+            skipped_reason=COMPANY_SEARCH_RATE_LIMIT_RETRY_REASON,
+            error_message=None,
+            reason_code=REASON_COMPANY_SEARCH_PENDING_RETRY,
+            attempt_metadata=merged_attempt_metadata,
+        )
+        return CNPJEnrichmentRunResult(
+            lead_id=lead.id,
+            business_name=lead.business_name,
+            success=True,
+            cnpj=lead.cnpj,
+            legal_name=lead.legal_name,
+            match_status="unknown",
+            reason_code=REASON_COMPANY_SEARCH_PENDING_RETRY,
+            skipped_reason=COMPANY_SEARCH_RATE_LIMIT_RETRY_REASON,
+            last_enriched_at=lead.cnpj_last_enriched_at,
+        )
+
+    @staticmethod
+    def _merge_attempt_metadata(
+        existing: dict[str, Any] | None,
+        provider_attempt_metadata: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if existing is None and provider_attempt_metadata is None:
+            return None
+        merged = dict(existing or {})
+        if provider_attempt_metadata:
+            merged["company_search"] = provider_attempt_metadata
+        return merged
+
+    @staticmethod
+    def _is_cnpja_zero_candidates(provider_attempt_metadata: dict[str, Any] | None) -> bool:
+        if not provider_attempt_metadata:
+            return False
+        return bool(
+            provider_attempt_metadata.get("provider") == "cnpja_commercial"
+            and provider_attempt_metadata.get("cnpja_zero_candidates")
+        )
+
+    def _uses_cnpja_commercial_company_search(self) -> bool:
+        return bool(
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpja_commercial"
         )
 
     def _company_search_source_provider(self) -> str:
@@ -1081,6 +1218,7 @@ class CNPJEnrichmentService:
         errors: list[str],
         source_provider: str | None,
         reason_code: str,
+        attempt_metadata: dict[str, Any] | None = None,
     ) -> CNPJEnrichmentRunResult:
         self.db.rollback()
         self._mark_attempt(
@@ -1092,6 +1230,7 @@ class CNPJEnrichmentService:
             skipped_reason=None,
             error_message=error_message,
             reason_code=reason_code,
+            attempt_metadata=attempt_metadata,
         )
         errors.append(f"Lead {lead.id}: {error_message}")
         return CNPJEnrichmentRunResult(
@@ -1407,13 +1546,21 @@ class CNPJEnrichmentService:
                 if item.reason_code in {REASON_COMPANY_SEARCH_NEEDS_REVIEW, REASON_COMPANY_SEARCH_PREVIEW_ONLY}
             ),
             company_search_no_candidates_count=sum(
-                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_NO_CANDIDATES
+                1
+                for item in results
+                if item.reason_code in {REASON_COMPANY_SEARCH_NO_CANDIDATES, REASON_CNPJA_ZERO_CANDIDATES}
+            ),
+            company_search_zero_candidates_count=sum(
+                1 for item in results if item.reason_code == REASON_CNPJA_ZERO_CANDIDATES
             ),
             company_search_low_confidence_count=sum(
                 1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_LOW_CONFIDENCE
             ),
             company_search_not_configured_count=sum(
                 1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_NOT_CONFIGURED
+            ),
+            company_search_pending_retry_count=sum(
+                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_PENDING_RETRY
             ),
             company_search_rate_limited_count=sum(
                 1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_RATE_LIMITED
