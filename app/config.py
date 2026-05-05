@@ -58,8 +58,46 @@ class Settings(BaseSettings):
         default="https://publica.cnpj.ws",
         alias="CNPJ_WS_BASE_URL",
     )
+    cnpj_company_search_provider: Literal["cnpja_commercial", "cnpj_ws_premium", "cnpjota"] = Field(
+        default="cnpja_commercial",
+        alias="CNPJ_COMPANY_SEARCH_PROVIDER",
+    )
+    cnpj_company_search_enabled: bool = Field(
+        default=False,
+        alias="CNPJ_COMPANY_SEARCH_ENABLED",
+    )
+    cnpj_ws_premium_base_url: str = Field(
+        default="https://comercial.cnpj.ws",
+        alias="CNPJ_WS_PREMIUM_BASE_URL",
+    )
+    cnpj_ws_premium_token: str | None = Field(
+        default=None,
+        alias="CNPJ_WS_PREMIUM_TOKEN",
+    )
+    cnpj_ws_premium_auth_mode: Literal["x_api_token", "authorization_bearer"] = Field(
+        default="x_api_token",
+        alias="CNPJ_WS_PREMIUM_AUTH_MODE",
+    )
+    cnpjota_base_url: str = Field(
+        default="https://api.cnpjota.com.br/api/v1",
+        alias="CNPJOTA_BASE_URL",
+    )
+    cnpjota_token: str | None = Field(
+        default=None,
+        alias="CNPJOTA_TOKEN",
+    )
+    cnpjota_use_preview: bool = Field(
+        default=True,
+        alias="CNPJOTA_USE_PREVIEW",
+    )
     cnpja_search_endpoint: str | None = Field(default=None, alias="CNPJA_SEARCH_ENDPOINT")
     cnpja_enable_company_search: bool = Field(default=False, alias="CNPJA_ENABLE_COMPANY_SEARCH")
+    cnpja_search_strategy: Literal["CACHE", "CACHE_IF_FRESH", "CACHE_IF_ERROR", "ONLINE"] = Field(
+        default="CACHE_IF_ERROR",
+        alias="CNPJA_SEARCH_STRATEGY",
+    )
+    cnpja_search_max_age: int = Field(default=45, alias="CNPJA_SEARCH_MAX_AGE")
+    cnpja_company_search_limit: int = Field(default=10, alias="CNPJA_COMPANY_SEARCH_LIMIT")
 
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
@@ -92,9 +130,47 @@ class Settings(BaseSettings):
     @property
     def cnpja_company_search_configured(self) -> bool:
         return bool(
-            self.cnpja_enable_company_search
-            and self.cnpja_api_key
-            and self.cnpja_search_endpoint
+            (
+                self.cnpj_company_search_enabled
+                and self.cnpj_company_search_provider == "cnpja_commercial"
+                and self.cnpja_api_key
+                and self.cnpja_api_base_url
+            )
+            or (
+                self.cnpja_enable_company_search
+                and self.cnpja_api_key
+                and self.cnpja_search_endpoint
+            )
+        )
+
+    @property
+    def cnpj_company_search_requested(self) -> bool:
+        return bool(self.cnpj_company_search_enabled or self.cnpja_enable_company_search)
+
+    @property
+    def cnpj_ws_premium_company_search_configured(self) -> bool:
+        return bool(
+            self.cnpj_company_search_enabled
+            and self.cnpj_company_search_provider == "cnpj_ws_premium"
+            and self.cnpj_ws_premium_base_url
+            and self.cnpj_ws_premium_token
+        )
+
+    @property
+    def cnpjota_company_search_configured(self) -> bool:
+        return bool(
+            self.cnpj_company_search_enabled
+            and self.cnpj_company_search_provider == "cnpjota"
+            and self.cnpjota_base_url
+            and self.cnpjota_token
+        )
+
+    @property
+    def cnpj_company_search_configured(self) -> bool:
+        return bool(
+            self.cnpj_ws_premium_company_search_configured
+            or self.cnpjota_company_search_configured
+            or self.cnpja_company_search_configured
         )
 
     @property

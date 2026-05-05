@@ -74,6 +74,21 @@ REASON_LOW_CONFIDENCE = "low_confidence"
 REASON_NEEDS_REVIEW = "needs_review"
 REASON_MATCHED = "matched"
 REASON_PROVIDER_ERROR = "provider_error"
+REASON_COMPANY_SEARCH_NOT_CONFIGURED = "company_search_not_configured"
+REASON_COMPANY_SEARCH_NO_CANDIDATES = "company_search_no_candidates"
+REASON_COMPANY_SEARCH_LOW_CONFIDENCE = "company_search_low_confidence"
+REASON_COMPANY_SEARCH_NEEDS_REVIEW = "company_search_needs_review"
+REASON_COMPANY_SEARCH_MATCHED = "company_search_matched"
+REASON_COMPANY_SEARCH_PROVIDER_ERROR = "company_search_provider_error"
+REASON_COMPANY_SEARCH_RATE_LIMITED = "company_search_rate_limited"
+REASON_COMPANY_SEARCH_PREVIEW_ONLY = "company_search_preview_only"
+
+COMPANY_SEARCH_NOT_CONFIGURED_REASON = "Paid company search is not configured for this environment."
+COMPANY_SEARCH_NO_CANDIDATES_REASON = "No paid company-search candidates were found for this lead."
+COMPANY_SEARCH_LOW_CONFIDENCE_REASON = (
+    "Paid company search found candidates, but confidence was too low to fill automatically."
+)
+COMPANY_SEARCH_PROVIDER_ERROR_REASON = "Paid company search failed temporarily."
 
 
 @dataclass(slots=True)
@@ -119,6 +134,16 @@ class _WebsiteExtractionCacheEntry:
     candidates: list[_WebsiteCNPJCandidate]
     reason_code: str | None
     skipped_reason: str | None
+    attempt_metadata: dict[str, Any]
+
+
+@dataclass(slots=True)
+class _WebsiteEvaluationOutcome:
+    final_result: CNPJEnrichmentRunResult | None = None
+    can_continue: bool = False
+    fallback_reason_code: str | None = None
+    fallback_skipped_reason: str | None = None
+    attempt_metadata: dict[str, Any] | None = None
 
 
 def is_valid_cnpj(cnpj: str | None) -> bool:
@@ -324,6 +349,7 @@ class CNPJEnrichmentService:
                 actor=actor,
                 error_message=str(exc),
                 errors=errors,
+                source_provider=self.settings.cnpj_lookup_provider,
                 reason_code=self._provider_reason_code(str(exc)),
             )
 
@@ -343,152 +369,122 @@ class CNPJEnrichmentService:
         actor: str,
         errors: list[str],
     ) -> CNPJEnrichmentRunResult:
-        website_result = self._evaluate_website_cnpj_candidates(lead, actor=actor, errors=errors)
-        if website_result is not None:
-            return website_result
+        website_outcome = self._evaluate_website_cnpj_candidates(lead, actor=actor, errors=errors)
+        if website_outcome.final_result is not None:
+            return website_outcome.final_result
 
-        if self.settings.cnpja_company_search_configured:
-            try:
-                candidates = self.provider.search_companies(
-                    business_name=lead.business_name,
-                    city=lead.city,
-                    state=lead.state,
-                    postal_code=lead.postal_code,
-                    website=lead.website or lead.domain,
-                    phone=lead.phone,
-                    whatsapp=lead.whatsapp,
-                    address=lead.address,
-                    neighborhood=lead.neighborhood,
-                )
-            except CNPJAProviderError as exc:
-                return self._record_error(
+        if self.settings.cnpj_company_search_requested:
+            if not self.settings.cnpj_company_search_configured:
+                return self._finalize_missing_cnpj_result(
                     lead,
                     actor=actor,
-                    error_message=str(exc),
-                    errors=errors,
-                    reason_code=self._provider_reason_code(str(exc)),
+                    source_provider=self._company_search_source_provider(),
+                    reason_code=REASON_COMPANY_SEARCH_NOT_CONFIGURED,
+                    skipped_reason=COMPANY_SEARCH_NOT_CONFIGURED_REASON,
+                    attempt_metadata=website_outcome.attempt_metadata,
                 )
-
-            if not candidates:
-                self._mark_attempt(
-                    lead,
-                    actor=actor,
-                    match_status="not_found",
-                    match_confidence=None,
-                    source_provider="cnpja_search",
-                    skipped_reason=NO_PROVIDER_MATCH_REASON,
-                    error_message=None,
-                    reason_code=REASON_NO_CNPJ_ON_WEBSITE,
-                )
-                return CNPJEnrichmentRunResult(
-                    lead_id=lead.id,
-                    business_name=lead.business_name,
-                    success=True,
-                    cnpj=None,
-                    legal_name=lead.legal_name,
-                    match_status="not_found",
-                    reason_code=REASON_NO_CNPJ_ON_WEBSITE,
-                    skipped_reason=NO_PROVIDER_MATCH_REASON,
-                    last_enriched_at=lead.cnpj_last_enriched_at,
-                )
-
-            scored_candidates = sorted(
-                (self._score_candidate(lead, candidate) for candidate in candidates),
-                key=lambda item: item.score,
-                reverse=True,
-            )
-            best_candidate = scored_candidates[0]
-            top_gap = (
-                best_candidate.score - scored_candidates[1].score
-                if len(scored_candidates) > 1
-                else CLEAR_WINNER_GAP
-            )
-            candidate_summary = self._build_candidate_summary(
-                best_candidate,
-                candidate_count=len(scored_candidates),
+            return self._enrich_missing_cnpj_via_company_search(
+                lead,
+                actor=actor,
+                errors=errors,
+                attempt_metadata=website_outcome.attempt_metadata,
             )
 
-            if self._is_high_confidence_match(best_candidate, top_gap=top_gap):
-                try:
-                    confirmed_lookup = self._lookup_known_cnpj_cached(best_candidate.candidate.cnpj)
-                except CNPJANotFoundError:
-                    self._mark_attempt(
-                        lead,
-                        actor=actor,
-                        match_status="not_found",
-                        match_confidence=None,
-                        source_provider=best_candidate.candidate.source_provider,
-                        skipped_reason=NO_PROVIDER_MATCH_REASON,
-                        error_message=None,
-                        matched_by="company_search",
-                        candidate_summary=candidate_summary,
-                        reason_code=REASON_CNPJ_VALIDATION_FAILED,
-                    )
-                    return CNPJEnrichmentRunResult(
-                        lead_id=lead.id,
-                        business_name=lead.business_name,
-                        success=True,
-                        cnpj=None,
-                        legal_name=lead.legal_name,
-                        match_status="not_found",
-                        reason_code=REASON_CNPJ_VALIDATION_FAILED,
-                        skipped_reason=NO_PROVIDER_MATCH_REASON,
-                        last_enriched_at=lead.cnpj_last_enriched_at,
-                    )
-                except CNPJAProviderError as exc:
-                    return self._record_error(
-                        lead,
-                        actor=actor,
-                        error_message=str(exc),
-                        errors=errors,
-                        reason_code=self._provider_reason_code(str(exc)),
-                    )
+        return self._finalize_missing_cnpj_result(
+            lead,
+            actor=actor,
+            source_provider=lead.cnpj_source_provider or self.settings.cnpj_lookup_provider,
+            reason_code=website_outcome.fallback_reason_code
+            or (REASON_NO_CNPJ_ON_WEBSITE if lead.website or lead.domain else REASON_SKIPPED_NO_WEBSITE),
+            skipped_reason=website_outcome.fallback_skipped_reason
+            or (NO_WEBSITE_CNPJ_REASON if lead.website or lead.domain else NO_WEBSITE_AVAILABLE_REASON),
+            attempt_metadata=website_outcome.attempt_metadata,
+        )
 
-                return self._apply_lookup_result(
-                    lead,
-                    confirmed_lookup,
-                    actor=actor,
-                    match_confidence=self._score_to_confidence(best_candidate.score),
-                    matched_by="company_search",
-                    candidate_summary=candidate_summary,
-                )
+    def _enrich_missing_cnpj_via_company_search(
+        self,
+        lead,
+        *,
+        actor: str,
+        errors: list[str],
+        attempt_metadata: dict[str, Any] | None,
+    ) -> CNPJEnrichmentRunResult:
+        try:
+            candidates = self.provider.search_companies(
+                business_name=lead.business_name,
+                city=lead.city,
+                state=lead.state,
+                postal_code=lead.postal_code,
+                website=lead.website or lead.domain,
+                phone=lead.phone,
+                whatsapp=lead.whatsapp,
+                address=lead.address,
+                neighborhood=lead.neighborhood,
+            )
+        except CNPJAProviderError as exc:
+            return self._record_error(
+                lead,
+                actor=actor,
+                error_message=str(exc),
+                errors=errors,
+                source_provider=self._company_search_source_provider(),
+                reason_code=self._provider_reason_code(str(exc), company_search=True),
+            )
 
-            if best_candidate.score >= MEDIUM_CONFIDENCE_SCORE and not self._has_location_conflict(best_candidate):
-                self._mark_attempt(
-                    lead,
-                    actor=actor,
-                    match_status="needs_review",
-                    match_confidence=self._score_to_confidence(best_candidate.score),
-                    source_provider=best_candidate.candidate.source_provider,
-                    skipped_reason=NEEDS_REVIEW_REASON,
-                    error_message=None,
-                    matched_by="company_search",
-                    candidate_summary=candidate_summary,
-                    reason_code=REASON_NEEDS_REVIEW,
-                )
-                return CNPJEnrichmentRunResult(
-                    lead_id=lead.id,
-                    business_name=lead.business_name,
-                    success=True,
-                    cnpj=None,
-                    legal_name=lead.legal_name,
-                    match_status="needs_review",
-                    match_confidence=self._score_to_confidence(best_candidate.score),
-                    reason_code=REASON_NEEDS_REVIEW,
-                    skipped_reason=NEEDS_REVIEW_REASON,
-                    last_enriched_at=lead.cnpj_last_enriched_at,
-                )
+        if not candidates:
+            return self._finalize_missing_cnpj_result(
+                lead,
+                actor=actor,
+                source_provider=self._company_search_source_provider(),
+                reason_code=REASON_COMPANY_SEARCH_NO_CANDIDATES,
+                skipped_reason=COMPANY_SEARCH_NO_CANDIDATES_REASON,
+                attempt_metadata=attempt_metadata,
+            )
+
+        scored_candidates = sorted(
+            (self._score_candidate(lead, candidate) for candidate in candidates),
+            key=lambda item: item.score,
+            reverse=True,
+        )
+        best_candidate = scored_candidates[0]
+        top_gap = (
+            best_candidate.score - scored_candidates[1].score
+            if len(scored_candidates) > 1
+            else CLEAR_WINNER_GAP
+        )
+        candidate_summary = self._build_candidate_summary(
+            best_candidate,
+            candidate_count=len(scored_candidates),
+        )
+
+        if self._is_high_confidence_match(best_candidate, top_gap=top_gap) and self._candidate_has_confirmable_cnpj(
+            best_candidate
+        ):
+            return self._apply_lookup_result(
+                lead,
+                best_candidate.candidate,
+                actor=actor,
+                match_confidence=self._score_to_confidence(best_candidate.score),
+                matched_by="company_search",
+                candidate_summary=candidate_summary,
+                attempt_metadata=attempt_metadata,
+                reason_code=REASON_COMPANY_SEARCH_MATCHED,
+            )
+
+        if self._candidate_requires_preview_review(best_candidate):
+            confidence = self._score_to_confidence(best_candidate.score)
             self._mark_attempt(
                 lead,
                 actor=actor,
-                match_status="not_found",
-                match_confidence=None,
+                match_status="needs_review",
+                match_confidence=confidence,
                 source_provider=best_candidate.candidate.source_provider,
-                skipped_reason=NO_PROVIDER_MATCH_REASON,
+                skipped_reason=NEEDS_REVIEW_REASON,
                 error_message=None,
                 matched_by="company_search",
                 candidate_summary=candidate_summary,
-                reason_code=REASON_LOW_CONFIDENCE if best_candidate.score > 0 else REASON_NO_CNPJ_ON_WEBSITE,
+                reason_code=REASON_COMPANY_SEARCH_PREVIEW_ONLY,
+                attempt_metadata=attempt_metadata,
             )
             return CNPJEnrichmentRunResult(
                 lead_id=lead.id,
@@ -496,32 +492,50 @@ class CNPJEnrichmentService:
                 success=True,
                 cnpj=None,
                 legal_name=lead.legal_name,
-                match_status="not_found",
-                reason_code=REASON_LOW_CONFIDENCE if best_candidate.score > 0 else REASON_NO_CNPJ_ON_WEBSITE,
-                skipped_reason=NO_PROVIDER_MATCH_REASON,
+                match_status="needs_review",
+                match_confidence=confidence,
+                reason_code=REASON_COMPANY_SEARCH_PREVIEW_ONLY,
+                skipped_reason=NEEDS_REVIEW_REASON,
                 last_enriched_at=lead.cnpj_last_enriched_at,
             )
 
-        self._mark_attempt(
+        if best_candidate.score >= MEDIUM_CONFIDENCE_SCORE and not self._has_location_conflict(best_candidate):
+            confidence = self._score_to_confidence(best_candidate.score)
+            self._mark_attempt(
+                lead,
+                actor=actor,
+                match_status="needs_review",
+                match_confidence=confidence,
+                source_provider=best_candidate.candidate.source_provider,
+                skipped_reason=NEEDS_REVIEW_REASON,
+                error_message=None,
+                matched_by="company_search",
+                candidate_summary=candidate_summary,
+                reason_code=REASON_COMPANY_SEARCH_NEEDS_REVIEW,
+                attempt_metadata=attempt_metadata,
+            )
+            return CNPJEnrichmentRunResult(
+                lead_id=lead.id,
+                business_name=lead.business_name,
+                success=True,
+                cnpj=None,
+                legal_name=lead.legal_name,
+                match_status="needs_review",
+                match_confidence=confidence,
+                reason_code=REASON_COMPANY_SEARCH_NEEDS_REVIEW,
+                skipped_reason=NEEDS_REVIEW_REASON,
+                last_enriched_at=lead.cnpj_last_enriched_at,
+            )
+
+        return self._finalize_missing_cnpj_result(
             lead,
             actor=actor,
-            match_status="not_found",
-            match_confidence=None,
-            source_provider=lead.cnpj_source_provider or self.settings.cnpj_lookup_provider,
-            skipped_reason=NO_WEBSITE_CNPJ_REASON if lead.website or lead.domain else NO_WEBSITE_AVAILABLE_REASON,
-            error_message=None,
-            reason_code=REASON_NO_CNPJ_ON_WEBSITE if lead.website or lead.domain else REASON_SKIPPED_NO_WEBSITE,
-        )
-        return CNPJEnrichmentRunResult(
-            lead_id=lead.id,
-            business_name=lead.business_name,
-            success=True,
-            cnpj=None,
-            legal_name=lead.legal_name,
-            match_status="not_found",
-            reason_code=REASON_NO_CNPJ_ON_WEBSITE if lead.website or lead.domain else REASON_SKIPPED_NO_WEBSITE,
-            skipped_reason=NO_WEBSITE_CNPJ_REASON if lead.website or lead.domain else NO_WEBSITE_AVAILABLE_REASON,
-            last_enriched_at=lead.cnpj_last_enriched_at,
+            source_provider=best_candidate.candidate.source_provider,
+            reason_code=REASON_COMPANY_SEARCH_LOW_CONFIDENCE,
+            skipped_reason=COMPANY_SEARCH_LOW_CONFIDENCE_REASON,
+            matched_by="company_search",
+            candidate_summary=candidate_summary,
+            attempt_metadata=attempt_metadata,
         )
 
     def _evaluate_website_cnpj_candidates(
@@ -530,36 +544,23 @@ class CNPJEnrichmentService:
         *,
         actor: str,
         errors: list[str],
-    ) -> CNPJEnrichmentRunResult | None:
+    ) -> _WebsiteEvaluationOutcome:
         website_url = lead.website or lead.domain
         if not website_url:
-            return None
+            return _WebsiteEvaluationOutcome(
+                can_continue=True,
+                fallback_reason_code=REASON_SKIPPED_NO_WEBSITE,
+                fallback_skipped_reason=NO_WEBSITE_AVAILABLE_REASON,
+            )
 
         extraction = self._get_website_extraction(website_url)
         extracted_candidates = extraction.candidates
         if not extracted_candidates:
-            if extraction.reason_code is None:
-                return None
-            self._mark_attempt(
-                lead,
-                actor=actor,
-                match_status="not_found",
-                match_confidence=None,
-                source_provider=self.settings.cnpj_lookup_provider,
-                skipped_reason=extraction.skipped_reason,
-                error_message=None,
-                reason_code=extraction.reason_code,
-            )
-            return CNPJEnrichmentRunResult(
-                lead_id=lead.id,
-                business_name=lead.business_name,
-                success=True,
-                cnpj=None,
-                legal_name=lead.legal_name,
-                match_status="not_found",
-                reason_code=extraction.reason_code,
-                skipped_reason=extraction.skipped_reason,
-                last_enriched_at=lead.cnpj_last_enriched_at,
+            return _WebsiteEvaluationOutcome(
+                can_continue=True,
+                fallback_reason_code=extraction.reason_code or REASON_NO_CNPJ_ON_WEBSITE,
+                fallback_skipped_reason=extraction.skipped_reason or NO_WEBSITE_CNPJ_REASON,
+                attempt_metadata=extraction.attempt_metadata,
             )
 
         validated_candidates: list[_ScoredCandidate] = []
@@ -569,37 +570,26 @@ class CNPJEnrichmentService:
             except CNPJANotFoundError:
                 continue
             except CNPJAProviderError as exc:
-                return self._record_error(
-                    lead,
-                    actor=actor,
-                    error_message=str(exc),
-                    errors=errors,
-                    reason_code=self._provider_reason_code(str(exc)),
+                return _WebsiteEvaluationOutcome(
+                    final_result=self._record_error(
+                        lead,
+                        actor=actor,
+                        error_message=str(exc),
+                        errors=errors,
+                        source_provider=self.settings.cnpj_lookup_provider,
+                        reason_code=self._provider_reason_code(str(exc)),
+                    ),
+                    attempt_metadata=extraction.attempt_metadata,
                 )
 
             validated_candidates.append(self._score_website_candidate(lead, lookup, extracted_candidate))
 
         if not validated_candidates:
-            self._mark_attempt(
-                lead,
-                actor=actor,
-                match_status="not_found",
-                match_confidence=None,
-                source_provider=self.settings.cnpj_lookup_provider,
-                skipped_reason=VALIDATION_FAILED_REASON,
-                error_message=None,
-                reason_code=REASON_CNPJ_VALIDATION_FAILED,
-            )
-            return CNPJEnrichmentRunResult(
-                lead_id=lead.id,
-                business_name=lead.business_name,
-                success=True,
-                cnpj=None,
-                legal_name=lead.legal_name,
-                match_status="not_found",
-                reason_code=REASON_CNPJ_VALIDATION_FAILED,
-                skipped_reason=VALIDATION_FAILED_REASON,
-                last_enriched_at=lead.cnpj_last_enriched_at,
+            return _WebsiteEvaluationOutcome(
+                can_continue=True,
+                fallback_reason_code=REASON_CNPJ_VALIDATION_FAILED,
+                fallback_skipped_reason=VALIDATION_FAILED_REASON,
+                attempt_metadata=extraction.attempt_metadata,
             )
 
         validated_candidates.sort(key=lambda item: item.score, reverse=True)
@@ -615,13 +605,17 @@ class CNPJEnrichmentService:
         )
 
         if self._is_high_confidence_match(best_candidate, top_gap=top_gap):
-            return self._apply_lookup_result(
-                lead,
-                best_candidate.candidate,
-                actor=actor,
-                match_confidence=self._score_to_confidence(best_candidate.score),
-                matched_by="website_cnpj",
-                candidate_summary=candidate_summary,
+            return _WebsiteEvaluationOutcome(
+                final_result=self._apply_lookup_result(
+                    lead,
+                    best_candidate.candidate,
+                    actor=actor,
+                    match_confidence=self._score_to_confidence(best_candidate.score),
+                    matched_by="website_cnpj",
+                    candidate_summary=candidate_summary,
+                    attempt_metadata=extraction.attempt_metadata,
+                ),
+                attempt_metadata=extraction.attempt_metadata,
             )
 
         if best_candidate.score >= MEDIUM_CONFIDENCE_SCORE and not self._has_location_conflict(best_candidate):
@@ -637,42 +631,32 @@ class CNPJEnrichmentService:
                 matched_by="website_cnpj",
                 candidate_summary=candidate_summary,
                 reason_code=REASON_NEEDS_REVIEW,
+                attempt_metadata=extraction.attempt_metadata,
             )
-            return CNPJEnrichmentRunResult(
-                lead_id=lead.id,
-                business_name=lead.business_name,
-                success=True,
-                cnpj=None,
-                legal_name=lead.legal_name,
-                match_status="needs_review",
-                match_confidence=confidence,
-                reason_code=REASON_NEEDS_REVIEW,
-                skipped_reason=NEEDS_REVIEW_REASON,
-                last_enriched_at=lead.cnpj_last_enriched_at,
+            return _WebsiteEvaluationOutcome(
+                final_result=CNPJEnrichmentRunResult(
+                    lead_id=lead.id,
+                    business_name=lead.business_name,
+                    success=True,
+                    cnpj=None,
+                    legal_name=lead.legal_name,
+                    match_status="needs_review",
+                    match_confidence=confidence,
+                    reason_code=REASON_NEEDS_REVIEW,
+                    skipped_reason=NEEDS_REVIEW_REASON,
+                    last_enriched_at=lead.cnpj_last_enriched_at,
+                ),
+                attempt_metadata=extraction.attempt_metadata,
             )
 
-        self._mark_attempt(
-            lead,
-            actor=actor,
-            match_status="not_found",
-            match_confidence=None,
-            source_provider=best_candidate.candidate.source_provider,
-            skipped_reason=NO_PROVIDER_MATCH_REASON,
-            error_message=None,
-            matched_by="website_cnpj",
-            candidate_summary=candidate_summary,
-            reason_code=REASON_LOW_CONFIDENCE,
-        )
-        return CNPJEnrichmentRunResult(
-            lead_id=lead.id,
-            business_name=lead.business_name,
-            success=True,
-            cnpj=None,
-            legal_name=lead.legal_name,
-            match_status="not_found",
-            reason_code=REASON_LOW_CONFIDENCE,
-            skipped_reason=NO_PROVIDER_MATCH_REASON,
-            last_enriched_at=lead.cnpj_last_enriched_at,
+        return _WebsiteEvaluationOutcome(
+            can_continue=True,
+            fallback_reason_code=REASON_LOW_CONFIDENCE,
+            fallback_skipped_reason=NO_PROVIDER_MATCH_REASON,
+            attempt_metadata={
+                **(extraction.attempt_metadata or {}),
+                "candidate_summary": candidate_summary,
+            },
         )
 
     def _get_website_extraction(self, website_url: str) -> _WebsiteExtractionCacheEntry:
@@ -686,11 +670,17 @@ class CNPJEnrichmentService:
             stop_after_page=lambda page: bool(extract_cnpj_candidates_from_text(page.page_text)),
         )
         extracted_candidates = self._extract_website_cnpj_candidates(crawl_result)
+        attempt_metadata = {
+            "checked_pages_count": crawl_result.pages_attempted,
+            "candidate_count": len(extracted_candidates),
+            "skipped_due_to_budget": crawl_result.stop_reason in {"page_budget_exhausted", "timeout_budget_exhausted"},
+        }
         if extracted_candidates:
             cached = _WebsiteExtractionCacheEntry(
                 candidates=extracted_candidates,
                 reason_code=None,
                 skipped_reason=None,
+                attempt_metadata=attempt_metadata,
             )
         else:
             reason_code, skipped_reason = self._classify_website_crawl_failure(crawl_result)
@@ -698,10 +688,73 @@ class CNPJEnrichmentService:
                 candidates=[],
                 reason_code=reason_code,
                 skipped_reason=skipped_reason,
+                attempt_metadata=attempt_metadata,
             )
 
         self._website_candidate_cache[cache_key] = cached
         return cached
+
+    def _finalize_missing_cnpj_result(
+        self,
+        lead,
+        *,
+        actor: str,
+        source_provider: str | None,
+        reason_code: str,
+        skipped_reason: str,
+        attempt_metadata: dict[str, Any] | None = None,
+        matched_by: str | None = None,
+        candidate_summary: dict[str, Any] | None = None,
+    ) -> CNPJEnrichmentRunResult:
+        self._mark_attempt(
+            lead,
+            actor=actor,
+            match_status="not_found",
+            match_confidence=None,
+            source_provider=source_provider,
+            skipped_reason=skipped_reason,
+            error_message=None,
+            reason_code=reason_code,
+            attempt_metadata=attempt_metadata,
+            matched_by=matched_by,
+            candidate_summary=candidate_summary,
+        )
+        return CNPJEnrichmentRunResult(
+            lead_id=lead.id,
+            business_name=lead.business_name,
+            success=True,
+            cnpj=None,
+            legal_name=lead.legal_name,
+            match_status="not_found",
+            reason_code=reason_code,
+            skipped_reason=skipped_reason,
+            last_enriched_at=lead.cnpj_last_enriched_at,
+        )
+
+    def _company_search_source_provider(self) -> str:
+        if (
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpja_commercial"
+        ):
+            return "cnpja_commercial"
+        if (
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpj_ws_premium"
+        ):
+            return "cnpj_ws_premium"
+        if (
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpjota"
+        ):
+            return "cnpjota"
+        if self.settings.cnpja_enable_company_search and self.settings.cnpja_search_endpoint:
+            return "cnpja_search"
+        if (
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpja_commercial"
+        ):
+            return "cnpja_commercial"
+        return "company_search"
 
     def _classify_website_crawl_failure(
         self,
@@ -890,6 +943,8 @@ class CNPJEnrichmentService:
         match_confidence: float,
         matched_by: str,
         candidate_summary: dict[str, Any] | None,
+        attempt_metadata: dict[str, Any] | None = None,
+        reason_code: str = REASON_MATCHED,
     ) -> CNPJEnrichmentRunResult:
         fields_updated: list[str] = []
         if lead.cnpj != lookup.cnpj:
@@ -909,7 +964,8 @@ class CNPJEnrichmentService:
             match_status="matched",
             skipped_reason=None,
             error_message=None,
-            reason_code=REASON_MATCHED,
+            reason_code=reason_code,
+            attempt_metadata=attempt_metadata,
             matched_by=matched_by,
             candidate_summary=candidate_summary,
         )
@@ -954,7 +1010,7 @@ class CNPJEnrichmentService:
             legal_name=lead.legal_name,
             match_status="matched",
             match_confidence=lead.cnpj_match_confidence,
-            reason_code=REASON_MATCHED,
+            reason_code=reason_code,
             fields_updated=fields_updated,
             last_enriched_at=lead.cnpj_last_enriched_at,
         )
@@ -970,6 +1026,7 @@ class CNPJEnrichmentService:
         skipped_reason: str | None,
         error_message: str | None,
         reason_code: str | None,
+        attempt_metadata: dict[str, Any] | None = None,
         matched_by: str | None = None,
         candidate_summary: dict[str, Any] | None = None,
     ) -> None:
@@ -985,6 +1042,7 @@ class CNPJEnrichmentService:
             skipped_reason=skipped_reason,
             error_message=error_message,
             reason_code=reason_code,
+            attempt_metadata=attempt_metadata,
             matched_by=matched_by,
             candidate_summary=candidate_summary,
         )
@@ -1021,6 +1079,7 @@ class CNPJEnrichmentService:
         actor: str,
         error_message: str,
         errors: list[str],
+        source_provider: str | None,
         reason_code: str,
     ) -> CNPJEnrichmentRunResult:
         self.db.rollback()
@@ -1029,7 +1088,7 @@ class CNPJEnrichmentService:
             actor=actor,
             match_status="error",
             match_confidence=None,
-            source_provider=lead.cnpj_source_provider or self.settings.cnpj_lookup_provider,
+            source_provider=source_provider or lead.cnpj_source_provider or self.settings.cnpj_lookup_provider,
             skipped_reason=None,
             error_message=error_message,
             reason_code=reason_code,
@@ -1112,8 +1171,8 @@ class CNPJEnrichmentService:
             and normalized_candidate_street
             and normalized_lead_street == normalized_candidate_street
         ):
-            evidence["address"] = 20
-            score += 20
+            evidence["address"] = 15
+            score += 15
         if lead_number and candidate_number and lead_number != candidate_number:
             score -= 10
             penalties.append("different_number")
@@ -1121,15 +1180,15 @@ class CNPJEnrichmentService:
         lead_postal = self._normalize_postal_code(lead.postal_code)
         candidate_postal = self._normalize_postal_code(candidate.postal_code)
         if lead_postal and candidate_postal and lead_postal == candidate_postal:
-            evidence["postal_code"] = 15
-            score += 15
+            evidence["postal_code"] = 25
+            score += 25
 
         lead_city = normalize_text(lead.city)
         candidate_city = normalize_text(candidate.city)
         if lead_city and candidate_city:
             if lead_city == candidate_city:
-                evidence["city"] = 10
-                score += 10
+                evidence["city"] = 15
+                score += 15
             else:
                 score -= 30
                 penalties.append("different_city")
@@ -1138,10 +1197,10 @@ class CNPJEnrichmentService:
         candidate_state = normalize_brazilian_state(candidate.state) or normalize_text(candidate.state)
         if lead_state and candidate_state:
             if lead_state == candidate_state:
-                evidence["state"] = 5
-                score += 5
+                evidence["state"] = 10
+                score += 10
             else:
-                score -= 35
+                score -= 40
                 penalties.append("different_state")
 
         supportive_signal_count = sum(
@@ -1186,10 +1245,15 @@ class CNPJEnrichmentService:
         return CNPJAProviderError(CNPJA_OPEN_PUBLIC_BATCH_LIMIT_MESSAGE, status_code=503)
 
     @staticmethod
-    def _provider_reason_code(error_message: str) -> str:
-        if "usage limit" in error_message.lower() or "at most 3" in error_message.lower():
-            return REASON_CNPJ_PROVIDER_RATE_LIMITED
-        return REASON_PROVIDER_ERROR
+    def _provider_reason_code(error_message: str, *, company_search: bool = False) -> str:
+        normalized_message = error_message.lower()
+        if "usage limit" in normalized_message or "at most 3" in normalized_message:
+            return (
+                REASON_COMPANY_SEARCH_RATE_LIMITED
+                if company_search
+                else REASON_CNPJ_PROVIDER_RATE_LIMITED
+            )
+        return REASON_COMPANY_SEARCH_PROVIDER_ERROR if company_search else REASON_PROVIDER_ERROR
 
     def _is_high_confidence_match(self, candidate: _ScoredCandidate, *, top_gap: int) -> bool:
         has_strong_identity = candidate.strong_name_match or (
@@ -1202,6 +1266,21 @@ class CNPJEnrichmentService:
             and has_strong_identity
             and not self._has_location_conflict(candidate)
         )
+
+    @staticmethod
+    def _candidate_has_confirmable_cnpj(candidate: _ScoredCandidate) -> bool:
+        if not normalize_cnpj(candidate.candidate.cnpj):
+            return False
+        metadata = candidate.candidate.metadata or {}
+        return bool(metadata.get("full_cnpj_available", True))
+
+    def _candidate_requires_preview_review(self, candidate: _ScoredCandidate) -> bool:
+        metadata = candidate.candidate.metadata or {}
+        if not metadata.get("preview_mode"):
+            return False
+        if self._candidate_has_confirmable_cnpj(candidate):
+            return False
+        return candidate.score >= MEDIUM_CONFIDENCE_SCORE and not self._has_location_conflict(candidate)
 
     @staticmethod
     def _score_to_confidence(score: int) -> float:
@@ -1246,6 +1325,7 @@ class CNPJEnrichmentService:
         skipped_reason: str | None,
         error_message: str | None,
         reason_code: str | None,
+        attempt_metadata: dict[str, Any] | None = None,
         matched_by: str | None = None,
         candidate_summary: dict[str, Any] | None = None,
     ) -> dict:
@@ -1262,6 +1342,8 @@ class CNPJEnrichmentService:
             metadata["matched_by"] = matched_by
         if candidate_summary is not None:
             metadata["candidate_summary"] = candidate_summary
+        if attempt_metadata is not None:
+            metadata["crawl_summary"] = attempt_metadata
         if lookup is not None:
             metadata.update(
                 {
@@ -1316,6 +1398,29 @@ class CNPJEnrichmentService:
                 1 for item in results if item.reason_code == REASON_CNPJ_VALIDATION_FAILED
             ),
             low_confidence_count=sum(1 for item in results if item.reason_code == REASON_LOW_CONFIDENCE),
+            company_search_matched_count=sum(
+                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_MATCHED
+            ),
+            company_search_needs_review_count=sum(
+                1
+                for item in results
+                if item.reason_code in {REASON_COMPANY_SEARCH_NEEDS_REVIEW, REASON_COMPANY_SEARCH_PREVIEW_ONLY}
+            ),
+            company_search_no_candidates_count=sum(
+                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_NO_CANDIDATES
+            ),
+            company_search_low_confidence_count=sum(
+                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_LOW_CONFIDENCE
+            ),
+            company_search_not_configured_count=sum(
+                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_NOT_CONFIGURED
+            ),
+            company_search_rate_limited_count=sum(
+                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_RATE_LIMITED
+            ),
+            company_search_provider_error_count=sum(
+                1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_PROVIDER_ERROR
+            ),
             provider_rate_limited_count=sum(
                 1 for item in results if item.reason_code == REASON_CNPJ_PROVIDER_RATE_LIMITED
             ),

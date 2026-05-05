@@ -103,7 +103,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
             </p>
           ) : null}
           <p className="mt-3 text-xs text-neutral-500">
-            Funciona quando o lead já tem CNPJ informado ou quando o CNPJ aparece no site da empresa. Nem todos os sites exibem CNPJ publicamente.
+            Busca CNPJ já informado, tenta encontrar CNPJ no site da empresa e, se configurado, usa busca cadastral paga.
           </p>
         </DetailSection>
 
@@ -423,6 +423,24 @@ function getCnpjStatusHint(lead: LeadDetail) {
   }
   if (reasonCode === "cnpj_provider_rate_limited") {
     return "Consulta pública limitada/rate limit.";
+  }
+  if (reasonCode === "company_search_not_configured") {
+    return "Busca cadastral paga não configurada.";
+  }
+  if (reasonCode === "company_search_no_candidates") {
+    return "Nenhum candidato encontrado na busca cadastral.";
+  }
+  if (reasonCode === "company_search_low_confidence") {
+    return "A busca cadastral encontrou candidatos, mas sem confiança suficiente para preencher automaticamente.";
+  }
+  if (reasonCode === "company_search_needs_review") {
+    return "Possível CNPJ encontrado na busca cadastral, precisa revisão.";
+  }
+  if (reasonCode === "company_search_rate_limited") {
+    return "Busca cadastral temporariamente limitada pelo provedor.";
+  }
+  if (reasonCode === "company_search_provider_error") {
+    return "Falha temporária na busca cadastral paga.";
   }
   if (reasonCode === "provider_error") {
     return "Falha temporária na consulta pública de CNPJ.";

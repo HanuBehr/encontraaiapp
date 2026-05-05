@@ -190,7 +190,7 @@ export function LeadBatchActions({
             Escolha um escopo para enriquecer contatos, consultar CNPJ, atribuir ou exportar os leads sem sair da lista.
           </p>
           <p className="mt-1 text-xs text-neutral-500">
-            Funciona quando o lead já tem CNPJ informado ou quando o CNPJ aparece no site da empresa. Nem todos os sites exibem CNPJ publicamente.
+            Busca CNPJ já informado, tenta encontrar CNPJ no site da empresa e, se configurado, usa busca cadastral paga.
           </p>
           <p className="mt-1 text-xs text-neutral-500">
             O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
@@ -581,6 +581,9 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
     if (summary.provider_rate_limited_count > 0) {
       return "A consulta pública de CNPJ atingiu o limite de uso. Tente novamente com menos empresas por vez.";
     }
+    if (summary.company_search_rate_limited_count > 0) {
+      return "A busca cadastral paga atingiu o limite do provedor. Tente novamente em alguns instantes.";
+    }
     return "A consulta CNPJ encontrou erro de provedor em parte do lote. Tente novamente em alguns instantes.";
   }
 
@@ -608,6 +611,21 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
       summary.provider_error_count
         ? `${summary.provider_error_count.toLocaleString()} com erro de provedor`
         : null,
+      summary.company_search_not_configured_count
+        ? `${summary.company_search_not_configured_count.toLocaleString()} com busca paga não configurada`
+        : null,
+      summary.company_search_no_candidates_count
+        ? `${summary.company_search_no_candidates_count.toLocaleString()} sem candidatos na busca cadastral`
+        : null,
+      summary.company_search_low_confidence_count
+        ? `${summary.company_search_low_confidence_count.toLocaleString()} com baixa confiança na busca cadastral`
+        : null,
+      summary.company_search_rate_limited_count
+        ? `${summary.company_search_rate_limited_count.toLocaleString()} limitados pela busca cadastral`
+        : null,
+      summary.company_search_provider_error_count
+        ? `${summary.company_search_provider_error_count.toLocaleString()} com erro na busca cadastral`
+        : null,
     ].filter(Boolean);
 
     if (reasons.length === 0) {
@@ -617,7 +635,17 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
     return `0 CNPJs confirmados. ${summary.not_found_count.toLocaleString()} sem correspondência: ${reasons.join(", ")}.`;
   }
 
-  return `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.`;
+  const paidSearchParts = [
+    summary.company_search_matched_count
+      ? `${summary.company_search_matched_count.toLocaleString()} encontrados via busca cadastral`
+      : null,
+    summary.company_search_needs_review_count
+      ? `${summary.company_search_needs_review_count.toLocaleString()} da busca cadastral precisam revisão`
+      : null,
+  ].filter(Boolean);
+
+  const paidSearchSuffix = paidSearchParts.length ? ` ${paidSearchParts.join(", ")}.` : "";
+  return `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.${paidSearchSuffix}`;
 }
 
 function formatScopeLabel(scopeLabel: string) {

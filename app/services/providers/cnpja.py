@@ -59,6 +59,8 @@ def normalize_cnpj(cnpj: str | None) -> str | None:
 
 class CNPJAProvider:
     REQUEST_TIMEOUT_SECONDS = 20
+    DEFAULT_COMPANY_SEARCH_LIMIT = 10
+    MIN_SEARCH_TERM_LENGTH = 3
 
     def __init__(
         self,
@@ -109,8 +111,66 @@ class CNPJAProvider:
         address: str | None = None,
         neighborhood: str | None = None,
     ) -> list[CNPJLookupResult]:
+        if (
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpja_commercial"
+        ):
+            return self._search_companies_commercial(
+                business_name=business_name,
+                city=city,
+                state=state,
+                postal_code=postal_code,
+                website=website,
+                phone=phone,
+                whatsapp=whatsapp,
+                address=address,
+                neighborhood=neighborhood,
+            )
+
+        if (
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpj_ws_premium"
+        ):
+            from app.services.providers.cnpj_ws import CNPJWSProvider
+
+            return CNPJWSProvider(
+                self.settings,
+                http_session=self.http,
+            ).search_companies(
+                business_name=business_name,
+                city=city,
+                state=state,
+                postal_code=postal_code,
+                website=website,
+                phone=phone,
+                whatsapp=whatsapp,
+                address=address,
+                neighborhood=neighborhood,
+            )
+
+        if (
+            self.settings.cnpj_company_search_enabled
+            and self.settings.cnpj_company_search_provider == "cnpjota"
+        ):
+            from app.services.providers.cnpjota import CNPJotaProvider
+
+            return CNPJotaProvider(
+                self.settings,
+                http_session=self.http,
+            ).search_companies(
+                business_name=business_name,
+                city=city,
+                state=state,
+                postal_code=postal_code,
+                website=website,
+                phone=phone,
+                whatsapp=whatsapp,
+                address=address,
+                neighborhood=neighborhood,
+            )
+
         if not self.settings.cnpja_company_search_configured:
-            return []
+            return [] 
 
         search_endpoint = (self.settings.cnpja_search_endpoint or "").strip()
         if not search_endpoint:
@@ -158,14 +218,76 @@ class CNPJAProvider:
                 continue
         return matches
 
+    def _search_companies_commercial(
+        self,
+        *,
+        business_name: str,
+        city: str | None = None,
+        state: str | None = None,
+        postal_code: str | None = None,
+        website: str | None = None,
+        phone: str | None = None,
+        whatsapp: str | None = None,
+        address: str | None = None,
+        neighborhood: str | None = None,
+    ) -> list[CNPJLookupResult]:
+        del city, website, address
+
+        if not self.settings.cnpja_company_search_configured:
+            return []
+
+        search_term = _first_text(business_name)
+        if not search_term or len(search_term.strip()) < self.MIN_SEARCH_TERM_LENGTH:
+            return []
+
+        base_url = (self.settings.cnpja_api_base_url or "").rstrip("/")
+        if not base_url or not self.settings.cnpja_api_key:
+            return []
+
+        response = self.http.get(
+            f"{base_url}/office",
+            headers={
+                "Authorization": self.settings.cnpja_api_key,
+                "Accept": "application/json",
+            },
+            params=self._build_commercial_search_params(
+                business_name=search_term,
+                state=state,
+                postal_code=postal_code,
+                phone=phone,
+                whatsapp=whatsapp,
+                neighborhood=neighborhood,
+            ),
+            timeout=self.REQUEST_TIMEOUT_SECONDS,
+        )
+        payload = self._json_value_or_raise(response)
+
+        matches: list[CNPJLookupResult] = []
+        for candidate_payload in self._extract_search_candidates(payload):
+            try:
+                matches.append(
+                    self._normalize_lookup_payload(
+                        candidate_payload,
+                        source_provider="cnpja_commercial",
+                        requested_cnpj="",
+                        strategy=None,
+                    )
+                )
+            except CNPJANotFoundError:
+                continue
+        return matches
+
     def _commercial_lookup(self, cnpj: str, *, strategy: str | None) -> dict[str, Any]:
         base_url = (self.settings.cnpja_api_base_url or "").rstrip("/")
         if not base_url or not self.settings.cnpja_api_key:
             raise CNPJAProviderError(MISSING_CNPJA_API_KEY_BATCH_MESSAGE, status_code=503)
 
         params: dict[str, str] = {}
-        if strategy:
-            params["strategy"] = strategy
+        effective_strategy = strategy or self.settings.cnpja_search_strategy
+        if effective_strategy:
+            params["strategy"] = effective_strategy
+        if self.settings.cnpja_search_max_age > 0:
+            params["maxAge"] = str(self.settings.cnpja_search_max_age)
 
         response = self.http.get(
             f"{base_url}/office/{cnpj}",
@@ -229,7 +351,7 @@ class CNPJAProvider:
         if not isinstance(payload, dict):
             return []
 
-        for key in ("results", "items", "offices", "companies", "data"):
+        for key in ("records", "results", "items", "offices", "companies", "data"):
             raw_candidates = payload.get(key)
             if isinstance(raw_candidates, list):
                 return [item for item in raw_candidates if isinstance(item, dict)]
@@ -365,6 +487,48 @@ class CNPJAProvider:
             metadata=metadata,
         )
 
+    def _build_commercial_search_params(
+        self,
+        *,
+        business_name: str,
+        state: str | None,
+        postal_code: str | None,
+        phone: str | None,
+        whatsapp: str | None,
+        neighborhood: str | None,
+    ) -> dict[str, str]:
+        params: dict[str, str] = {
+            "limit": str(self._normalize_search_limit()),
+            "names.in": business_name,
+            "status.id.in": "2",
+        }
+
+        normalized_state = normalize_brazilian_state(state)
+        if normalized_state:
+            params["address.state.in"] = normalized_state
+
+        normalized_postal_code = _normalize_postal_code(postal_code)
+        if normalized_postal_code:
+            params["address.zip.in"] = normalized_postal_code
+
+        district = _first_text(neighborhood)
+        if district:
+            params["address.district.in"] = district
+
+        area_code = _extract_area_code(phone) or _extract_area_code(whatsapp)
+        if area_code:
+            params["phones.area.in"] = area_code
+
+        return params
+
+    def _normalize_search_limit(self) -> int:
+        configured = self.settings.cnpja_company_search_limit
+        if configured < 1:
+            return 1
+        if configured > self.DEFAULT_COMPANY_SEARCH_LIMIT:
+            return self.DEFAULT_COMPANY_SEARCH_LIMIT
+        return configured
+
 
 def _as_dict(value: Any) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
@@ -393,12 +557,35 @@ def _extract_contact_values(raw_value: Any) -> list[str]:
                     values.append(stripped)
                 continue
             if isinstance(item, dict):
+                area = _first_text(item.get("area"))
+                number = _first_text(item.get("number"))
+                if area and number:
+                    values.append(f"{area}{number}")
+                    continue
                 text_value = _first_text(
                     item.get("full"),
-                    item.get("number"),
                     item.get("address"),
                     item.get("value"),
+                    item.get("number"),
                 )
                 if text_value:
                     values.append(text_value)
     return values
+
+
+def _normalize_postal_code(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = "".join(character for character in value if character.isdigit())
+    return digits or None
+
+
+def _extract_area_code(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = "".join(character for character in value if character.isdigit())
+    if len(digits) < 10:
+        return None
+    if len(digits) == 10:
+        return digits[:2]
+    return digits[-10:-8]

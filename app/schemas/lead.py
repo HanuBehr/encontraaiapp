@@ -419,6 +419,13 @@ class LeadBatchCNPJEnrichmentSummary(BaseModel):
     website_unreachable_count: int = 0
     validation_failed_count: int = 0
     low_confidence_count: int = 0
+    company_search_matched_count: int = 0
+    company_search_needs_review_count: int = 0
+    company_search_no_candidates_count: int = 0
+    company_search_low_confidence_count: int = 0
+    company_search_not_configured_count: int = 0
+    company_search_rate_limited_count: int = 0
+    company_search_provider_error_count: int = 0
     provider_rate_limited_count: int = 0
     provider_error_count: int = 0
     error_count: int = 0

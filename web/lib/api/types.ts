@@ -354,6 +354,13 @@ export type LeadBatchCNPJEnrichmentResponse = {
     website_unreachable_count: number;
     validation_failed_count: number;
     low_confidence_count: number;
+    company_search_matched_count: number;
+    company_search_needs_review_count: number;
+    company_search_no_candidates_count: number;
+    company_search_low_confidence_count: number;
+    company_search_not_configured_count: number;
+    company_search_rate_limited_count: number;
+    company_search_provider_error_count: number;
     provider_rate_limited_count: number;
     provider_error_count: number;
     error_count: number;

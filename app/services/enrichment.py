@@ -41,6 +41,7 @@ from app.services.normalization import (
     is_contact_like_url,
     normalize_domain,
     normalize_phone_br,
+    normalize_text,
     unique_preserve_order,
 )
 from app.services.scoring import ScoringService
@@ -76,6 +77,7 @@ class PageExtractionResult:
     material_signals: dict[str, dict[str, Any]]
     candidate_page_urls: list[str]
     visible_text: str
+    searchable_text: str
 
 
 @dataclass(slots=True)
@@ -116,6 +118,39 @@ class CrawlProfile:
     request_timeout_seconds: int
     robots_timeout_seconds: int
     max_elapsed_seconds: float | None = None
+    max_pages: int | None = None
+    discovery_mode: str = "generic"
+
+
+_CNPJ_DISCOVERY_SIGNAL_TERMS = (
+    "cnpj",
+    "contato",
+    "sobre",
+    "quem somos",
+    "quem-somos",
+    "institucional",
+    "privacidade",
+    "politica de privacidade",
+    "politica-de-privacidade",
+    "termos",
+    "termos de uso",
+    "termos-de-uso",
+    "termos e condicoes",
+    "termos-e-condicoes",
+    "legal",
+    "empresa",
+)
+_CNPJ_DISCOVERY_SKIP_HOST_HINTS = (
+    "instagram.com",
+    "facebook.com",
+    "linkedin.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "wa.me",
+    "whatsapp.com",
+    "api.whatsapp.com",
+)
 
 
 def _decode_cloudflare_email(encoded_value: str | None) -> str | None:
@@ -378,6 +413,28 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
         (float(details.get("confidence", 0.0)) for details in material_signals.values()),
         default=0.0,
     )
+    footer_text = " ".join(
+        section.get_text(separator=" ", strip=True)
+        for section in soup.find_all(["footer"])
+    )
+    meta_text = " ".join(
+        content.strip()
+        for content in (
+            str(tag.get("content") or "")
+            for tag in soup.find_all("meta")
+        )
+        if content.strip()
+    )
+    searchable_text = "\n".join(
+        unique_preserve_order(
+            [
+                text,
+                footer_text,
+                meta_text,
+                html,
+            ]
+        )
+    )
 
     return PageExtractionResult(
         evidences=evidences,
@@ -386,6 +443,7 @@ def extract_public_page_data(html: str, source_url: str) -> PageExtractionResult
         material_signals=material_signals,
         candidate_page_urls=unique_preserve_order(candidate_page_urls),
         visible_text=text,
+        searchable_text=searchable_text,
     )
 
 
@@ -431,12 +489,22 @@ class EnrichmentService:
         "/",
         "/contato",
         "/sobre",
+        "/quem-somos",
+        "/institucional",
+        "/empresa",
         "/politica-de-privacidade",
+        "/privacidade",
+        "/termos",
+        "/termos-de-uso",
+        "/termos-e-condicoes",
+        "/politica",
+        "/legal",
     )
-    CNPJ_MAX_DISCOVERED_CONTACT_PAGES = 0
+    CNPJ_MAX_DISCOVERED_CONTACT_PAGES = 3
     CNPJ_REQUEST_TIMEOUT_SECONDS = 4
     CNPJ_ROBOTS_TIMEOUT_SECONDS = 2
     CNPJ_MAX_ELAPSED_SECONDS = 8.0
+    CNPJ_MAX_PAGES = 6
 
     def __init__(
         self,
@@ -737,6 +805,9 @@ class EnrichmentService:
             ):
                 stop_reason = "timeout_budget_exhausted"
                 break
+            if crawl_profile.max_pages is not None and pages_attempted >= crawl_profile.max_pages:
+                stop_reason = "page_budget_exhausted"
+                break
             candidate_page = candidate_pages[page_index]
             page_url = candidate_page.url
             page_index += 1
@@ -846,7 +917,7 @@ class EnrichmentService:
                 confidence_scores=extraction.confidence_scores,
                 material_signals=extraction.material_signals,
                 evidences=extraction.evidences,
-                page_text=extraction.visible_text,
+                page_text=extraction.searchable_text,
                 note=None,
             )
             page_results.append(crawled_page)
@@ -854,16 +925,39 @@ class EnrichmentService:
             if stop_after_page is not None and stop_after_page(crawled_page):
                 stop_reason = "stop_after_page"
                 break
-            for discovered_url in extraction.candidate_page_urls:
+            for discovered_url in self._candidate_discovery_urls(
+                html=response.text,
+                source_url=response.url,
+                page_type=page_type,
+                extraction=extraction,
+                crawl_profile=crawl_profile,
+            ):
                 if discovered_contact_pages >= crawl_profile.max_discovered_contact_pages:
                     break
+                if crawl_profile.discovery_mode == "cnpj":
+                    existing_index = next(
+                        (
+                            index
+                            for index in range(page_index, len(candidate_pages))
+                            if candidate_pages[index].url == discovered_url
+                        ),
+                        None,
+                    )
+                    if existing_index is not None:
+                        discovered_page = candidate_pages.pop(existing_index)
+                        discovered_page.discovered_from_url = response.url
+                        candidate_pages.insert(page_index + discovered_contact_pages, discovered_page)
+                        discovered_contact_pages += 1
+                        continue
                 if discovered_url in seen_candidate_urls:
                     continue
                 if not self._is_same_host(discovered_url, website_url or page_url):
                     continue
-                candidate_pages.append(
-                    CandidatePage(url=discovered_url, discovered_from_url=response.url)
-                )
+                discovered_page = CandidatePage(url=discovered_url, discovered_from_url=response.url)
+                if crawl_profile.discovery_mode == "cnpj":
+                    candidate_pages.insert(page_index + discovered_contact_pages, discovered_page)
+                else:
+                    candidate_pages.append(discovered_page)
                 seen_candidate_urls.add(discovered_url)
                 discovered_contact_pages += 1
 
@@ -1060,11 +1154,18 @@ class EnrichmentService:
         root_url = f"{parsed.scheme}://{parsed.netloc}/"
         urls = [website_url, root_url]
         urls.extend(urljoin(root_url, path) for path in (page_paths or self.PAGE_PATHS))
-        same_host_urls = [
-            candidate
-            for candidate in unique_preserve_order(urls)
-            if urlparse(candidate).netloc.lower() == parsed.netloc.lower()
-        ]
+        same_host_urls: list[str] = []
+        seen_keys: set[str] = set()
+        for candidate in unique_preserve_order(urls):
+            candidate_parsed = urlparse(candidate)
+            if candidate_parsed.netloc.lower() != parsed.netloc.lower():
+                continue
+            normalized_path = candidate_parsed.path.rstrip("/") or "/"
+            dedupe_key = f"{candidate_parsed.scheme.lower()}://{candidate_parsed.netloc.lower()}{normalized_path}"
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+            same_host_urls.append(candidate)
         return [CandidatePage(url=candidate) for candidate in same_host_urls]
 
     @staticmethod
@@ -1124,7 +1225,66 @@ class EnrichmentService:
             request_timeout_seconds=self.CNPJ_REQUEST_TIMEOUT_SECONDS,
             robots_timeout_seconds=self.CNPJ_ROBOTS_TIMEOUT_SECONDS,
             max_elapsed_seconds=self.CNPJ_MAX_ELAPSED_SECONDS,
+            max_pages=self.CNPJ_MAX_PAGES,
+            discovery_mode="cnpj",
         )
+
+    def _candidate_discovery_urls(
+        self,
+        *,
+        html: str,
+        source_url: str,
+        page_type: str,
+        extraction: PageExtractionResult,
+        crawl_profile: CrawlProfile,
+    ) -> list[str]:
+        if crawl_profile.discovery_mode == "cnpj":
+            if page_type != "homepage":
+                return []
+            return self._discover_cnpj_signal_links(html, source_url)
+        return extraction.candidate_page_urls
+
+    def _discover_cnpj_signal_links(self, html: str, source_url: str) -> list[str]:
+        soup = BeautifulSoup(html, "html.parser")
+        source_host = urlparse(source_url).netloc.lower()
+        discovered: list[str] = []
+
+        for anchor in soup.find_all("a", href=True):
+            href = (anchor.get("href") or "").strip()
+            if not href:
+                continue
+            lower_href = href.lower()
+            if lower_href.startswith(("mailto:", "tel:", "javascript:")):
+                continue
+
+            canonical_href = canonicalize_url(href, base_url=source_url)
+            if not canonical_href:
+                continue
+            parsed = urlparse(canonical_href)
+            if parsed.netloc.lower() != source_host:
+                continue
+            if any(host_hint in parsed.netloc.lower() for host_hint in _CNPJ_DISCOVERY_SKIP_HOST_HINTS):
+                continue
+            if parsed.path.lower().endswith(".pdf"):
+                continue
+
+            anchor_text = anchor.get_text(" ", strip=True)
+            signal_source = f"{parsed.path} {anchor_text}"
+            if not self._has_cnpj_page_signal(signal_source):
+                continue
+
+            discovered.append(canonical_href)
+            if len(discovered) >= self.CNPJ_MAX_DISCOVERED_CONTACT_PAGES:
+                break
+
+        return unique_preserve_order(discovered)
+
+    @staticmethod
+    def _has_cnpj_page_signal(value: str) -> bool:
+        normalized_value = normalize_text(value)
+        if not normalized_value:
+            return False
+        return any(signal in normalized_value for signal in _CNPJ_DISCOVERY_SIGNAL_TERMS)
 
     def _create_enrichment_record(
         self,

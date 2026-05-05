@@ -17,6 +17,7 @@ from app.services.cnpj_enrichment import (
     extract_cnpj_candidates_from_text,
     is_valid_cnpj,
 )
+from app.services.enrichment import EnrichmentService
 from app.services.normalization import normalize_business_name
 from app.services.providers.cnpja import (
     CNPJAProvider,
@@ -25,6 +26,7 @@ from app.services.providers.cnpja import (
     CNPJLookupResult,
     normalize_cnpj,
 )
+from app.services.providers.cnpjota import CNPJotaProvider
 from app.services.providers.cnpj_ws import CNPJWSProvider
 
 
@@ -407,6 +409,75 @@ def test_cnpj_batch_large_without_api_key_fails_safely(db_session) -> None:
         service.enrich_lead_ids([lead.id for lead in leads], actor="test")
 
 
+def test_cnpja_commercial_search_builds_office_endpoint_and_auth_header() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://api.cnpja.com/office": FakeResponse(
+                payload={
+                    "records": [
+                        {
+                            "taxId": "17247065000139",
+                            "company": {"name": "Casa Falci Ltda"},
+                            "alias": "Casa Falci",
+                            "status": {"id": 2, "text": "Ativa"},
+                            "address": {
+                                "street": "Rua Beta",
+                                "number": "45",
+                                "district": "Centro",
+                                "city": "Campinas",
+                                "state": "SP",
+                                "zip": "13000000",
+                            },
+                            "phones": [{"area": "19", "number": "32348887"}],
+                            "emails": [{"address": "contato@casafalci.com.br"}],
+                            "mainActivity": {"id": 4759899, "text": "Comercio varejista"},
+                        }
+                    ]
+                }
+            )
+        },
+        default_status_code=None,
+    )
+    provider = CNPJAProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        http_session=session,
+    )
+
+    results = provider.search_companies(
+        business_name="Casa Falci",
+        state="SP",
+        postal_code="13000-000",
+        neighborhood="Centro",
+        phone="(19) 3234-8887",
+    )
+
+    assert session.get_calls[0][0] == "https://api.cnpja.com/office"
+    assert session.get_calls[0][1]["headers"]["Authorization"] == "cnpja-key"
+    assert session.get_calls[0][1]["headers"]["Accept"] == "application/json"
+    assert session.get_calls[0][1]["params"]["limit"] == "10"
+    assert session.get_calls[0][1]["params"]["names.in"] == "Casa Falci"
+    assert session.get_calls[0][1]["params"]["status.id.in"] == "2"
+    assert session.get_calls[0][1]["params"]["address.state.in"] == "SP"
+    assert session.get_calls[0][1]["params"]["address.zip.in"] == "13000000"
+    assert session.get_calls[0][1]["params"]["address.district.in"] == "Centro"
+    assert session.get_calls[0][1]["params"]["phones.area.in"] == "19"
+    assert results[0].cnpj == "17247065000139"
+    assert results[0].legal_name == "Casa Falci Ltda"
+    assert results[0].trade_name == "Casa Falci"
+    assert results[0].city == "Campinas"
+    assert results[0].state == "SP"
+    assert results[0].postal_code == "13000000"
+    assert results[0].phones == ["1932348887"]
+    assert results[0].emails == ["contato@casafalci.com.br"]
+    assert results[0].primary_activity == "Comercio varejista"
+    assert results[0].source_provider == "cnpja_commercial"
+
+
 def test_website_cnpj_batch_limit_fails_fast_for_large_selection(db_session) -> None:
     leads = [_lead(cnpj=None, website=f"https://empresa-{index}.example.com") for index in range(11)]
     db_session.add_all(leads)
@@ -527,6 +598,30 @@ def test_lead_without_cnpj_attempts_provider_search_when_enabled(db_session) -> 
     assert fake_provider.search_calls[0]["business_name"] == "Loja Exemplo"
 
 
+def test_cnpja_commercial_search_enabled_but_missing_api_key_returns_safe_reason(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider()
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert fake_provider.search_calls == []
+    assert response.summary.company_search_not_configured_count == 1
+    assert response.results[0].reason_code == "company_search_not_configured"
+
+
 def test_lead_without_cnpj_but_with_website_cnpj_gets_matched_after_provider_validation(db_session) -> None:
     lead = _lead(website="https://empresa.example.com", phone=None)
     db_session.add(lead)
@@ -584,6 +679,146 @@ def test_lead_without_cnpj_but_with_website_cnpj_gets_matched_after_provider_val
     assert lead.legal_name == "Oficina CNPJ LTDA"
     assert lead.cnpj_metadata_json["matched_by"] == "website_cnpj"
     assert "https://empresa.example.com/contato" in lead.cnpj_metadata_json["candidate_summary"]["source_urls"]
+    assert lead.cnpj_metadata_json["crawl_summary"]["checked_pages_count"] <= 6
+
+
+def test_cnpj_can_be_found_on_quem_somos_page(db_session) -> None:
+    lead = _lead(website="https://quemsomos.example.com", phone=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    http_session = FakeHTTPSession(
+        {
+            "https://quemsomos.example.com/robots.txt": FakeResponse(
+                url="https://quemsomos.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://quemsomos.example.com": FakeResponse(
+                url="https://quemsomos.example.com",
+                text="<html><body>Bem-vindo</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://quemsomos.example.com/contato": FakeResponse(
+                url="https://quemsomos.example.com/contato",
+                text="<html><body>Contato</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://quemsomos.example.com/sobre": FakeResponse(
+                url="https://quemsomos.example.com/sobre",
+                text="<html><body>Sobre</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://quemsomos.example.com/quem-somos": FakeResponse(
+                url="https://quemsomos.example.com/quem-somos",
+                text="<html><body>CNPJ 37.335.118/0001-80</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+        },
+        default_status_code=404,
+    )
+    fake_provider = FakeCNPJAProvider(
+        lookup_results_by_cnpj={"37335118000180": _lookup_result(phones=[])},
+        http_session=http_session,
+    )
+    service = CNPJEnrichmentService(db_session, _settings(), provider=fake_provider)  # type: ignore[arg-type]
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.matched_count == 1
+    assert response.results[0].reason_code == "matched"
+
+
+def test_cnpj_can_be_found_on_institucional_page(db_session) -> None:
+    lead = _lead(website="https://institucional.example.com", phone=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    http_session = FakeHTTPSession(
+        {
+            "https://institucional.example.com/robots.txt": FakeResponse(
+                url="https://institucional.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://institucional.example.com": FakeResponse(
+                url="https://institucional.example.com",
+                text="<html><body>Início</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://institucional.example.com/contato": FakeResponse(
+                url="https://institucional.example.com/contato",
+                text="<html><body>Contato</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://institucional.example.com/sobre": FakeResponse(
+                url="https://institucional.example.com/sobre",
+                text="<html><body>Sobre</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://institucional.example.com/quem-somos": FakeResponse(
+                url="https://institucional.example.com/quem-somos",
+                text="<html><body>Quem somos</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://institucional.example.com/institucional": FakeResponse(
+                url="https://institucional.example.com/institucional",
+                text="<html><body>CNPJ 37.335.118/0001-80</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+        },
+        default_status_code=404,
+    )
+    fake_provider = FakeCNPJAProvider(
+        lookup_results_by_cnpj={"37335118000180": _lookup_result(phones=[])},
+        http_session=http_session,
+    )
+    service = CNPJEnrichmentService(db_session, _settings(), provider=fake_provider)  # type: ignore[arg-type]
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.matched_count == 1
+
+
+def test_cnpj_can_be_found_on_termos_page_via_homepage_link_discovery(db_session) -> None:
+    lead = _lead(website="https://termos.example.com", phone=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    http_session = FakeHTTPSession(
+        {
+            "https://termos.example.com/robots.txt": FakeResponse(
+                url="https://termos.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://termos.example.com": FakeResponse(
+                url="https://termos.example.com",
+                text="<html><body><a href=\"/termos-de-uso\">Termos de uso</a></body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://termos.example.com/termos-de-uso": FakeResponse(
+                url="https://termos.example.com/termos-de-uso",
+                text="<html><body>CNPJ 37.335.118/0001-80</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+        },
+        default_status_code=404,
+    )
+    fake_provider = FakeCNPJAProvider(
+        lookup_results_by_cnpj={"37335118000180": _lookup_result(phones=[])},
+        http_session=http_session,
+    )
+    service = CNPJEnrichmentService(db_session, _settings(), provider=fake_provider)  # type: ignore[arg-type]
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.matched_count == 1
+    fetched_urls = [url for url, _ in http_session.get_calls]
+    assert "https://termos.example.com/termos-de-uso" in fetched_urls
 
 
 def test_website_cnpj_with_mismatched_city_uf_does_not_auto_fill(db_session) -> None:
@@ -752,7 +987,7 @@ def test_slow_website_returns_timeout_reason(db_session) -> None:
             "https://lento.example.com/sobre": requests.Timeout("Read timed out"),
             "https://lento.example.com/politica-de-privacidade": requests.Timeout("Read timed out"),
         },
-        default_status_code=None,
+        default_status_code=404,
     )
     service = CNPJEnrichmentService(
         db_session,
@@ -764,6 +999,175 @@ def test_slow_website_returns_timeout_reason(db_session) -> None:
 
     assert response.summary.website_timeout_count == 1
     assert response.results[0].reason_code == "website_timeout"
+
+
+def test_homepage_link_discovery_selects_only_high_signal_same_domain_links(db_session) -> None:
+    service = EnrichmentService(
+        db_session,
+        _settings(),
+        http_session=FakeHTTPSession(
+            {
+                "https://discovery.example.com/robots.txt": FakeResponse(
+                    url="https://discovery.example.com/robots.txt",
+                    text="User-agent: *\nAllow: /\n",
+                    content_type="text/plain",
+                ),
+                "https://discovery.example.com": FakeResponse(
+                    url="https://discovery.example.com",
+                    text=(
+                        "<html><body>"
+                        "<a href=\"/quem-somos\">Quem somos</a>"
+                        "<a href=\"/legal\">Legal</a>"
+                        "<a href=\"/contato\">Contato</a>"
+                        "<a href=\"/blog\">Blog</a>"
+                        "<a href=\"https://instagram.com/empresa\">Instagram</a>"
+                        "<a href=\"mailto:contato@empresa.com\">Email</a>"
+                        "<a href=\"tel:+551133334444\">Telefone</a>"
+                        "<a href=\"https://externo.example.com/termos\">Externo</a>"
+                        "</body></html>"
+                    ),
+                    content_type="text/html; charset=utf-8",
+                ),
+                "https://discovery.example.com/quem-somos": FakeResponse(
+                    url="https://discovery.example.com/quem-somos",
+                    text="<html><body>Quem somos</body></html>",
+                    content_type="text/html; charset=utf-8",
+                ),
+                "https://discovery.example.com/legal": FakeResponse(
+                    url="https://discovery.example.com/legal",
+                    text="<html><body>Legal</body></html>",
+                    content_type="text/html; charset=utf-8",
+                ),
+                "https://discovery.example.com/contato": FakeResponse(
+                    url="https://discovery.example.com/contato",
+                    text="<html><body>Contato</body></html>",
+                    content_type="text/html; charset=utf-8",
+                ),
+            },
+            default_status_code=404,
+        ),
+    )
+
+    crawl = service.crawl_public_website_for_cnpj("https://discovery.example.com")
+    attempted_urls = [page.url for page in crawl.attempted_pages]
+
+    assert "https://discovery.example.com/quem-somos" in attempted_urls
+    assert "https://discovery.example.com/legal" in attempted_urls
+    assert "https://discovery.example.com/contato" in attempted_urls
+    assert "https://discovery.example.com/blog" not in attempted_urls
+    assert "https://externo.example.com/termos" not in attempted_urls
+    assert "https://instagram.com/empresa" not in attempted_urls
+
+
+def test_crawl_stops_after_finding_valid_cnpj_candidate(db_session) -> None:
+    lead = _lead(website="https://parada.example.com", phone=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    http_session = FakeHTTPSession(
+        {
+            "https://parada.example.com/robots.txt": FakeResponse(
+                url="https://parada.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://parada.example.com": FakeResponse(
+                url="https://parada.example.com",
+                text="<html><body>Home</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://parada.example.com/contato": FakeResponse(
+                url="https://parada.example.com/contato",
+                text="<html><body>CNPJ 37.335.118/0001-80</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://parada.example.com/sobre": FakeResponse(
+                url="https://parada.example.com/sobre",
+                text="<html><body>Sobre</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+        },
+        default_status_code=404,
+    )
+    fake_provider = FakeCNPJAProvider(
+        lookup_results_by_cnpj={"37335118000180": _lookup_result(phones=[])},
+        http_session=http_session,
+    )
+    service = CNPJEnrichmentService(db_session, _settings(), provider=fake_provider)  # type: ignore[arg-type]
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    fetched_urls = [url for url, _ in http_session.get_calls]
+
+    assert response.summary.matched_count == 1
+    assert "https://parada.example.com/sobre" not in fetched_urls
+
+
+def test_crawl_respects_max_page_limit(db_session) -> None:
+    session = FakeHTTPSession(
+        {
+            "https://limite.example.com/robots.txt": FakeResponse(
+                url="https://limite.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://limite.example.com": FakeResponse(
+                url="https://limite.example.com",
+                text=(
+                    "<html><body>"
+                    "<a href=\"/quem-somos\">Quem somos</a>"
+                    "<a href=\"/institucional\">Institucional</a>"
+                    "<a href=\"/empresa\">Empresa</a>"
+                    "<a href=\"/privacidade\">Privacidade</a>"
+                    "<a href=\"/termos\">Termos</a>"
+                    "</body></html>"
+                ),
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://limite.example.com/contato": FakeResponse(
+                url="https://limite.example.com/contato",
+                text="<html><body>Contato</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://limite.example.com/sobre": FakeResponse(
+                url="https://limite.example.com/sobre",
+                text="<html><body>Sobre</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://limite.example.com/quem-somos": FakeResponse(
+                url="https://limite.example.com/quem-somos",
+                text="<html><body>Quem somos</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://limite.example.com/institucional": FakeResponse(
+                url="https://limite.example.com/institucional",
+                text="<html><body>Institucional</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://limite.example.com/empresa": FakeResponse(
+                url="https://limite.example.com/empresa",
+                text="<html><body>Empresa</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://limite.example.com/privacidade": FakeResponse(
+                url="https://limite.example.com/privacidade",
+                text="<html><body>Privacidade</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+            "https://limite.example.com/termos": FakeResponse(
+                url="https://limite.example.com/termos",
+                text="<html><body>Termos</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+        },
+        default_status_code=404,
+    )
+    service = EnrichmentService(db_session, _settings(), http_session=session)
+
+    crawl = service.crawl_public_website_for_cnpj("https://limite.example.com")
+
+    assert crawl.pages_attempted <= 6
+    assert crawl.stop_reason in {"page_budget_exhausted", None}
 
 
 def test_same_domain_reused_in_batch_uses_cached_crawl(db_session) -> None:
@@ -926,6 +1330,821 @@ def test_cnpj_batch_endpoint_without_key_returns_safe_error(client, db_session) 
 
     assert response.status_code == 503
     assert response.json()["detail"] == CNPJA_OPEN_PUBLIC_BATCH_LIMIT_MESSAGE
+
+
+def test_cnpj_ws_premium_search_builds_endpoint_and_uses_x_api_token_header() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://comercial.cnpj.ws/v2/pesquisa": FakeResponse(
+                payload={
+                    "resultados": [
+                        {
+                            "razao_social": "Casa Falci Ltda",
+                            "estabelecimento": {
+                                "cnpj": "17247065000139",
+                                "nome_fantasia": "Casa Falci",
+                                "situacao_cadastral": "Ativa",
+                                "cep": "13000-000",
+                                "logradouro": "Rua Beta",
+                                "numero": "45",
+                                "bairro": "Centro",
+                                "cidade": {"nome": "Campinas"},
+                                "estado": {"sigla": "SP"},
+                                "atividade_principal": {"descricao": "Comercio varejista"},
+                            },
+                        }
+                    ]
+                }
+            )
+        },
+        default_status_code=None,
+    )
+    provider = CNPJWSProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        http_session=session,
+    )
+
+    results = provider.search_companies(
+        business_name="Casa Falci",
+        city="Campinas",
+        state="SP",
+        postal_code="13000-000",
+    )
+
+    assert session.get_calls[0][0] == "https://comercial.cnpj.ws/v2/pesquisa"
+    assert session.get_calls[0][1]["headers"]["x_api_token"] == "premium-token"
+    assert "Authorization" not in session.get_calls[0][1]["headers"]
+    assert session.get_calls[0][1]["params"]["nome_fantasia"] == "Casa Falci"
+    assert session.get_calls[0][1]["params"]["cep"] == "13000000"
+    assert session.get_calls[0][1]["params"]["situacao_cadastral"] == "Ativa"
+    assert results[0].cnpj == "17247065000139"
+    assert results[0].legal_name == "Casa Falci Ltda"
+    assert results[0].trade_name == "Casa Falci"
+    assert results[0].city == "Campinas"
+    assert results[0].state == "SP"
+    assert results[0].source_provider == "cnpj_ws_premium"
+
+
+def test_cnpj_ws_premium_search_can_follow_up_with_direct_lookup_for_cnpj_only_results() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://comercial.cnpj.ws/v2/pesquisa": FakeResponse(
+                payload={"resultados": ["17247065000139"]}
+            ),
+            "https://comercial.cnpj.ws/cnpj/17247065000139": FakeResponse(
+                payload={
+                    "razao_social": "Casa Falci Ltda",
+                    "estabelecimento": {
+                        "cnpj": "17247065000139",
+                        "nome_fantasia": "Casa Falci",
+                        "situacao_cadastral": "Ativa",
+                        "cep": "13000-000",
+                        "logradouro": "Rua Beta",
+                        "numero": "45",
+                        "bairro": "Centro",
+                        "cidade": {"nome": "Campinas"},
+                        "estado": {"sigla": "SP"},
+                        "atividade_principal": {"descricao": "Comercio varejista"},
+                    },
+                }
+            ),
+        },
+        default_status_code=None,
+    )
+    provider = CNPJWSProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        http_session=session,
+    )
+
+    results = provider.search_companies(
+        business_name="Casa Falci",
+        city="Campinas",
+        state="SP",
+        postal_code="13000-000",
+    )
+
+    assert session.get_calls[0][0] == "https://comercial.cnpj.ws/v2/pesquisa"
+    assert session.get_calls[1][0] == "https://comercial.cnpj.ws/cnpj/17247065000139"
+    assert session.get_calls[1][1]["headers"]["x_api_token"] == "premium-token"
+    assert "Authorization" not in session.get_calls[1][1]["headers"]
+    assert results[0].cnpj == "17247065000139"
+    assert results[0].legal_name == "Casa Falci Ltda"
+    assert results[0].source_provider == "cnpj_ws_premium"
+
+
+def test_cnpjota_provider_builds_search_request_with_preview() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://api.cnpjota.com.br/api/v1/empresas/busca": FakeResponse(
+                payload={
+                    "data": [
+                        {
+                            "cnpj": "17247065000139",
+                            "razao_social": "Casa Falci Ltda",
+                            "nome_fantasia": "Casa Falci",
+                            "situacao_cadastral": "Ativa",
+                            "cep": "13000-000",
+                            "logradouro": "Rua Beta",
+                            "numero": "45",
+                            "bairro": "Centro",
+                            "cidade": "Campinas",
+                            "uf": "SP",
+                            "telefone": "1133334444",
+                            "email": "contato@casafalci.com.br",
+                            "atividade_principal": {"descricao": "Comercio varejista"},
+                        }
+                    ]
+                }
+            )
+        },
+        default_status_code=None,
+    )
+    provider = CNPJotaProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpjota",
+            CNPJOTA_TOKEN="ota-token",
+            CNPJOTA_USE_PREVIEW=True,
+        ),
+        http_session=session,
+    )
+
+    results = provider.search_companies(
+        business_name="Casa Falci",
+        state="SP",
+    )
+
+    assert session.get_calls[0][0] == "https://api.cnpjota.com.br/api/v1/empresas/busca"
+    assert session.get_calls[0][1]["headers"]["Authorization"] == "Bearer ota-token"
+    assert session.get_calls[0][1]["params"]["q"] == "Casa Falci"
+    assert session.get_calls[0][1]["params"]["uf"] == "SP"
+    assert session.get_calls[0][1]["params"]["limite"] == 10
+    assert session.get_calls[0][1]["params"]["preview"] == "true"
+    assert results[0].cnpj == "17247065000139"
+    assert results[0].legal_name == "Casa Falci Ltda"
+    assert results[0].trade_name == "Casa Falci"
+    assert results[0].source_provider == "cnpjota"
+
+
+def test_company_search_is_not_called_when_disabled(db_session) -> None:
+    lead = _lead(website="https://sem-cnpj.example.com")
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    http_session = FakeHTTPSession(
+        {
+            "https://sem-cnpj.example.com/robots.txt": FakeResponse(
+                url="https://sem-cnpj.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://sem-cnpj.example.com": FakeResponse(
+                url="https://sem-cnpj.example.com",
+                text="<html><body>Fale conosco.</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+        },
+        default_status_code=404,
+    )
+    fake_provider = FakeCNPJAProvider(
+        search_results=[_lookup_result(source_provider="cnpj_ws_premium")],
+        http_session=http_session,
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(CNPJ_COMPANY_SEARCH_ENABLED=False),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert fake_provider.search_calls == []
+    assert response.summary.company_search_no_candidates_count == 0
+    assert response.results[0].reason_code == "no_cnpj_on_website"
+
+
+def test_cnpjota_search_enabled_but_token_missing_returns_safe_reason(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider()
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpjota",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert fake_provider.search_calls == []
+    assert response.summary.company_search_not_configured_count == 1
+    assert response.results[0].reason_code == "company_search_not_configured"
+
+
+def test_company_search_enabled_but_token_missing_returns_safe_reason(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider()
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(CNPJ_COMPANY_SEARCH_ENABLED=True),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert fake_provider.search_calls == []
+    assert response.summary.company_search_not_configured_count == 1
+    assert response.results[0].reason_code == "company_search_not_configured"
+
+
+def test_cnpjota_high_confidence_candidate_fills_cnpj(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[_lookup_result(source_provider="cnpjota")]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpjota",
+            CNPJOTA_TOKEN="ota-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.matched_count == 1
+    assert response.summary.company_search_matched_count == 1
+    assert lead.cnpj == "37335118000180"
+    assert lead.legal_name == "Oficina CNPJ LTDA"
+    assert lead.cnpj_source_provider == "cnpjota"
+
+
+def test_cnpjota_preview_masked_candidate_does_not_autofill(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    preview_candidate = CNPJLookupResult(
+        cnpj="17.247.***/*",
+        legal_name="Oficina CNPJ LTDA",
+        trade_name="Oficina CNPJ",
+        registration_status="Ativa",
+        address="Rua Alfa, 10",
+        city="Campinas",
+        state="SP",
+        postal_code="13000-000",
+        website=None,
+        domain=None,
+        phones=["1133334444"],
+        emails=[],
+        primary_activity="Oficina mecanica",
+        source_provider="cnpjota",
+        provider_record_id="preview-1",
+        metadata={
+            "queried_via": "cnpjota",
+            "preview_mode": True,
+            "full_cnpj_available": False,
+            "masked_cnpj": "17.247.***/*",
+        },
+    )
+    fake_provider = FakeCNPJAProvider(search_results=[preview_candidate])
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpjota",
+            CNPJOTA_TOKEN="ota-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.needs_review_count == 1
+    assert response.summary.company_search_needs_review_count == 1
+    assert response.results[0].reason_code == "company_search_preview_only"
+    assert lead.cnpj is None
+    assert lead.cnpj_match_status == "needs_review"
+
+
+def test_cnpjota_medium_confidence_candidate_becomes_needs_review(db_session) -> None:
+    lead = _lead(cnpj=None, website=None, phone=None, whatsapp=None, address=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[_lookup_result(source_provider="cnpjota", phones=[], address=None, website=None)]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpjota",
+            CNPJOTA_TOKEN="ota-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.needs_review_count == 1
+    assert response.results[0].reason_code == "company_search_needs_review"
+
+
+def test_cnpjota_name_only_candidate_does_not_autofill(db_session) -> None:
+    lead = _lead(
+        business_name="Loja Exemplo",
+        cnpj=None,
+        website=None,
+        phone=None,
+        whatsapp=None,
+        address=None,
+        postal_code=None,
+        city=None,
+        state=None,
+    )
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpjota",
+                trade_name="Loja Exemplo",
+                legal_name="Loja Exemplo Ltda",
+                phones=[],
+                address=None,
+                postal_code=None,
+                city=None,
+                state=None,
+                website=None,
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpjota",
+            CNPJOTA_TOKEN="ota-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.not_found_count == 1
+    assert response.summary.company_search_low_confidence_count == 1
+    assert response.results[0].reason_code == "company_search_low_confidence"
+
+
+def test_cnpjota_rate_limit_is_reported_safely(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_error=CNPJAProviderError(
+            "CNPJota search hit the upstream usage limit. Retry shortly.",
+            status_code=503,
+        )
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpjota",
+            CNPJOTA_TOKEN="ota-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.company_search_rate_limited_count == 1
+    assert response.results[0].reason_code == "company_search_rate_limited"
+
+
+def test_cnpja_commercial_high_confidence_candidate_fills_cnpj(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[_lookup_result(source_provider="cnpja_commercial")]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.matched_count == 1
+    assert response.summary.company_search_matched_count == 1
+    assert response.results[0].reason_code == "company_search_matched"
+    assert lead.cnpj == "37335118000180"
+    assert lead.legal_name == "Oficina CNPJ LTDA"
+    assert lead.cnpj_source_provider == "cnpja_commercial"
+
+
+def test_cnpja_commercial_medium_confidence_candidate_needs_review(db_session) -> None:
+    lead = _lead(cnpj=None, website=None, phone=None, whatsapp=None, address=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpja_commercial",
+                phones=[],
+                address=None,
+                website=None,
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.needs_review_count == 1
+    assert response.summary.company_search_needs_review_count == 1
+    assert response.results[0].reason_code == "company_search_needs_review"
+    assert lead.cnpj is None
+    assert lead.cnpj_match_status == "needs_review"
+
+
+def test_cnpja_commercial_name_only_candidate_does_not_autofill(db_session) -> None:
+    lead = _lead(
+        business_name="Loja Exemplo",
+        cnpj=None,
+        website=None,
+        phone=None,
+        whatsapp=None,
+        address=None,
+        postal_code=None,
+        city=None,
+        state=None,
+    )
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpja_commercial",
+                trade_name="Loja Exemplo",
+                legal_name="Loja Exemplo Ltda",
+                phones=[],
+                address=None,
+                postal_code=None,
+                city=None,
+                state=None,
+                website=None,
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.not_found_count == 1
+    assert response.summary.company_search_low_confidence_count == 1
+    assert response.results[0].reason_code == "company_search_low_confidence"
+
+
+def test_cnpja_commercial_different_city_state_does_not_autofill(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpja_commercial",
+                city="Curitiba",
+                state="PR",
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.not_found_count == 1
+    assert response.summary.company_search_low_confidence_count == 1
+    assert lead.cnpj is None
+
+
+def test_company_search_high_confidence_candidate_fills_cnpj(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[_lookup_result(source_provider="cnpj_ws_premium")]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.matched_count == 1
+    assert response.summary.company_search_matched_count == 1
+    assert response.results[0].reason_code == "company_search_matched"
+    assert lead.cnpj == "37335118000180"
+    assert lead.legal_name == "Oficina CNPJ LTDA"
+    assert lead.cnpj_source_provider == "cnpj_ws_premium"
+
+
+def test_company_search_medium_confidence_candidate_needs_review(db_session) -> None:
+    lead = _lead(cnpj=None, website=None, phone=None, whatsapp=None, address=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpj_ws_premium",
+                phones=[],
+                address=None,
+                website=None,
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.needs_review_count == 1
+    assert response.summary.company_search_needs_review_count == 1
+    assert response.results[0].reason_code == "company_search_needs_review"
+    assert lead.cnpj is None
+    assert lead.cnpj_match_status == "needs_review"
+
+
+def test_company_search_name_only_candidate_does_not_autofill(db_session) -> None:
+    lead = _lead(
+        business_name="Loja Exemplo",
+        cnpj=None,
+        website=None,
+        phone=None,
+        whatsapp=None,
+        address=None,
+        postal_code=None,
+        city=None,
+        state=None,
+    )
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpj_ws_premium",
+                trade_name="Loja Exemplo",
+                legal_name="Loja Exemplo Ltda",
+                phones=[],
+                address=None,
+                postal_code=None,
+                city=None,
+                state=None,
+                website=None,
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.not_found_count == 1
+    assert response.summary.company_search_low_confidence_count == 1
+    assert response.results[0].reason_code == "company_search_low_confidence"
+
+
+def test_company_search_different_city_state_does_not_autofill(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpj_ws_premium",
+                city="Curitiba",
+                state="PR",
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.not_found_count == 1
+    assert response.summary.company_search_low_confidence_count == 1
+    assert lead.cnpj is None
+
+
+def test_company_search_no_candidates_returns_reason(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(search_results=[])
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.company_search_no_candidates_count == 1
+    assert response.results[0].reason_code == "company_search_no_candidates"
+
+
+def test_company_search_rate_limit_is_reported_safely(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_error=CNPJAProviderError(
+            "CNPJ.ws Premium search hit the upstream usage limit. Retry shortly.",
+            status_code=503,
+        )
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.company_search_rate_limited_count == 1
+    assert response.summary.error_count == 1
+    assert response.results[0].reason_code == "company_search_rate_limited"
+
+
+def test_website_extraction_runs_before_paid_company_search(db_session) -> None:
+    lead = _lead(website="https://empresa.example.com", phone=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    http_session = FakeHTTPSession(
+        {
+            "https://empresa.example.com/robots.txt": FakeResponse(
+                url="https://empresa.example.com/robots.txt",
+                text="User-agent: *\nAllow: /\n",
+                content_type="text/plain",
+            ),
+            "https://empresa.example.com": FakeResponse(
+                url="https://empresa.example.com",
+                text="<html><body>CNPJ 37.335.118/0001-80</body></html>",
+                content_type="text/html; charset=utf-8",
+            ),
+        },
+        default_status_code=404,
+    )
+    fake_provider = FakeCNPJAProvider(
+        lookup_results_by_cnpj={"37335118000180": _lookup_result(phones=[])},
+        search_results=[_lookup_result(source_provider="cnpj_ws_premium")],
+        http_session=http_session,
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpj_ws_premium",
+            CNPJ_WS_PREMIUM_TOKEN="premium-token",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert response.summary.matched_count == 1
+    assert fake_provider.search_calls == []
 
 
 def test_no_cpf_fields_were_added() -> None:
