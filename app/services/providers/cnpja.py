@@ -7,6 +7,7 @@ from typing import Any
 import requests
 
 from app.config import Settings
+from app.services.geo.ibge_municipalities import lookup_ibge_municipality_code
 from app.services.normalization import (
     format_street_address,
     normalize_brazilian_state,
@@ -264,7 +265,7 @@ class CNPJAProvider:
         address: str | None = None,
         neighborhood: str | None = None,
     ) -> list[CNPJLookupResult]:
-        del city, website, address
+        del website, address
 
         if not self.settings.cnpja_company_search_configured:
             return []
@@ -291,6 +292,7 @@ class CNPJAProvider:
         matches: list[CNPJLookupResult] = []
         shared_metadata = self._build_commercial_search_shared_metadata(
             search_variants=search_variants,
+            city=city,
             state=state,
             postal_code=postal_code,
             phone=phone,
@@ -301,6 +303,7 @@ class CNPJAProvider:
         for names_clause in names_clauses:
             params = self._build_commercial_search_params(
                 names_in=names_clause,
+                city=city,
                 state=state,
                 postal_code=postal_code,
                 phone=phone,
@@ -574,6 +577,7 @@ class CNPJAProvider:
         self,
         *,
         names_in: str,
+        city: str | None,
         state: str | None,
         postal_code: str | None,
         phone: str | None,
@@ -589,6 +593,10 @@ class CNPJAProvider:
         normalized_state = normalize_brazilian_state(state)
         if normalized_state:
             params["address.state.in"] = normalized_state
+
+        municipality_code = lookup_ibge_municipality_code(city, normalized_state)
+        if municipality_code:
+            params["address.municipality.in"] = municipality_code
 
         normalized_postal_code = _normalize_postal_code(postal_code)
         if normalized_postal_code:
@@ -608,16 +616,22 @@ class CNPJAProvider:
         self,
         *,
         search_variants: list[str],
+        city: str | None,
         state: str | None,
         postal_code: str | None,
         phone: str | None,
         whatsapp: str | None,
         neighborhood: str | None,
     ) -> dict[str, Any]:
+        normalized_state = normalize_brazilian_state(state)
+        municipality_code = lookup_ibge_municipality_code(city, normalized_state)
         return {
             "provider": "cnpja_commercial",
+            "searched_city": _first_text(city),
             "searched_names": search_variants,
-            "searched_state": normalize_brazilian_state(state),
+            "searched_state": normalized_state,
+            "searched_municipality_code": municipality_code,
+            "municipality_mapping_found": municipality_code is not None,
             "searched_zip": _normalize_postal_code(postal_code),
             "searched_district": _first_text(neighborhood),
             "searched_phone_area": _extract_area_code(phone) or _extract_area_code(whatsapp),

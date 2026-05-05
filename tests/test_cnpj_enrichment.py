@@ -18,6 +18,7 @@ from app.services.cnpj_enrichment import (
     is_valid_cnpj,
 )
 from app.services.enrichment import EnrichmentService
+from app.services.geo.ibge_municipalities import lookup_ibge_municipality_code
 from app.services.normalization import normalize_business_name
 from app.services.providers.cnpja import (
     CNPJAProvider,
@@ -331,6 +332,26 @@ def test_build_company_search_name_variants_keeps_low_priority_brand_fallbacks_l
     ]
 
 
+def test_ibge_municipality_lookup_maps_curitiba_pr() -> None:
+    assert lookup_ibge_municipality_code("Curitiba", "PR") == "4106902"
+
+
+def test_ibge_municipality_lookup_maps_sao_paulo_sp() -> None:
+    assert lookup_ibge_municipality_code("São Paulo", "SP") == "3550308"
+
+
+def test_ibge_municipality_lookup_is_accent_insensitive() -> None:
+    assert lookup_ibge_municipality_code("Sao Paulo", "SP") == "3550308"
+
+
+def test_ibge_municipality_lookup_accepts_city_with_state_suffix() -> None:
+    assert lookup_ibge_municipality_code("Curitiba, PR") == "4106902"
+
+
+def test_ibge_municipality_lookup_returns_none_for_unknown_city() -> None:
+    assert lookup_ibge_municipality_code("Cidade Inventada", "SP") is None
+
+
 def test_lookup_known_cnpj_maps_open_api_payload() -> None:
     provider = CNPJAProvider(
         _settings(),
@@ -501,6 +522,7 @@ def test_cnpja_commercial_search_builds_office_endpoint_and_auth_header() -> Non
 
     results = provider.search_companies(
         business_name="Casa Falci",
+        city="Campinas",
         state="SP",
         postal_code="13000-000",
         neighborhood="Centro",
@@ -514,9 +536,14 @@ def test_cnpja_commercial_search_builds_office_endpoint_and_auth_header() -> Non
     assert session.get_calls[0][1]["params"]["names.in"] == "Casa Falci"
     assert session.get_calls[0][1]["params"]["status.id.in"] == "2"
     assert session.get_calls[0][1]["params"]["address.state.in"] == "SP"
+    assert session.get_calls[0][1]["params"]["address.municipality.in"] == "3509502"
     assert session.get_calls[0][1]["params"]["address.zip.in"] == "13000000"
     assert session.get_calls[0][1]["params"]["address.district.in"] == "Centro"
     assert session.get_calls[0][1]["params"]["phones.area.in"] == "19"
+    assert provider.last_company_search_metadata is not None
+    assert provider.last_company_search_metadata["searched_city"] == "Campinas"
+    assert provider.last_company_search_metadata["searched_municipality_code"] == "3509502"
+    assert provider.last_company_search_metadata["municipality_mapping_found"] is True
     assert results[0].cnpj == "17247065000139"
     assert results[0].legal_name == "Casa Falci Ltda"
     assert results[0].trade_name == "Casa Falci"
@@ -564,6 +591,37 @@ def test_cnpja_commercial_search_sends_comma_separated_name_variants() -> None:
         "Bela Vista",
         "Banho Carinhoso",
     ]
+
+
+def test_cnpja_commercial_search_skips_municipality_when_city_mapping_is_missing() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://api.cnpja.com/office": FakeResponse(payload={"records": []})
+        },
+        default_status_code=None,
+    )
+    provider = CNPJAProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        http_session=session,
+    )
+
+    results = provider.search_companies(
+        business_name="Loja Exemplo",
+        city="Cidade Inventada",
+        state="SP",
+    )
+
+    assert results == []
+    assert "address.municipality.in" not in session.get_calls[0][1]["params"]
+    assert provider.last_company_search_metadata is not None
+    assert provider.last_company_search_metadata["searched_city"] == "Cidade Inventada"
+    assert provider.last_company_search_metadata["searched_municipality_code"] is None
+    assert provider.last_company_search_metadata["municipality_mapping_found"] is False
 
 
 def test_website_cnpj_batch_limit_fails_fast_for_large_selection(db_session) -> None:
