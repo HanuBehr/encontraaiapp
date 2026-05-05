@@ -2236,6 +2236,81 @@ def test_company_search_medium_confidence_candidate_needs_review(db_session) -> 
     assert response.results[0].reason_code == "company_search_needs_review"
     assert lead.cnpj is None
     assert lead.cnpj_match_status == "needs_review"
+    candidate_summary = lead.cnpj_metadata_json["candidate_summary"]
+    assert candidate_summary["cnpj"] == "37335118000180"
+    assert candidate_summary["legal_name"] == "Oficina CNPJ LTDA"
+    assert candidate_summary["city"] == "Campinas"
+    assert candidate_summary["state"] == "SP"
+    assert candidate_summary["provider"] == "cnpj_ws_premium"
+    assert candidate_summary["match_confidence"] == 0.75
+    assert candidate_summary["blocked_from_autofill_reason"] == "below_autofill_threshold"
+
+
+def test_company_search_high_confidence_review_keeps_block_reason(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(cnpj="37335118000180", legal_name="Empresa A Ltda", source_provider="cnpja_commercial"),
+            _lookup_result(cnpj="17247065000139", legal_name="Empresa B Ltda", source_provider="cnpja_commercial"),
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.summary.needs_review_count == 1
+    assert response.results[0].match_status == "needs_review"
+    assert response.results[0].match_confidence == 1.0
+    assert lead.cnpj is None
+    assert lead.cnpj_match_status == "needs_review"
+    candidate_summary = lead.cnpj_metadata_json["candidate_summary"]
+    assert candidate_summary["blocked_from_autofill_reason"] == "ambiguous_top_candidates"
+    assert candidate_summary["review_reason"] == "Mais de um candidato forte foi encontrado."
+
+
+def test_company_search_high_confidence_review_requires_block_reason(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(cnpj="37335118000180", legal_name="Empresa A Ltda", source_provider="cnpja_commercial"),
+            _lookup_result(cnpj="17247065000139", legal_name="Empresa B Ltda", source_provider="cnpja_commercial"),
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.results[0].match_confidence == 1.0
+    assert response.results[0].reason_code == "company_search_needs_review"
+    assert lead.cnpj_metadata_json["candidate_summary"]["blocked_from_autofill_reason"]
 
 
 def test_company_search_name_only_candidate_does_not_autofill(db_session) -> None:

@@ -84,6 +84,12 @@ REASON_COMPANY_SEARCH_PROVIDER_ERROR = "company_search_provider_error"
 REASON_COMPANY_SEARCH_RATE_LIMITED = "company_search_rate_limited"
 REASON_COMPANY_SEARCH_PREVIEW_ONLY = "company_search_preview_only"
 REASON_COMPANY_SEARCH_PENDING_RETRY = "company_search_pending_retry"
+BLOCKED_REASON_MISSING_FULL_CNPJ = "missing_full_cnpj"
+BLOCKED_REASON_CITY_STATE_CONFLICT = "city_state_conflict"
+BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES = "ambiguous_top_candidates"
+BLOCKED_REASON_PROVIDER_PREVIEW_MASKED = "provider_preview_masked"
+BLOCKED_REASON_INSUFFICIENT_IDENTITY_SUPPORT = "insufficient_identity_support"
+BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD = "below_autofill_threshold"
 
 COMPANY_SEARCH_NOT_CONFIGURED_REASON = "Paid company search is not configured for this environment."
 COMPANY_SEARCH_NO_CANDIDATES_REASON = "No paid company-search candidates were found for this lead."
@@ -95,6 +101,7 @@ COMPANY_SEARCH_PROVIDER_ERROR_REASON = "Paid company search failed temporarily."
 COMPANY_SEARCH_RATE_LIMIT_RETRY_REASON = (
     "Busca CNPJ limitada pelo provedor. Aguarde cerca de 1 minuto e tente novamente."
 )
+APPROVE_CNPJ_CANDIDATE_ERROR_MESSAGE = "Nenhum CNPJ revisável disponível para este lead."
 
 
 @dataclass(slots=True)
@@ -150,6 +157,10 @@ class _WebsiteEvaluationOutcome:
     fallback_reason_code: str | None = None
     fallback_skipped_reason: str | None = None
     attempt_metadata: dict[str, Any] | None = None
+
+
+class CNPJCandidateApprovalError(ValueError):
+    pass
 
 
 def is_valid_cnpj(cnpj: str | None) -> bool:
@@ -321,6 +332,75 @@ class CNPJEnrichmentService:
             results=results,
             summary=summary,
         )
+
+    def approve_cnpj_candidate(self, lead_id: int, *, actor: str = "system"):
+        lead = self.repository.get_by_id(lead_id)
+        if lead is None:
+            raise ValueError(f"Lead {lead_id} not found.")
+
+        candidate_summary = self._get_reviewable_candidate_summary(lead)
+        if candidate_summary is None:
+            raise CNPJCandidateApprovalError(APPROVE_CNPJ_CANDIDATE_ERROR_MESSAGE)
+
+        candidate_cnpj = normalize_cnpj(candidate_summary.get("cnpj"))
+        if candidate_cnpj is None:
+            raise CNPJCandidateApprovalError(APPROVE_CNPJ_CANDIDATE_ERROR_MESSAGE)
+
+        previous_status = lead.cnpj_match_status
+        approved_at = utcnow()
+        lead.cnpj = candidate_cnpj
+
+        legal_name = self._candidate_summary_text(candidate_summary, "legal_name")
+        if legal_name:
+            lead.legal_name = legal_name
+
+        lead.cnpj_match_status = "matched"
+        lead.cnpj_match_confidence = self._candidate_summary_confidence(candidate_summary, lead.cnpj_match_confidence)
+        lead.cnpj_last_enriched_at = approved_at
+
+        provider = self._candidate_summary_text(candidate_summary, "provider")
+        if provider:
+            lead.cnpj_source_provider = provider
+
+        metadata = dict(lead.cnpj_metadata_json or {})
+        metadata.update(
+            {
+                "match_status": "matched",
+                "reason_code": REASON_MATCHED,
+                "skipped_reason": None,
+                "error_message": None,
+                "candidate_summary": candidate_summary,
+                "approved_manually": True,
+                "approved_at": approved_at.isoformat(),
+                "previous_status": previous_status,
+            }
+        )
+        lead.cnpj_metadata_json = metadata
+
+        self.db.add(
+            ActivityLog(
+                organization_id=lead.organization_id or self.repository.organization_id,
+                lead_id=lead.id,
+                entity_type="lead",
+                entity_id=lead.id,
+                action=ActivityAction.ENRICHED,
+                actor=actor,
+                message="CNPJ candidate approved manually.",
+                metadata_json={
+                    "enrichment_type": "cnpj",
+                    "approval_action": "approved",
+                    "cnpj": lead.cnpj,
+                    "legal_name": lead.legal_name,
+                    "previous_status": previous_status,
+                    "source_provider": lead.cnpj_source_provider,
+                },
+            )
+        )
+        self.db.commit()
+        approved_lead = self.repository.get_detail(lead_id)
+        if approved_lead is None:
+            raise ValueError(f"Lead {lead_id} not found.")
+        return approved_lead
 
     def _enrich_known_cnpj_lead(
         self,
@@ -495,14 +575,23 @@ class CNPJEnrichmentService:
             if len(scored_candidates) > 1
             else CLEAR_WINNER_GAP
         )
+        blocked_reason = self._blocked_from_autofill_reason(
+            best_candidate,
+            top_gap=top_gap,
+            require_confirmable_cnpj=True,
+        )
         candidate_summary = self._build_candidate_summary(
             best_candidate,
             candidate_count=len(scored_candidates),
+            blocked_from_autofill_reason=blocked_reason,
+            match_confidence=(
+                self._review_confidence(best_candidate.score, blocked_reason)
+                if blocked_reason
+                else self._score_to_confidence(best_candidate.score)
+            ),
         )
 
-        if self._is_high_confidence_match(best_candidate, top_gap=top_gap) and self._candidate_has_confirmable_cnpj(
-            best_candidate
-        ):
+        if self._is_high_confidence_match(best_candidate, top_gap=top_gap) and blocked_reason is None:
             return self._apply_lookup_result(
                 lead,
                 best_candidate.candidate,
@@ -514,60 +603,44 @@ class CNPJEnrichmentService:
                 reason_code=REASON_COMPANY_SEARCH_MATCHED,
             )
 
-        if self._candidate_requires_preview_review(best_candidate):
-            confidence = self._score_to_confidence(best_candidate.score)
-            self._mark_attempt(
+        if best_candidate.score >= HIGH_CONFIDENCE_SCORE and blocked_reason is not None:
+            return self._finalize_review_result(
                 lead,
                 actor=actor,
-                match_status="needs_review",
-                match_confidence=confidence,
                 source_provider=best_candidate.candidate.source_provider,
-                skipped_reason=NEEDS_REVIEW_REASON,
-                error_message=None,
-                matched_by="company_search",
                 candidate_summary=candidate_summary,
-                reason_code=REASON_COMPANY_SEARCH_PREVIEW_ONLY,
+                reason_code=(
+                    REASON_COMPANY_SEARCH_PREVIEW_ONLY
+                    if blocked_reason == BLOCKED_REASON_PROVIDER_PREVIEW_MASKED
+                    else REASON_COMPANY_SEARCH_NEEDS_REVIEW
+                ),
                 attempt_metadata=merged_attempt_metadata,
-            )
-            return CNPJEnrichmentRunResult(
-                lead_id=lead.id,
-                business_name=lead.business_name,
-                success=True,
-                cnpj=None,
-                legal_name=lead.legal_name,
-                match_status="needs_review",
-                match_confidence=confidence,
-                reason_code=REASON_COMPANY_SEARCH_PREVIEW_ONLY,
-                skipped_reason=NEEDS_REVIEW_REASON,
-                last_enriched_at=lead.cnpj_last_enriched_at,
+                matched_by="company_search",
+                score=best_candidate.score,
+                blocked_reason=blocked_reason,
             )
 
         if best_candidate.score >= MEDIUM_CONFIDENCE_SCORE and not self._has_location_conflict(best_candidate):
-            confidence = self._score_to_confidence(best_candidate.score)
-            self._mark_attempt(
+            review_reason = blocked_reason or BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD
+            return self._finalize_review_result(
                 lead,
                 actor=actor,
-                match_status="needs_review",
-                match_confidence=confidence,
                 source_provider=best_candidate.candidate.source_provider,
-                skipped_reason=NEEDS_REVIEW_REASON,
-                error_message=None,
-                matched_by="company_search",
-                candidate_summary=candidate_summary,
-                reason_code=REASON_COMPANY_SEARCH_NEEDS_REVIEW,
+                candidate_summary=self._build_candidate_summary(
+                    best_candidate,
+                    candidate_count=len(scored_candidates),
+                    blocked_from_autofill_reason=review_reason,
+                    match_confidence=self._review_confidence(best_candidate.score, review_reason),
+                ),
+                reason_code=(
+                    REASON_COMPANY_SEARCH_PREVIEW_ONLY
+                    if review_reason == BLOCKED_REASON_PROVIDER_PREVIEW_MASKED
+                    else REASON_COMPANY_SEARCH_NEEDS_REVIEW
+                ),
                 attempt_metadata=merged_attempt_metadata,
-            )
-            return CNPJEnrichmentRunResult(
-                lead_id=lead.id,
-                business_name=lead.business_name,
-                success=True,
-                cnpj=None,
-                legal_name=lead.legal_name,
-                match_status="needs_review",
-                match_confidence=confidence,
-                reason_code=REASON_COMPANY_SEARCH_NEEDS_REVIEW,
-                skipped_reason=NEEDS_REVIEW_REASON,
-                last_enriched_at=lead.cnpj_last_enriched_at,
+                matched_by="company_search",
+                score=best_candidate.score,
+                blocked_reason=review_reason,
             )
 
         return self._finalize_missing_cnpj_result(
@@ -642,12 +715,23 @@ class CNPJEnrichmentService:
             if len(validated_candidates) > 1
             else CLEAR_WINNER_GAP
         )
+        blocked_reason = self._blocked_from_autofill_reason(
+            best_candidate,
+            top_gap=top_gap,
+            require_confirmable_cnpj=True,
+        )
         candidate_summary = self._build_candidate_summary(
             best_candidate,
             candidate_count=len(validated_candidates),
+            blocked_from_autofill_reason=blocked_reason,
+            match_confidence=(
+                self._review_confidence(best_candidate.score, blocked_reason)
+                if blocked_reason
+                else self._score_to_confidence(best_candidate.score)
+            ),
         )
 
-        if self._is_high_confidence_match(best_candidate, top_gap=top_gap):
+        if self._is_high_confidence_match(best_candidate, top_gap=top_gap) and blocked_reason is None:
             return _WebsiteEvaluationOutcome(
                 final_result=self._apply_lookup_result(
                     lead,
@@ -662,32 +746,23 @@ class CNPJEnrichmentService:
             )
 
         if best_candidate.score >= MEDIUM_CONFIDENCE_SCORE and not self._has_location_conflict(best_candidate):
-            confidence = self._score_to_confidence(best_candidate.score)
-            self._mark_attempt(
-                lead,
-                actor=actor,
-                match_status="needs_review",
-                match_confidence=confidence,
-                source_provider=best_candidate.candidate.source_provider,
-                skipped_reason=NEEDS_REVIEW_REASON,
-                error_message=None,
-                matched_by="website_cnpj",
-                candidate_summary=candidate_summary,
-                reason_code=REASON_NEEDS_REVIEW,
-                attempt_metadata=extraction.attempt_metadata,
-            )
+            review_reason = blocked_reason or BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD
             return _WebsiteEvaluationOutcome(
-                final_result=CNPJEnrichmentRunResult(
-                    lead_id=lead.id,
-                    business_name=lead.business_name,
-                    success=True,
-                    cnpj=None,
-                    legal_name=lead.legal_name,
-                    match_status="needs_review",
-                    match_confidence=confidence,
+                final_result=self._finalize_review_result(
+                    lead,
+                    actor=actor,
+                    source_provider=best_candidate.candidate.source_provider,
+                    candidate_summary=self._build_candidate_summary(
+                        best_candidate,
+                        candidate_count=len(validated_candidates),
+                        blocked_from_autofill_reason=review_reason,
+                        match_confidence=self._review_confidence(best_candidate.score, review_reason),
+                    ),
                     reason_code=REASON_NEEDS_REVIEW,
-                    skipped_reason=NEEDS_REVIEW_REASON,
-                    last_enriched_at=lead.cnpj_last_enriched_at,
+                    attempt_metadata=extraction.attempt_metadata,
+                    matched_by="website_cnpj",
+                    score=best_candidate.score,
+                    blocked_reason=review_reason,
                 ),
                 attempt_metadata=extraction.attempt_metadata,
             )
@@ -1395,14 +1470,10 @@ class CNPJEnrichmentService:
         return REASON_COMPANY_SEARCH_PROVIDER_ERROR if company_search else REASON_PROVIDER_ERROR
 
     def _is_high_confidence_match(self, candidate: _ScoredCandidate, *, top_gap: int) -> bool:
-        has_strong_identity = candidate.strong_name_match or (
-            "domain" in candidate.evidence and "phone" in candidate.evidence
-        )
         return (
             candidate.score >= HIGH_CONFIDENCE_SCORE
             and top_gap >= CLEAR_WINNER_GAP
             and candidate.supportive_signal_count >= 1
-            and has_strong_identity
             and not self._has_location_conflict(candidate)
         )
 
@@ -1425,35 +1496,161 @@ class CNPJEnrichmentService:
     def _score_to_confidence(score: int) -> float:
         return round(min(score, 100) / 100, 2)
 
+    def _review_confidence(self, score: int, blocked_reason: str | None) -> float:
+        confidence = self._score_to_confidence(score)
+        if blocked_reason:
+            return confidence
+        if confidence >= self._score_to_confidence(HIGH_CONFIDENCE_SCORE):
+            return self._score_to_confidence(HIGH_CONFIDENCE_SCORE - 1)
+        return confidence
+
     @staticmethod
     def _has_location_conflict(candidate: _ScoredCandidate) -> bool:
         return any(penalty in {"different_city", "different_state"} for penalty in candidate.penalties)
+
+    def _blocked_from_autofill_reason(
+        self,
+        candidate: _ScoredCandidate,
+        *,
+        top_gap: int,
+        require_confirmable_cnpj: bool,
+    ) -> str | None:
+        if self._has_location_conflict(candidate):
+            return BLOCKED_REASON_CITY_STATE_CONFLICT
+        if top_gap < CLEAR_WINNER_GAP:
+            return BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES
+        if candidate.supportive_signal_count < 1:
+            return BLOCKED_REASON_INSUFFICIENT_IDENTITY_SUPPORT
+        if require_confirmable_cnpj and not self._candidate_has_confirmable_cnpj(candidate):
+            metadata = candidate.candidate.metadata or {}
+            if metadata.get("preview_mode"):
+                return BLOCKED_REASON_PROVIDER_PREVIEW_MASKED
+            return BLOCKED_REASON_MISSING_FULL_CNPJ
+        return None
+
+    @staticmethod
+    def _review_reason_text(blocked_reason: str | None) -> str | None:
+        if blocked_reason == BLOCKED_REASON_MISSING_FULL_CNPJ:
+            return "O provedor nÃ£o retornou um CNPJ completo para confirmaÃ§Ã£o automÃ¡tica."
+        if blocked_reason == BLOCKED_REASON_CITY_STATE_CONFLICT:
+            return "Cidade ou UF do candidato conflita com o lead."
+        if blocked_reason == BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES:
+            return "Mais de um candidato forte foi encontrado."
+        if blocked_reason == BLOCKED_REASON_PROVIDER_PREVIEW_MASKED:
+            return "O provedor retornou dados em modo prÃ©via ou mascarados."
+        if blocked_reason == BLOCKED_REASON_INSUFFICIENT_IDENTITY_SUPPORT:
+            return "Os sinais de identidade ainda nÃ£o sÃ£o suficientes para preencher automaticamente."
+        if blocked_reason == BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD:
+            return "O candidato ficou abaixo do limite de confirmaÃ§Ã£o automÃ¡tica."
+        return None
 
     @staticmethod
     def _build_candidate_summary(
         candidate: _ScoredCandidate,
         *,
         candidate_count: int,
+        blocked_from_autofill_reason: str | None = None,
+        match_confidence: float | None = None,
     ) -> dict[str, Any]:
         return {
             "cnpj": candidate.candidate.cnpj,
             "legal_name": candidate.candidate.legal_name,
             "trade_name": candidate.candidate.trade_name,
+            "address": candidate.candidate.address,
             "city": candidate.candidate.city,
             "state": candidate.candidate.state,
             "postal_code": candidate.candidate.postal_code,
             "website": candidate.candidate.website,
             "domain": candidate.candidate.domain,
             "phones": candidate.candidate.phones,
+            "registration_status": candidate.candidate.registration_status,
+            "primary_activity": candidate.candidate.primary_activity,
+            "provider": candidate.candidate.source_provider,
             "score": candidate.score,
-            "match_confidence": CNPJEnrichmentService._score_to_confidence(candidate.score),
+            "match_confidence": (
+                match_confidence
+                if match_confidence is not None
+                else CNPJEnrichmentService._score_to_confidence(candidate.score)
+            ),
             "evidence": candidate.evidence,
             "penalties": candidate.penalties,
             "candidate_count": candidate_count,
             "source_urls": candidate.source_urls,
             "page_types": candidate.page_types,
             "matched_by": candidate.matched_by,
+            "blocked_from_autofill_reason": blocked_from_autofill_reason,
+            "review_reason": CNPJEnrichmentService._review_reason_text(blocked_from_autofill_reason),
         }
+
+    def _finalize_review_result(
+        self,
+        lead,
+        *,
+        actor: str,
+        source_provider: str | None,
+        candidate_summary: dict[str, Any],
+        reason_code: str,
+        attempt_metadata: dict[str, Any] | None,
+        matched_by: str,
+        score: int,
+        blocked_reason: str | None,
+    ) -> CNPJEnrichmentRunResult:
+        confidence = self._review_confidence(score, blocked_reason)
+        self._mark_attempt(
+            lead,
+            actor=actor,
+            match_status="needs_review",
+            match_confidence=confidence,
+            source_provider=source_provider,
+            skipped_reason=NEEDS_REVIEW_REASON,
+            error_message=None,
+            matched_by=matched_by,
+            candidate_summary=candidate_summary,
+            reason_code=reason_code,
+            attempt_metadata=attempt_metadata,
+        )
+        return CNPJEnrichmentRunResult(
+            lead_id=lead.id,
+            business_name=lead.business_name,
+            success=True,
+            cnpj=None,
+            legal_name=lead.legal_name,
+            match_status="needs_review",
+            match_confidence=confidence,
+            reason_code=reason_code,
+            skipped_reason=NEEDS_REVIEW_REASON,
+            last_enriched_at=lead.cnpj_last_enriched_at,
+        )
+
+    @staticmethod
+    def _candidate_summary_text(candidate_summary: dict[str, Any], key: str) -> str | None:
+        value = candidate_summary.get(key)
+        if not isinstance(value, str):
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @staticmethod
+    def _candidate_summary_confidence(
+        candidate_summary: dict[str, Any],
+        fallback: float | None,
+    ) -> float | None:
+        value = candidate_summary.get("match_confidence")
+        if isinstance(value, (int, float)):
+            return max(0.0, min(float(value), 1.0))
+        return fallback
+
+    @staticmethod
+    def _get_reviewable_candidate_summary(lead) -> dict[str, Any] | None:
+        if getattr(lead, "cnpj_match_status", None) != "needs_review":
+            return None
+        metadata = lead.cnpj_metadata_json or {}
+        candidate_summary = metadata.get("candidate_summary")
+        if not isinstance(candidate_summary, dict):
+            return None
+        if normalize_cnpj(candidate_summary.get("cnpj")) is None:
+            return None
+        return dict(candidate_summary)
 
     @staticmethod
     def _build_metadata(

@@ -14,6 +14,10 @@ def _seed_lead(
     whatsapp: str | None = None,
     cnpj: str | None = None,
     legal_name: str | None = None,
+    cnpj_match_status: str = "unknown",
+    cnpj_match_confidence: float | None = None,
+    cnpj_source_provider: str | None = None,
+    cnpj_metadata_json: dict | None = None,
     status: LeadStatus = LeadStatus.NEW,
     do_not_contact: bool = False,
     company_size_fit: CompanySizeFit = CompanySizeFit.UNKNOWN,
@@ -32,6 +36,10 @@ def _seed_lead(
         whatsapp=whatsapp,
         cnpj=cnpj,
         legal_name=legal_name,
+        cnpj_match_status=cnpj_match_status,
+        cnpj_match_confidence=cnpj_match_confidence,
+        cnpj_source_provider=cnpj_source_provider,
+        cnpj_metadata_json=cnpj_metadata_json or {},
         status=status,
         do_not_contact=do_not_contact,
         company_size_fit=company_size_fit.value,
@@ -157,3 +165,63 @@ def test_get_and_update_lead(client, db_session) -> None:
     assert "status_changed" in actions
     assert "note_added" in actions
     assert "lead_updated" in actions
+
+
+def test_approve_cnpj_candidate_endpoint_confirms_reviewable_candidate(client, db_session) -> None:
+    lead = _seed_lead(
+        db_session,
+        business_name="Wawa Moveis",
+        city="Guarulhos",
+        cnpj_match_status="needs_review",
+        cnpj_match_confidence=1.0,
+        cnpj_source_provider="cnpja_commercial",
+        cnpj_metadata_json={
+            "reason_code": "company_search_needs_review",
+            "candidate_summary": {
+                "cnpj": "17247065000139",
+                "legal_name": "Wawa Moveis Ltda",
+                "trade_name": "Wawa Moveis",
+                "city": "Guarulhos",
+                "state": "SP",
+                "provider": "cnpja_commercial",
+                "match_confidence": 1.0,
+                "blocked_from_autofill_reason": "ambiguous_top_candidates",
+            },
+        },
+    )
+
+    response = client.post(f"/leads/{lead.id}/approve-cnpj-candidate")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cnpj"] == "17247065000139"
+    assert payload["legal_name"] == "Wawa Moveis Ltda"
+    assert payload["cnpj_match_status"] == "matched"
+    assert payload["cnpj_match_confidence"] == 1.0
+    assert payload["cnpj_metadata_json"]["approved_manually"] is True
+    assert payload["cnpj_metadata_json"]["previous_status"] == "needs_review"
+
+
+def test_approve_cnpj_candidate_endpoint_rejects_missing_candidate(client, db_session) -> None:
+    lead = _seed_lead(
+        db_session,
+        business_name="Lead Revisao",
+        city="Sao Paulo",
+        cnpj_match_status="needs_review",
+        cnpj_match_confidence=0.78,
+        cnpj_metadata_json={
+            "reason_code": "company_search_needs_review",
+            "candidate_summary": {
+                "cnpj": "***",
+                "legal_name": "Lead Revisao Ltda",
+                "provider": "cnpja_commercial",
+                "match_confidence": 0.78,
+                "blocked_from_autofill_reason": "provider_preview_masked",
+            },
+        },
+    )
+
+    response = client.post(f"/leads/{lead.id}/approve-cnpj-candidate")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Nenhum CNPJ revisável disponível para este lead."

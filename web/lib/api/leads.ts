@@ -48,6 +48,10 @@ export function enrichLeadBatchCnpj(leadIds: number[], force = false) {
   );
 }
 
+export function approveLeadCnpjCandidate(leadId: number) {
+  return postJson<LeadDetail, Record<string, never>>(`/leads/${leadId}/approve-cnpj-candidate`, {});
+}
+
 export function assignLeadBatch(scope: LeadScopeRequest) {
   return postJson<LeadBatchAssignmentResponse, LeadScopeRequest & { overwrite: boolean; dry_run: boolean }>(
     "/leads/batch/assign",

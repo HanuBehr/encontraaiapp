@@ -30,7 +30,7 @@ from app.schemas.lead import (
     LeadSortDir,
     LeadUpdateRequest,
 )
-from app.services.cnpj_enrichment import CNPJEnrichmentService
+from app.services.cnpj_enrichment import CNPJCandidateApprovalError, CNPJEnrichmentService
 from app.services.crm import CRMService
 from app.services.enrichment import EnrichmentService
 from app.services.lead_assignment import LeadAssignmentService
@@ -175,6 +175,22 @@ def enrich_lead_batch_cnpj(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{lead_id}/approve-cnpj-candidate", response_model=LeadDetail)
+def approve_cnpj_candidate(
+    lead_id: int,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> LeadDetail:
+    service = CNPJEnrichmentService(db=db, settings=settings)
+    try:
+        lead = service.approve_cnpj_candidate(lead_id, actor="api")
+    except CNPJCandidateApprovalError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LeadDetail.model_validate(lead)
 
 
 @router.post("/batch/assign", response_model=LeadBatchAssignmentResponse)

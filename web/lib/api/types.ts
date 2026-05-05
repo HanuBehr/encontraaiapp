@@ -166,6 +166,20 @@ export type ActivityLogRead = {
   created_at: string;
 };
 
+export type LeadCnpjCandidateSummary = {
+  cnpj: string | null;
+  legal_name: string | null;
+  trade_name: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  provider: string | null;
+  match_confidence: number | null;
+  blocked_from_autofill_reason: string | null;
+  review_reason: string | null;
+};
+
 export type LeadDetail = LeadSummary & {
   address: string | null;
   postal_code: string | null;
