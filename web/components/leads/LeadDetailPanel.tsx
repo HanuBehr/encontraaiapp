@@ -8,6 +8,7 @@ import type {
   EnrichmentAttemptedPage,
   EnrichmentExtractedContact,
   LeadCnpjCandidateSummary,
+  LeadCnpjSearchDiagnostics,
   LeadContactRead,
   LeadDetail,
 } from "@/lib/api/types";
@@ -68,6 +69,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   const latestEnrichmentAudit = getLatestEnrichmentAudit(lead);
   const cnpjStatusHint = getCnpjStatusHint(lead);
   const cnpjCandidateSummary = getCnpjCandidateSummary(lead);
+  const cnpjSearchDiagnostics = getCnpjSearchDiagnostics(lead);
   const canApproveCnpjCandidate =
     lead.cnpj_match_status === "needs_review" && hasFullCnpj(cnpjCandidateSummary?.cnpj);
 
@@ -115,13 +117,25 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
               {cnpjStatusHint}
             </p>
           ) : null}
+          {cnpjSearchDiagnostics && lead.cnpj_match_status !== "matched" ? (
+            <CnpjSearchDiagnosticsPanel
+              diagnostics={cnpjSearchDiagnostics}
+              matchStatus={lead.cnpj_match_status}
+            />
+          ) : null}
           {cnpjCandidateSummary ? (
             <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">Candidato em revisão</p>
+                  <p className="text-xs font-semibold uppercase text-neutral-500">
+                    {lead.cnpj_match_status === "needs_review"
+                      ? "Candidato em revisão"
+                      : "Melhor candidato encontrado"}
+                  </p>
                   <p className="mt-1 text-sm text-neutral-700">
-                    Confira o cadastro encontrado antes de confirmar o CNPJ neste lead.
+                    {lead.cnpj_match_status === "needs_review"
+                      ? "Confira o cadastro encontrado antes de confirmar o CNPJ neste lead."
+                      : "A busca encontrou um candidato, mas ele ainda não foi confirmado automaticamente."}
                   </p>
                 </div>
                 {canApproveCnpjCandidate ? (
@@ -146,6 +160,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                   />
                   <InfoItem label="Endereço" value={cnpjCandidateSummary.address} />
                   <InfoItem label="Confiança" value={formatConfidence(cnpjCandidateSummary.match_confidence)} />
+                  <InfoItem label="Pontuação" value={formatScore(cnpjCandidateSummary.score)} />
                   <InfoItem label="Motivo da revisão" value={cnpjCandidateSummary.review_reason} />
                   <InfoItem label="Provedor" value={labelToken(cnpjCandidateSummary.provider)} />
                 </InfoGrid>
@@ -322,6 +337,42 @@ function ContactEvidence({ contacts }: { contacts: LeadContactRead[] }) {
   );
 }
 
+function CnpjSearchDiagnosticsPanel({
+  diagnostics,
+  matchStatus,
+}: {
+  diagnostics: LeadCnpjSearchDiagnostics;
+  matchStatus: LeadDetail["cnpj_match_status"];
+}) {
+  const primaryMessage = buildCnpjDiagnosticsMessage(diagnostics, matchStatus);
+  const secondaryFacts = [
+    diagnostics.searched_municipality_code
+      ? `Município IBGE: ${diagnostics.searched_municipality_code}`
+      : null,
+    diagnostics.searched_zip
+      ? `CEP usado: ${diagnostics.searched_zip}${diagnostics.extracted_zip_from_address ? " (extraído do endereço)" : ""}`
+      : null,
+    diagnostics.searched_phone_area ? `DDD usado: ${diagnostics.searched_phone_area}` : null,
+    diagnostics.search_attempts_count ? `Tentativas: ${diagnostics.search_attempts_count}` : null,
+    typeof diagnostics.candidates_returned_count === "number"
+      ? `Candidatos retornados: ${diagnostics.candidates_returned_count}`
+      : null,
+  ].filter(Boolean);
+
+  if (!primaryMessage && secondaryFacts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+      {primaryMessage ? <p>{primaryMessage}</p> : null}
+      {secondaryFacts.length ? (
+        <p className="mt-1 text-xs text-neutral-500">{secondaryFacts.join(" - ")}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function EnrichmentAudit({ audit }: { audit: EnrichmentAuditData | null }) {
   if (!audit) {
     return <p className="mt-4 text-sm text-neutral-500">Nenhum histórico de enriquecimento registrado.</p>;
@@ -441,6 +492,13 @@ function formatConfidence(value?: number | null) {
   return `${Math.round(value * 100)}%`;
 }
 
+function formatScore(value?: number | null) {
+  if (typeof value !== "number") {
+    return "Não informado";
+  }
+  return `${Math.round(value)} / 100`;
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) {
     return null;
@@ -534,11 +592,38 @@ function getCnpjCandidateSummary(lead: LeadDetail): LeadCnpjCandidateSummary | n
     state: asNullableString(candidate.state),
     postal_code: asNullableString(candidate.postal_code),
     provider: asNullableString(candidate.provider),
+    score: asNullableNumber(candidate.score),
     match_confidence: asNullableNumber(candidate.match_confidence),
     blocked_from_autofill_reason: asNullableString(candidate.blocked_from_autofill_reason),
     review_reason:
       asNullableString(candidate.review_reason) ??
       reviewReasonFromCode(asNullableString(candidate.blocked_from_autofill_reason)),
+  };
+}
+
+function getCnpjSearchDiagnostics(lead: LeadDetail): LeadCnpjSearchDiagnostics | null {
+  const metadata = asRecord(lead.cnpj_metadata_json);
+  const crawlSummary = asRecord(metadata?.crawl_summary);
+  const companySearch = asRecord(crawlSummary?.company_search);
+  if (!companySearch) {
+    return null;
+  }
+
+  return {
+    provider: asNullableString(companySearch.provider),
+    searched_names: asStringArray(companySearch.searched_names),
+    searched_city: asNullableString(companySearch.searched_city),
+    searched_state: asNullableString(companySearch.searched_state),
+    searched_municipality_code: asNullableString(companySearch.searched_municipality_code),
+    searched_zip: asNullableString(companySearch.searched_zip),
+    searched_district: asNullableString(companySearch.searched_district),
+    searched_phone_area: asNullableString(companySearch.searched_phone_area),
+    search_attempts_count: asNullableNumber(companySearch.search_attempts_count),
+    candidates_returned_count: asNullableNumber(companySearch.candidates_returned_count),
+    extracted_zip_from_address: Boolean(companySearch.extracted_zip_from_address),
+    cnpja_zero_candidates: Boolean(companySearch.cnpja_zero_candidates),
+    top_candidate_score: asNullableNumber(companySearch.top_candidate_score),
+    top_candidate_rejection_reason: asNullableString(companySearch.top_candidate_rejection_reason),
   };
 }
 
@@ -569,6 +654,33 @@ function reviewReasonFromCode(code?: string | null) {
   if (code === "below_autofill_threshold") {
     return "O candidato ficou abaixo do limite de confirmação automática.";
   }
+  if (code === "below_review_threshold") {
+    return "O melhor candidato ficou abaixo do limite mínimo para revisão.";
+  }
+  return null;
+}
+
+function buildCnpjDiagnosticsMessage(
+  diagnostics: LeadCnpjSearchDiagnostics,
+  matchStatus: LeadDetail["cnpj_match_status"],
+) {
+  const providerLabel = diagnostics.provider === "cnpja_commercial" ? "CNPJá" : "A busca cadastral";
+  const searchedNames = diagnostics.searched_names.filter(Boolean).slice(0, 4).join(", ");
+
+  if (diagnostics.cnpja_zero_candidates) {
+    return searchedNames
+      ? `${providerLabel} retornou 0 candidatos para: ${searchedNames}.`
+      : `${providerLabel} retornou 0 candidatos para esta empresa.`;
+  }
+
+  if (matchStatus === "not_found" && (diagnostics.candidates_returned_count ?? 0) > 0) {
+    return `${providerLabel} retornou candidatos, mas o melhor ficou com baixa confiança.`;
+  }
+
+  if (matchStatus === "needs_review" && (diagnostics.candidates_returned_count ?? 0) > 0) {
+    return `${providerLabel} encontrou um candidato promissor, mas ele ainda precisa revisão manual.`;
+  }
+
   return null;
 }
 
@@ -653,6 +765,13 @@ function parseStringArray(value: unknown): string[] {
     return [];
   }
   return value.filter((item): item is string => typeof item === "string");
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

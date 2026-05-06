@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     cnpja_company_search_limit: int = Field(default=10, alias="CNPJA_COMPANY_SEARCH_LIMIT")
     cnpja_name_variant_limit: int = Field(default=4, alias="CNPJA_NAME_VARIANT_LIMIT")
     cnpja_max_search_attempts_per_lead: int = Field(
-        default=1,
+        default=2,
         alias="CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD",
     )
     cnpja_rate_limit_per_minute: int = Field(default=10, alias="CNPJA_RATE_LIMIT_PER_MINUTE")

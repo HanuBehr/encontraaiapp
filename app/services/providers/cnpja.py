@@ -20,6 +20,7 @@ MISSING_CNPJA_API_KEY_BATCH_MESSAGE = "CNPJA_API_KEY must be configured to use b
 COMPANY_SEARCH_NOT_CONFIGURED_MESSAGE = "CNPJA company search is not configured for lead matching."
 _NAME_SPLIT_RE = re.compile(r"[|/\-,()]+")
 _WHITESPACE_RE = re.compile(r"\s+")
+_ZIP_PATTERN = re.compile(r"(?<!\d)(\d{5})-?(\d{3})(?!\d)")
 _SEARCH_CONNECTOR_WORDS = {"de", "da", "do", "das", "dos", "e"}
 _SEARCH_LIGHT_NOISE_PHRASES = (
     "banho e tosa",
@@ -33,6 +34,7 @@ _SEARCH_LIGHT_NOISE_PHRASES = (
 )
 _SEARCH_HEAVY_NOISE_PHRASES = (
     "pet shop",
+    "petshop",
     "loja",
     "comercio",
     "comercio varejista",
@@ -44,6 +46,45 @@ _SEARCH_HEAVY_NOISE_PHRASES = (
     "centro automotivo",
     "clinica",
     "restaurante",
+)
+_ADDRESS_PREFIX_TOKENS = {"av", "avenida", "rua", "rod", "rodovia", "estrada", "travessa", "alameda"}
+_GENERIC_BRAND_PREFIX_TOKENS = {"agro", "casa", "loja"}
+_KNOWN_CHAIN_BRANDS = (
+    "cobasi",
+    "petz",
+    "leroy merlin",
+    "madeiramadeira",
+    "telhanorte",
+    "c c",
+    "tok stok",
+    "petlove",
+)
+_COMMON_CITY_PHRASES = (
+    "londrina",
+    "curitiba",
+    "maringa",
+    "ponta grossa",
+    "cascavel",
+    "foz do iguacu",
+    "joinville",
+    "florianopolis",
+    "porto alegre",
+    "caxias do sul",
+    "sao paulo",
+    "campinas",
+    "sorocaba",
+    "jundiai",
+    "santos",
+    "sao jose dos campos",
+    "mogi das cruzes",
+    "guarulhos",
+    "osasco",
+    "barueri",
+    "embu das artes",
+    "ribeirao preto",
+    "belo horizonte",
+    "rio de janeiro",
+    "santana de parnaiba",
 )
 
 
@@ -265,7 +306,7 @@ class CNPJAProvider:
         address: str | None = None,
         neighborhood: str | None = None,
     ) -> list[CNPJLookupResult]:
-        del website, address
+        del website
 
         if not self.settings.cnpja_company_search_configured:
             return []
@@ -282,30 +323,45 @@ class CNPJAProvider:
         if not base_url or not self.settings.cnpja_api_key:
             return []
 
-        search_attempts = max(1, self.settings.cnpja_max_search_attempts_per_lead)
-        names_clauses = [",".join(search_variants)]
-        if search_attempts > 1 and search_variants:
-            names_clauses.append(search_variants[0])
-        names_clauses = names_clauses[:search_attempts]
+        effective_postal_code, extracted_zip_from_address = _resolve_search_postal_code(
+            postal_code,
+            address,
+        )
+        normalized_state = normalize_brazilian_state(state)
+        municipality_code = lookup_ibge_municipality_code(city, normalized_state)
+        phone_area = _extract_area_code(phone) or _extract_area_code(whatsapp)
+        district = _first_text(neighborhood)
+        search_attempts = max(1, min(self.settings.cnpja_max_search_attempts_per_lead, 2))
+        names_clauses = self._build_commercial_search_name_clauses(
+            search_variants,
+            municipality_code=municipality_code,
+            postal_code=effective_postal_code,
+            phone_area=phone_area,
+            max_attempts=search_attempts,
+        )
+        if not names_clauses:
+            return []
 
         search_attempt_metadata: list[dict[str, Any]] = []
         matches: list[CNPJLookupResult] = []
         shared_metadata = self._build_commercial_search_shared_metadata(
             search_variants=search_variants,
             city=city,
-            state=state,
-            postal_code=postal_code,
+            state=normalized_state,
+            postal_code=effective_postal_code,
             phone=phone,
             whatsapp=whatsapp,
             neighborhood=neighborhood,
+            municipality_code=municipality_code,
+            extracted_zip_from_address=extracted_zip_from_address,
         )
 
         for names_clause in names_clauses:
             params = self._build_commercial_search_params(
                 names_in=names_clause,
                 city=city,
-                state=state,
-                postal_code=postal_code,
+                state=normalized_state,
+                postal_code=effective_postal_code,
                 phone=phone,
                 whatsapp=whatsapp,
                 neighborhood=neighborhood,
@@ -327,6 +383,7 @@ class CNPJAProvider:
                     "candidate_count": len(raw_candidates),
                     "limit": params.get("limit"),
                     "state": params.get("address.state.in"),
+                    "municipality_code": params.get("address.municipality.in"),
                     "postal_code": params.get("address.zip.in"),
                     "district": params.get("address.district.in"),
                     "phone_area": params.get("phones.area.in"),
@@ -350,7 +407,9 @@ class CNPJAProvider:
                 self.last_company_search_metadata = {
                     **shared_metadata,
                     "search_attempts": search_attempt_metadata,
+                    "search_attempts_count": len(search_attempt_metadata),
                     "cnpja_zero_candidates": False,
+                    "candidates_returned_count": len(matches),
                     "returned_candidates": len(matches),
                 }
                 return matches
@@ -358,7 +417,9 @@ class CNPJAProvider:
         self.last_company_search_metadata = {
             **shared_metadata,
             "search_attempts": search_attempt_metadata,
+            "search_attempts_count": len(search_attempt_metadata),
             "cnpja_zero_candidates": True,
+            "candidates_returned_count": 0,
             "returned_candidates": 0,
         }
         return []
@@ -622,20 +683,45 @@ class CNPJAProvider:
         phone: str | None,
         whatsapp: str | None,
         neighborhood: str | None,
+        municipality_code: str | None = None,
+        extracted_zip_from_address: bool = False,
     ) -> dict[str, Any]:
-        normalized_state = normalize_brazilian_state(state)
-        municipality_code = lookup_ibge_municipality_code(city, normalized_state)
         return {
             "provider": "cnpja_commercial",
             "searched_city": _first_text(city),
             "searched_names": search_variants,
-            "searched_state": normalized_state,
+            "searched_state": state,
             "searched_municipality_code": municipality_code,
             "municipality_mapping_found": municipality_code is not None,
             "searched_zip": _normalize_postal_code(postal_code),
             "searched_district": _first_text(neighborhood),
             "searched_phone_area": _extract_area_code(phone) or _extract_area_code(whatsapp),
+            "extracted_zip_from_address": extracted_zip_from_address,
         }
+
+    def _build_commercial_search_name_clauses(
+        self,
+        search_variants: list[str],
+        *,
+        municipality_code: str | None,
+        postal_code: str | None,
+        phone_area: str | None,
+        max_attempts: int,
+    ) -> list[str]:
+        if not search_variants:
+            return []
+
+        clauses = [",".join(search_variants)]
+        if max_attempts < 2:
+            return clauses
+
+        if not (municipality_code or postal_code or phone_area):
+            return clauses
+
+        fallback_variant = _select_company_search_fallback_variant(search_variants)
+        if fallback_variant and fallback_variant not in clauses:
+            clauses.append(fallback_variant)
+        return clauses[:max_attempts]
 
     def _normalize_search_limit(self) -> int:
         configured = self.settings.cnpja_company_search_limit
@@ -696,6 +782,25 @@ def _normalize_postal_code(value: str | None) -> str | None:
     return digits or None
 
 
+def _resolve_search_postal_code(postal_code: str | None, address: str | None) -> tuple[str | None, bool]:
+    normalized_postal_code = _normalize_postal_code(postal_code)
+    if normalized_postal_code:
+        return normalized_postal_code, False
+    extracted_from_address = _extract_postal_code_from_text(address)
+    if extracted_from_address:
+        return extracted_from_address, True
+    return None, False
+
+
+def _extract_postal_code_from_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    match = _ZIP_PATTERN.search(value)
+    if not match:
+        return None
+    return f"{match.group(1)}{match.group(2)}"
+
+
 def _extract_area_code(value: str | None) -> str | None:
     if not value:
         return None
@@ -733,6 +838,8 @@ def build_company_search_name_variants(
         normalized_candidate = normalize_text(candidate)
         if normalized_candidate is None:
             return
+        if _looks_like_address_only_variant(normalized_candidate):
+            return
         formatted_candidate = _format_company_search_variant(normalized_candidate)
         if not _is_meaningful_company_search_variant(normalized_candidate):
             return
@@ -742,21 +849,32 @@ def build_company_search_name_variants(
         variants.append(formatted_candidate)
 
     if base_full_variant:
+        register(_strip_address_suffix(base_full_variant))
         register(base_full_variant)
+        register(_strip_city_tokens(base_full_variant))
         register(_trim_trailing_location_phrase(base_full_variant))
         register(_extract_trailing_location_variant(base_full_variant))
+        register(_drop_generic_prefix_variant(_strip_address_suffix(base_full_variant)))
+        for candidate in _extract_known_brand_variants(base_full_variant):
+            register(candidate)
 
     for variant in chunk_variants:
         normalized_variant = normalize_text(variant)
         if normalized_variant is None:
             continue
         register(normalized_variant)
+        register(_strip_address_suffix(normalized_variant))
         register(
             _strip_company_search_noise(
                 normalized_variant,
                 phrases=set(_SEARCH_LIGHT_NOISE_PHRASES) | extra_noise_phrases,
             )
         )
+        heavy_noise_preserved = _strip_company_search_noise_preserve_connectors(
+            _strip_address_suffix(normalized_variant),
+            phrases=set(_SEARCH_HEAVY_NOISE_PHRASES) | extra_noise_phrases,
+        )
+        register(heavy_noise_preserved)
         register(
             _strip_company_search_noise(
                 normalized_variant,
@@ -765,8 +883,22 @@ def build_company_search_name_variants(
                 | extra_noise_phrases,
             )
         )
+        register(_strip_city_tokens(normalized_variant))
         register(_trim_trailing_location_phrase(normalized_variant))
         register(_extract_trailing_location_variant(normalized_variant))
+        register(_drop_generic_prefix_variant(_strip_address_suffix(normalized_variant)))
+        register(_drop_generic_prefix_variant(heavy_noise_preserved))
+        register(
+            _drop_connector_words_variant(
+                _strip_company_search_noise(
+                    _strip_city_tokens(normalized_variant),
+                    phrases=set(_SEARCH_HEAVY_NOISE_PHRASES) | extra_noise_phrases,
+                )
+            )
+        )
+        register(_extract_last_brand_token_variant(normalized_variant))
+        for candidate in _extract_known_brand_variants(normalized_variant):
+            register(candidate)
 
     if max_variants < 1:
         return []
@@ -803,6 +935,37 @@ def _strip_company_search_noise(value: str | None, *, phrases: set[str] | tuple[
     return " ".join(tokens) or None
 
 
+def _strip_company_search_noise_preserve_connectors(
+    value: str | None,
+    *,
+    phrases: set[str] | tuple[str, ...],
+) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    candidate = f" {normalized} "
+    removed_phrase = False
+    for phrase in phrases:
+        normalized_phrase = normalize_text(phrase)
+        if normalized_phrase and f" {normalized_phrase} " in candidate:
+            candidate = candidate.replace(f" {normalized_phrase} ", " ")
+            removed_phrase = True
+    if not removed_phrase:
+        return normalized
+    collapsed = _WHITESPACE_RE.sub(" ", candidate).strip()
+    return collapsed or None
+
+
+def _drop_connector_words_variant(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    tokens = [token for token in normalized.split() if token not in _SEARCH_CONNECTOR_WORDS]
+    if len(tokens) < 2:
+        return normalized
+    return " ".join(tokens)
+
+
 def _trim_trailing_location_phrase(value: str | None) -> str | None:
     normalized = normalize_text(value)
     if normalized is None:
@@ -812,6 +975,18 @@ def _trim_trailing_location_phrase(value: str | None) -> str | None:
         return normalized
     if tokens[-2] in {"de", "da", "do", "das", "dos"} and len(tokens[-1]) >= 4:
         return " ".join(tokens[:-2]) or None
+    return normalized
+
+
+def _strip_address_suffix(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    tokens = normalized.split()
+    for index, token in enumerate(tokens):
+        if token in _ADDRESS_PREFIX_TOKENS and index > 0:
+            trimmed = " ".join(tokens[:index]).strip()
+            return trimmed or normalized
     return normalized
 
 
@@ -827,6 +1002,102 @@ def _extract_trailing_location_variant(value: str | None) -> str | None:
     return None
 
 
+def _strip_city_tokens(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+
+    result = normalized
+    for city_phrase in _COMMON_CITY_PHRASES:
+        city_tokens = city_phrase.split()
+        tokens = result.split()
+        if len(tokens) <= len(city_tokens):
+            continue
+        if tokens[-len(city_tokens):] == city_tokens:
+            result = " ".join(tokens[:-len(city_tokens)]) or result
+            break
+        if len(tokens) > len(city_tokens) and tokens[-len(city_tokens) - 1 : -1] == city_tokens:
+            result = " ".join(tokens[:-len(city_tokens)]) or result
+            break
+    return result
+
+
+def _extract_last_brand_token_variant(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    tokens = [token for token in normalized.split() if token not in _SEARCH_CONNECTOR_WORDS]
+    if len(tokens) < 2:
+        return None
+    if tokens[0] not in _GENERIC_BRAND_PREFIX_TOKENS:
+        return None
+    if tokens[-1] in _ADDRESS_PREFIX_TOKENS:
+        return None
+    return tokens[-1]
+
+
+def _drop_generic_prefix_variant(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    tokens = normalized.split()
+    if len(tokens) < 2:
+        return None
+    if tokens[0] not in _GENERIC_BRAND_PREFIX_TOKENS:
+        return None
+    if len(tokens) <= 3 and tokens[1] in _SEARCH_CONNECTOR_WORDS:
+        return None
+    remainder = " ".join(tokens[1:]).strip()
+    return remainder or None
+
+
+def _extract_known_brand_variants(value: str | None) -> list[str]:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return []
+
+    variants: list[str] = []
+    for brand in _KNOWN_CHAIN_BRANDS:
+        brand_tokens = brand.split()
+        tokens = normalized.split()
+        for index in range(0, len(tokens) - len(brand_tokens) + 1):
+            if tokens[index : index + len(brand_tokens)] != brand_tokens:
+                continue
+            brand_phrase = " ".join(brand_tokens)
+            variants.append(brand_phrase)
+
+            suffix_tokens = tokens[index + len(brand_tokens) :]
+            cleaned_suffix = [
+                token
+                for token in suffix_tokens
+                if token not in _SEARCH_CONNECTOR_WORDS and token not in _ADDRESS_PREFIX_TOKENS
+            ]
+            cleaned_suffix = [token for token in cleaned_suffix if token not in _COMMON_CITY_PHRASES]
+
+            if suffix_tokens:
+                first_suffix = suffix_tokens[0]
+                if first_suffix not in _SEARCH_CONNECTOR_WORDS and first_suffix not in _ADDRESS_PREFIX_TOKENS:
+                    variants.append(f"{brand_phrase} {first_suffix}")
+                if first_suffix in _COMMON_CITY_PHRASES and len(suffix_tokens) > 1:
+                    next_suffix = suffix_tokens[1]
+                    if next_suffix not in _SEARCH_CONNECTOR_WORDS and next_suffix not in _ADDRESS_PREFIX_TOKENS:
+                        variants.append(f"{brand_phrase} {next_suffix}")
+            if cleaned_suffix:
+                variants.append(f"{brand_phrase} {cleaned_suffix[0]}")
+            break
+    return variants
+
+
+def _looks_like_address_only_variant(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return False
+    tokens = normalized.split()
+    if not tokens:
+        return False
+    return tokens[0] in _ADDRESS_PREFIX_TOKENS
+
+
 def _is_meaningful_company_search_variant(value: str | None) -> bool:
     normalized = normalize_text(value)
     if normalized is None or len(normalized) < 3:
@@ -840,6 +1111,36 @@ def _is_meaningful_company_search_variant(value: str | None) -> bool:
         for token in normalize_text(phrase).split()
     }
     return any(token not in generic_terms for token in tokens)
+
+
+def _select_company_search_fallback_variant(search_variants: list[str]) -> str | None:
+    if len(search_variants) < 2:
+        return None
+    candidates: list[tuple[str, str, int]] = []
+    first_variant = normalize_text(search_variants[0])
+    first_token = first_variant.split()[0] if first_variant else None
+
+    for candidate in search_variants[1:]:
+        normalized = normalize_text(candidate)
+        if normalized is None:
+            continue
+        token_count = len(normalized.split())
+        if 1 <= token_count <= 3 and _is_meaningful_company_search_variant(normalized):
+            candidates.append((candidate, normalized, token_count))
+
+    if not candidates:
+        return search_variants[1]
+
+    if first_token and first_token not in _GENERIC_BRAND_PREFIX_TOKENS:
+        preferred = [
+            item
+            for item in candidates
+            if item[1].split()[0] == first_token and item[2] <= 2
+        ]
+        if preferred:
+            return min(preferred, key=lambda item: (item[2], len(item[1])))[0]
+
+    return min(candidates, key=lambda item: (item[2], len(item[1])))[0]
 
 
 def _format_company_search_variant(value: str) -> str:

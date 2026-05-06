@@ -175,9 +175,27 @@ export type LeadCnpjCandidateSummary = {
   state: string | null;
   postal_code: string | null;
   provider: string | null;
+  score: number | null;
   match_confidence: number | null;
   blocked_from_autofill_reason: string | null;
   review_reason: string | null;
+};
+
+export type LeadCnpjSearchDiagnostics = {
+  provider: string | null;
+  searched_names: string[];
+  searched_city: string | null;
+  searched_state: string | null;
+  searched_municipality_code: string | null;
+  searched_zip: string | null;
+  searched_district: string | null;
+  searched_phone_area: string | null;
+  search_attempts_count: number | null;
+  candidates_returned_count: number | null;
+  extracted_zip_from_address: boolean;
+  cnpja_zero_candidates: boolean;
+  top_candidate_score: number | null;
+  top_candidate_rejection_reason: string | null;
 };
 
 export type LeadDetail = LeadSummary & {

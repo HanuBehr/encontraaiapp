@@ -590,6 +590,16 @@ class CNPJEnrichmentService:
                 else self._score_to_confidence(best_candidate.score)
             ),
         )
+        merged_attempt_metadata = self._attach_company_search_candidate_diagnostics(
+            merged_attempt_metadata,
+            best_candidate=best_candidate,
+            candidate_summary=candidate_summary,
+            candidates_returned_count=len(scored_candidates),
+            rejection_reason=self._top_candidate_rejection_reason(
+                best_candidate,
+                blocked_reason=blocked_reason,
+            ),
+        )
 
         if self._is_high_confidence_match(best_candidate, top_gap=top_gap) and blocked_reason is None:
             return self._apply_lookup_result(
@@ -927,6 +937,38 @@ class CNPJEnrichmentService:
         if provider_attempt_metadata:
             merged["company_search"] = provider_attempt_metadata
         return merged
+
+    @staticmethod
+    def _attach_company_search_candidate_diagnostics(
+        attempt_metadata: dict[str, Any] | None,
+        *,
+        best_candidate: _ScoredCandidate,
+        candidate_summary: dict[str, Any],
+        candidates_returned_count: int,
+        rejection_reason: str | None,
+    ) -> dict[str, Any]:
+        merged = dict(attempt_metadata or {})
+        company_search_metadata = dict(merged.get("company_search") or {})
+        company_search_metadata["candidates_returned_count"] = candidates_returned_count
+        company_search_metadata["top_candidate_score"] = best_candidate.score
+        company_search_metadata["top_candidate_rejection_reason"] = rejection_reason
+        company_search_metadata["top_candidate_summary"] = candidate_summary
+        merged["company_search"] = company_search_metadata
+        return merged
+
+    @staticmethod
+    def _top_candidate_rejection_reason(
+        candidate: _ScoredCandidate,
+        *,
+        blocked_reason: str | None,
+    ) -> str | None:
+        if blocked_reason:
+            return blocked_reason
+        if candidate.score < MEDIUM_CONFIDENCE_SCORE:
+            return "below_review_threshold"
+        if candidate.score < HIGH_CONFIDENCE_SCORE:
+            return BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD
+        return None
 
     @staticmethod
     def _is_cnpja_zero_candidates(provider_attempt_metadata: dict[str, Any] | None) -> bool:

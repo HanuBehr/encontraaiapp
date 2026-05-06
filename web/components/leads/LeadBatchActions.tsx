@@ -658,6 +658,9 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
   }
 
   const paidSearchParts = [
+    Math.max(0, summary.matched_count - summary.company_search_matched_count)
+      ? `${Math.max(0, summary.matched_count - summary.company_search_matched_count).toLocaleString()} confirmados por CNPJ já informado ou site`
+      : null,
     summary.company_search_matched_count
       ? `${summary.company_search_matched_count.toLocaleString()} encontrados via busca cadastral`
       : null,
