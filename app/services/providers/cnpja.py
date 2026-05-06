@@ -86,6 +86,43 @@ _COMMON_CITY_PHRASES = (
     "rio de janeiro",
     "santana de parnaiba",
 )
+_LEGAL_COMPANY_TERMS = {
+    "ltda",
+    "me",
+    "mei",
+    "eireli",
+    "comercio",
+    "servicos",
+    "industria",
+    "materiais",
+    "construcao",
+}
+_GENERIC_ONLY_VARIANT_TERMS = {
+    "pet",
+    "petshop",
+    "pet shop",
+    "loja",
+    "servicos",
+    "assistencia",
+    "manutencao",
+    "moveis",
+    "materiais",
+    "construcao",
+    "celular",
+    "eletronica",
+}
+_EMAIL_DOMAIN_FILTER_BLOCKLIST = {
+    "facebook.com",
+    "instagram.com",
+    "google.com",
+    "gmail.com",
+    "googleusercontent.com",
+    "whatsapp.com",
+    "wa.me",
+    "linktr.ee",
+    "linktree.ee",
+    "mercadolivre.com.br",
+}
 
 
 class CNPJAProviderError(RuntimeError):
@@ -117,6 +154,25 @@ class CNPJLookupResult:
     source_provider: str
     provider_record_id: str | None
     metadata: dict[str, Any]
+
+
+@dataclass(slots=True)
+class CompanySearchVariantGroups:
+    alias_variants: list[str]
+    names_variants: list[str]
+    legal_name_variants: list[str]
+
+
+@dataclass(slots=True)
+class CommercialSearchAttempt:
+    mode: str
+    label: str
+    query_param: str
+    variants: list[str]
+    include_phone_area: bool = False
+    include_postal_code: bool = False
+    include_district: bool = False
+    include_email_domain: bool = False
 
 
 def normalize_cnpj(cnpj: str | None) -> str | None:
@@ -306,17 +362,19 @@ class CNPJAProvider:
         address: str | None = None,
         neighborhood: str | None = None,
     ) -> list[CNPJLookupResult]:
-        del website
-
         if not self.settings.cnpja_company_search_configured:
             return []
 
-        search_variants = build_company_search_name_variants(
+        variant_groups = build_company_search_name_variant_groups(
             business_name,
             category=category,
             max_variants=self.settings.cnpja_name_variant_limit,
         )
-        if not search_variants:
+        if (
+            not variant_groups.alias_variants
+            and not variant_groups.names_variants
+            and not variant_groups.legal_name_variants
+        ):
             return []
 
         base_url = (self.settings.cnpja_api_base_url or "").rstrip("/")
@@ -331,21 +389,30 @@ class CNPJAProvider:
         municipality_code = lookup_ibge_municipality_code(city, normalized_state)
         phone_area = _extract_area_code(phone) or _extract_area_code(whatsapp)
         district = _first_text(neighborhood)
-        search_attempts = max(1, min(self.settings.cnpja_max_search_attempts_per_lead, 2))
-        names_clauses = self._build_commercial_search_name_clauses(
-            search_variants,
+        email_domain = _resolve_company_email_domain_filter(
+            website,
+            enabled=self.settings.cnpja_use_email_domain_filter,
+        )
+        search_attempts = max(1, min(self.settings.cnpja_max_search_attempts_per_lead, 4))
+        search_plan = self._build_commercial_search_attempts(
+            business_name=business_name,
+            variant_groups=variant_groups,
+            state_available=normalized_state is not None,
             municipality_code=municipality_code,
-            postal_code=effective_postal_code,
             phone_area=phone_area,
+            postal_code=effective_postal_code,
+            district=district,
+            email_domain=email_domain,
             max_attempts=search_attempts,
         )
-        if not names_clauses:
+        if not search_plan:
             return []
 
         search_attempt_metadata: list[dict[str, Any]] = []
         matches: list[CNPJLookupResult] = []
+        seen_cnpjs: set[str] = set()
         shared_metadata = self._build_commercial_search_shared_metadata(
-            search_variants=search_variants,
+            variant_groups=variant_groups,
             city=city,
             state=normalized_state,
             postal_code=effective_postal_code,
@@ -354,17 +421,18 @@ class CNPJAProvider:
             neighborhood=neighborhood,
             municipality_code=municipality_code,
             extracted_zip_from_address=extracted_zip_from_address,
+            email_domain=email_domain,
         )
 
-        for names_clause in names_clauses:
+        for attempt_index, attempt in enumerate(search_plan, start=1):
             params = self._build_commercial_search_params(
-                names_in=names_clause,
-                city=city,
+                attempt=attempt,
                 state=normalized_state,
+                municipality_code=municipality_code,
                 postal_code=effective_postal_code,
-                phone=phone,
-                whatsapp=whatsapp,
-                neighborhood=neighborhood,
+                phone_area=phone_area,
+                district=district,
+                email_domain=email_domain,
             )
             response = self.http.get(
                 f"{base_url}/office",
@@ -378,30 +446,42 @@ class CNPJAProvider:
             payload = self._json_value_or_raise(response)
             raw_candidates = self._extract_search_candidates(payload)
             search_attempt_metadata.append(
-                {
-                    "names_in": names_clause,
-                    "candidate_count": len(raw_candidates),
-                    "limit": params.get("limit"),
-                    "state": params.get("address.state.in"),
-                    "municipality_code": params.get("address.municipality.in"),
-                    "postal_code": params.get("address.zip.in"),
-                    "district": params.get("address.district.in"),
-                    "phone_area": params.get("phones.area.in"),
-                }
+                self._build_commercial_attempt_metadata(
+                    attempt=attempt,
+                    params=params,
+                    candidate_count=len(raw_candidates),
+                    attempt_index=attempt_index,
+                )
             )
 
             for candidate_payload in raw_candidates:
                 try:
-                    matches.append(
-                        self._normalize_lookup_payload(
-                            candidate_payload,
-                            source_provider="cnpja_commercial",
-                            requested_cnpj="",
-                            strategy=None,
-                        )
+                    normalized_candidate = self._normalize_lookup_payload(
+                        candidate_payload,
+                        source_provider="cnpja_commercial",
+                        requested_cnpj="",
+                        strategy=None,
                     )
                 except CNPJANotFoundError:
                     continue
+                if normalized_candidate.cnpj in seen_cnpjs:
+                    continue
+                seen_cnpjs.add(normalized_candidate.cnpj)
+                normalized_candidate.metadata.update(
+                    {
+                        "company_search_query_mode": attempt.mode,
+                        "company_search_query_mode_label": attempt.label,
+                        "company_search_query_param": attempt.query_param,
+                        "company_search_attempt": attempt_index,
+                        "company_search_terms": attempt.variants,
+                        "company_search_filters": {
+                            key: value
+                            for key, value in params.items()
+                            if key != attempt.query_param
+                        },
+                    }
+                )
+                matches.append(normalized_candidate)
 
             if matches:
                 self.last_company_search_metadata = {
@@ -411,6 +491,8 @@ class CNPJAProvider:
                     "cnpja_zero_candidates": False,
                     "candidates_returned_count": len(matches),
                     "returned_candidates": len(matches),
+                    "matched_attempt_mode": attempt.mode,
+                    "matched_attempt_label": attempt.label,
                 }
                 return matches
 
@@ -597,6 +679,12 @@ class CNPJAProvider:
             "registration_status": registration_status,
             "trade_name": trade_name,
             "primary_activity": primary_activity,
+            "main_activity_id": _normalize_cnae_id(
+                _first_text(
+                    main_activity.get("id"),
+                    main_activity.get("code"),
+                )
+            ),
             "city": city,
             "state": state,
             "postal_code": postal_code,
@@ -637,17 +725,17 @@ class CNPJAProvider:
     def _build_commercial_search_params(
         self,
         *,
-        names_in: str,
-        city: str | None,
+        attempt: CommercialSearchAttempt,
         state: str | None,
+        municipality_code: str | None,
         postal_code: str | None,
-        phone: str | None,
-        whatsapp: str | None,
-        neighborhood: str | None,
+        phone_area: str | None,
+        district: str | None,
+        email_domain: str | None,
     ) -> dict[str, str]:
         params: dict[str, str] = {
             "limit": str(self._normalize_search_limit()),
-            "names.in": names_in,
+            attempt.query_param: ",".join(attempt.variants),
             "status.id.in": "2",
         }
 
@@ -655,28 +743,31 @@ class CNPJAProvider:
         if normalized_state:
             params["address.state.in"] = normalized_state
 
-        municipality_code = lookup_ibge_municipality_code(city, normalized_state)
         if municipality_code:
             params["address.municipality.in"] = municipality_code
 
-        normalized_postal_code = _normalize_postal_code(postal_code)
-        if normalized_postal_code:
-            params["address.zip.in"] = normalized_postal_code
+        if attempt.include_postal_code:
+            normalized_postal_code = _normalize_postal_code(postal_code)
+            if normalized_postal_code:
+                params["address.zip.in"] = normalized_postal_code
 
-        district = _first_text(neighborhood)
-        if district:
-            params["address.district.in"] = district
+        if attempt.include_district:
+            normalized_district = _first_text(district)
+            if normalized_district:
+                params["address.district.in"] = normalized_district
 
-        area_code = _extract_area_code(phone) or _extract_area_code(whatsapp)
-        if area_code:
-            params["phones.area.in"] = area_code
+        if attempt.include_phone_area and phone_area:
+            params["phones.area.in"] = phone_area
+
+        if attempt.include_email_domain and email_domain:
+            params["emails.domain.in"] = email_domain
 
         return params
 
     def _build_commercial_search_shared_metadata(
         self,
         *,
-        search_variants: list[str],
+        variant_groups: CompanySearchVariantGroups,
         city: str | None,
         state: str | None,
         postal_code: str | None,
@@ -685,43 +776,131 @@ class CNPJAProvider:
         neighborhood: str | None,
         municipality_code: str | None = None,
         extracted_zip_from_address: bool = False,
+        email_domain: str | None = None,
     ) -> dict[str, Any]:
         return {
             "provider": "cnpja_commercial",
             "searched_city": _first_text(city),
-            "searched_names": search_variants,
+            "searched_alias_names": variant_groups.alias_variants,
+            "searched_names": variant_groups.names_variants,
+            "searched_legal_names": variant_groups.legal_name_variants,
             "searched_state": state,
             "searched_municipality_code": municipality_code,
             "municipality_mapping_found": municipality_code is not None,
             "searched_zip": _normalize_postal_code(postal_code),
             "searched_district": _first_text(neighborhood),
             "searched_phone_area": _extract_area_code(phone) or _extract_area_code(whatsapp),
+            "searched_email_domain": email_domain,
             "extracted_zip_from_address": extracted_zip_from_address,
         }
 
-    def _build_commercial_search_name_clauses(
+    def _build_commercial_search_attempts(
         self,
-        search_variants: list[str],
         *,
+        business_name: str,
+        variant_groups: CompanySearchVariantGroups,
+        state_available: bool,
         municipality_code: str | None,
-        postal_code: str | None,
         phone_area: str | None,
+        postal_code: str | None,
+        district: str | None,
+        email_domain: str | None,
         max_attempts: int,
-    ) -> list[str]:
-        if not search_variants:
-            return []
+    ) -> list[CommercialSearchAttempt]:
+        attempts: list[CommercialSearchAttempt] = []
 
-        clauses = [",".join(search_variants)]
-        if max_attempts < 2:
-            return clauses
+        if variant_groups.alias_variants:
+            attempts.append(
+                CommercialSearchAttempt(
+                    mode="alias",
+                    label="Nome fantasia",
+                    query_param="alias.in",
+                    variants=variant_groups.alias_variants,
+                )
+            )
 
-        if not (municipality_code or postal_code or phone_area):
-            return clauses
+        if variant_groups.names_variants and (state_available or municipality_code or phone_area or postal_code):
+            attempts.append(
+                CommercialSearchAttempt(
+                    mode="names",
+                    label="Razao/nome fantasia",
+                    query_param="names.in",
+                    variants=variant_groups.names_variants,
+                    include_phone_area=phone_area is not None,
+                )
+            )
 
-        fallback_variant = _select_company_search_fallback_variant(search_variants)
-        if fallback_variant and fallback_variant not in clauses:
-            clauses.append(fallback_variant)
-        return clauses[:max_attempts]
+        if (
+            variant_groups.legal_name_variants
+            and _looks_legal_company_name(business_name)
+            and (state_available or municipality_code or postal_code)
+        ):
+            attempts.append(
+                CommercialSearchAttempt(
+                    mode="company_name",
+                    label="Razao social",
+                    query_param="company.name.in",
+                    variants=variant_groups.legal_name_variants,
+                )
+            )
+
+        strict_variants = (
+            variant_groups.alias_variants[:2]
+            or variant_groups.names_variants[:2]
+            or variant_groups.legal_name_variants[:2]
+        )
+        has_strict_filters = any((postal_code, district, phone_area, email_domain))
+        if strict_variants and has_strict_filters and (municipality_code or postal_code or phone_area):
+            attempts.append(
+                CommercialSearchAttempt(
+                    mode="address",
+                    label="Busca com endereco",
+                    query_param="alias.in" if variant_groups.alias_variants else "names.in",
+                    variants=strict_variants,
+                    include_phone_area=phone_area is not None,
+                    include_postal_code=postal_code is not None,
+                    include_district=district is not None,
+                    include_email_domain=email_domain is not None,
+                )
+            )
+
+        deduped_attempts: list[CommercialSearchAttempt] = []
+        seen_attempts: set[tuple[str, str]] = set()
+        for attempt in attempts:
+            if not attempt.variants:
+                continue
+            key = (attempt.query_param, ",".join(attempt.variants))
+            if key in seen_attempts:
+                continue
+            seen_attempts.add(key)
+            deduped_attempts.append(attempt)
+            if len(deduped_attempts) >= max_attempts:
+                break
+        return deduped_attempts
+
+    def _build_commercial_attempt_metadata(
+        self,
+        *,
+        attempt: CommercialSearchAttempt,
+        params: dict[str, str],
+        candidate_count: int,
+        attempt_index: int,
+    ) -> dict[str, Any]:
+        return {
+            "attempt_index": attempt_index,
+            "query_mode": attempt.mode,
+            "query_mode_label": attempt.label,
+            "query_param": attempt.query_param,
+            "searched_values": attempt.variants,
+            "candidate_count": candidate_count,
+            "limit": params.get("limit"),
+            "state": params.get("address.state.in"),
+            "municipality_code": params.get("address.municipality.in"),
+            "postal_code": params.get("address.zip.in"),
+            "district": params.get("address.district.in"),
+            "phone_area": params.get("phones.area.in"),
+            "email_domain": params.get("emails.domain.in"),
+        }
 
     def _normalize_search_limit(self) -> int:
         configured = self.settings.cnpja_company_search_limit
@@ -902,6 +1081,162 @@ def build_company_search_name_variants(
 
     if max_variants < 1:
         return []
+    return variants[:max_variants]
+
+
+def build_company_search_name_variant_groups(
+    business_name: str,
+    category: str | None = None,
+    *,
+    max_variants: int = 4,
+) -> CompanySearchVariantGroups:
+    names_variants = build_company_search_name_variants(
+        business_name,
+        category=category,
+        max_variants=max_variants,
+    )
+    alias_variants = _build_alias_search_variants(
+        business_name,
+        category=category,
+        max_variants=max_variants,
+    )
+    legal_name_variants = _build_legal_name_variants(
+        business_name,
+        fallback_variants=names_variants,
+        max_variants=max_variants,
+    )
+    return CompanySearchVariantGroups(
+        alias_variants=alias_variants,
+        names_variants=names_variants,
+        legal_name_variants=legal_name_variants,
+    )
+
+
+def _build_alias_search_variants(
+    business_name: str,
+    *,
+    category: str | None,
+    max_variants: int,
+) -> list[str]:
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def register(candidate: str | None) -> None:
+        if not candidate:
+            return
+        normalized_candidate = normalize_text(candidate)
+        if normalized_candidate is None:
+            return
+        if _looks_like_address_only_variant(normalized_candidate):
+            return
+        if _looks_generic_only_variant(normalized_candidate):
+            return
+        if not _is_meaningful_company_search_variant(normalized_candidate):
+            return
+        if normalized_candidate in seen:
+            return
+        seen.add(normalized_candidate)
+        variants.append(_format_company_search_variant(normalized_candidate))
+
+    base_full_variant = _clean_company_search_text(business_name)
+    chunk_variants = [
+        cleaned_chunk
+        for chunk in _NAME_SPLIT_RE.split(business_name)
+        if (cleaned_chunk := _clean_company_search_text(chunk)) is not None
+    ]
+    extra_noise_phrases: set[str] = set()
+    normalized_category = normalize_text(category)
+    if normalized_category:
+        extra_noise_phrases.add(normalized_category)
+    has_split_chunks = len(chunk_variants) > 1
+    known_brand_variants = _extract_known_brand_variants(base_full_variant)
+
+    def register_for_source(
+        source: str | None,
+        *,
+        allow_full_variant: bool,
+    ) -> None:
+        normalized_source = normalize_text(source)
+        if normalized_source is None:
+            return
+        for candidate in _extract_known_brand_variants(normalized_source):
+            register(candidate)
+        stripped_source = _strip_city_tokens(_strip_address_suffix(normalized_source))
+        if allow_full_variant:
+            register(stripped_source)
+        register(
+            _strip_company_search_noise_preserve_connectors(
+                stripped_source,
+                phrases=set(_SEARCH_HEAVY_NOISE_PHRASES) | extra_noise_phrases,
+            )
+        )
+        register(_trim_trailing_location_phrase(stripped_source))
+        register(_drop_generic_prefix_variant(stripped_source))
+        register(_extract_last_brand_token_variant(normalized_source))
+
+    if base_full_variant is not None:
+        for candidate in known_brand_variants:
+            register(candidate)
+        if not has_split_chunks:
+            register_for_source(
+                base_full_variant,
+                allow_full_variant=not known_brand_variants,
+            )
+    for chunk_variant in chunk_variants:
+        register_for_source(chunk_variant, allow_full_variant=True)
+
+    for candidate in build_company_search_name_variants(
+        business_name,
+        category=category,
+        max_variants=max_variants + 2,
+    ):
+        normalized_candidate = normalize_text(candidate)
+        if normalized_candidate is None:
+            continue
+        if (
+            base_full_variant
+            and normalized_candidate == base_full_variant
+            and (has_split_chunks or bool(known_brand_variants))
+        ):
+            continue
+        token_count = len(normalized_candidate.split())
+        if has_split_chunks and token_count == 1:
+            continue
+        if token_count <= 4:
+            register(candidate)
+
+    return variants[:max_variants]
+
+
+def _build_legal_name_variants(
+    business_name: str,
+    *,
+    fallback_variants: list[str],
+    max_variants: int,
+) -> list[str]:
+    base_full_variant = _clean_company_search_text(business_name)
+    if not _looks_legal_company_name(base_full_variant):
+        return []
+
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def register(candidate: str | None) -> None:
+        if not candidate:
+            return
+        normalized_candidate = normalize_text(candidate)
+        if normalized_candidate is None or not _looks_legal_company_name(normalized_candidate):
+            return
+        if normalized_candidate in seen:
+            return
+        seen.add(normalized_candidate)
+        variants.append(_format_company_search_variant(normalized_candidate))
+
+    register(base_full_variant)
+    register(_strip_address_suffix(base_full_variant))
+    register(_strip_city_tokens(_strip_address_suffix(base_full_variant)))
+    for candidate in fallback_variants:
+        register(candidate)
     return variants[:max_variants]
 
 
@@ -1113,6 +1448,27 @@ def _is_meaningful_company_search_variant(value: str | None) -> bool:
     return any(token not in generic_terms for token in tokens)
 
 
+def _looks_legal_company_name(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return False
+    tokens = set(normalized.split())
+    return bool(tokens.intersection(_LEGAL_COMPANY_TERMS))
+
+
+def _looks_generic_only_variant(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return True
+    compact_variant = normalized.replace(" ", "")
+    if compact_variant in {"cc", "me", "mei"}:
+        return True
+    tokens = [token for token in normalized.split() if token not in _SEARCH_CONNECTOR_WORDS]
+    if not tokens:
+        return True
+    return all(token in _GENERIC_ONLY_VARIANT_TERMS for token in tokens)
+
+
 def _select_company_search_fallback_variant(search_variants: list[str]) -> str | None:
     if len(search_variants) < 2:
         return None
@@ -1153,3 +1509,22 @@ def _format_company_search_variant(value: str) -> str:
         else:
             words.append(token.capitalize())
     return " ".join(words)
+
+
+def _resolve_company_email_domain_filter(website: str | None, *, enabled: bool) -> str | None:
+    if not enabled:
+        return None
+    normalized_domain = normalize_domain(website)
+    if not normalized_domain:
+        return None
+    for blocked_domain in _EMAIL_DOMAIN_FILTER_BLOCKLIST:
+        if normalized_domain == blocked_domain or normalized_domain.endswith(f".{blocked_domain}"):
+            return None
+    return normalized_domain
+
+
+def _normalize_cnae_id(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = "".join(character for character in str(value) if character.isdigit())
+    return digits or None

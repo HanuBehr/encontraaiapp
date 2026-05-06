@@ -16,6 +16,7 @@ from app.schemas.lead import (
     LeadBatchCNPJEnrichmentResponse,
     LeadBatchCNPJEnrichmentSummary,
 )
+from app.services.cnpj_category_cnae import category_activity_matches
 from app.services.enrichment import EnrichmentService
 from app.services.normalization import (
     normalize_brazilian_state,
@@ -129,6 +130,9 @@ class _ScoredCandidate:
     evidence: dict[str, int]
     penalties: list[str]
     strong_name_match: bool
+    alias_match: bool
+    legal_name_match: bool
+    person_like_legal_name: bool
     supportive_signal_count: int
     source_urls: list[str]
     page_types: list[str]
@@ -1161,6 +1165,9 @@ class CNPJEnrichmentService:
             evidence=evidence,
             penalties=penalties,
             strong_name_match=strong_name_match,
+            alias_match=strong_name_match,
+            legal_name_match=False,
+            person_like_legal_name=self._looks_person_like_legal_name(lookup.legal_name),
             supportive_signal_count=supportive_signal_count,
             source_urls=extracted_candidate.source_urls,
             page_types=extracted_candidate.page_types,
@@ -1389,23 +1396,31 @@ class CNPJEnrichmentService:
             score += 35
 
         lead_name = normalize_business_name(lead.business_name)
-        candidate_names = {
-            value
-            for value in (
-                normalize_business_name(candidate.trade_name),
-                normalize_business_name(candidate.legal_name),
-            )
-            if value
-        }
         strong_name_match = False
-        if lead_name and candidate_names:
-            if lead_name in candidate_names:
-                evidence["name"] = 25
+        alias_match = False
+        legal_name_match = False
+        candidate_alias = normalize_business_name(candidate.trade_name)
+        candidate_legal_name = normalize_business_name(candidate.legal_name)
+        if lead_name and candidate_alias:
+            if lead_name == candidate_alias:
+                evidence["alias_name"] = 25
                 score += 25
                 strong_name_match = True
-            elif any(self._is_strong_name_variant(lead_name, candidate_name) for candidate_name in candidate_names):
-                evidence["name"] = 15
+                alias_match = True
+            elif self._is_strong_name_variant(lead_name, candidate_alias):
+                evidence["alias_name"] = 20
+                score += 20
+                alias_match = True
+        if lead_name and candidate_legal_name and not alias_match:
+            if lead_name == candidate_legal_name:
+                evidence["legal_name"] = 15
                 score += 15
+                strong_name_match = True
+                legal_name_match = True
+            elif self._is_strong_name_variant(lead_name, candidate_legal_name):
+                evidence["legal_name"] = 10
+                score += 10
+                legal_name_match = True
 
         lead_street, lead_number = split_street_and_number(
             lead.address,
@@ -1459,15 +1474,32 @@ class CNPJEnrichmentService:
                 score -= 40
                 penalties.append("different_state")
 
+        candidate_main_activity_id = None
+        if isinstance(candidate.metadata, dict):
+            raw_activity_id = candidate.metadata.get("main_activity_id")
+            if isinstance(raw_activity_id, str):
+                candidate_main_activity_id = raw_activity_id
+        if category_activity_matches(
+            lead.category,
+            primary_activity=candidate.primary_activity,
+            main_activity_id=candidate_main_activity_id,
+        ):
+            evidence["activity"] = 5
+            score += 5
+
         supportive_signal_count = sum(
             1 for key in ("domain", "phone", "address", "postal_code") if key in evidence
         )
+        person_like_legal_name = self._looks_person_like_legal_name(candidate.legal_name)
         return _ScoredCandidate(
             candidate=candidate,
             score=max(score, 0),
             evidence=evidence,
             penalties=penalties,
             strong_name_match=strong_name_match,
+            alias_match=alias_match,
+            legal_name_match=legal_name_match,
+            person_like_legal_name=person_like_legal_name,
             supportive_signal_count=supportive_signal_count,
             source_urls=[],
             page_types=[],
@@ -1480,6 +1512,17 @@ class CNPJEnrichmentService:
             return True
         shorter, longer = sorted((lead_name, candidate_name), key=len)
         return len(shorter) >= 10 and (shorter in longer or longer in shorter)
+
+    @staticmethod
+    def _looks_person_like_legal_name(value: str | None) -> bool:
+        normalized = normalize_text(value)
+        if not normalized:
+            return False
+        company_terms = {"ltda", "me", "mei", "eireli", "sa", "s a", "comercio", "servicos", "industria"}
+        tokens = normalized.split()
+        if any(token in company_terms for token in tokens):
+            return False
+        return 2 <= len(tokens) <= 5 and all(token.isalpha() for token in tokens)
 
     @staticmethod
     def _normalize_postal_code(value: str | None) -> str | None:
@@ -1594,6 +1637,12 @@ class CNPJEnrichmentService:
         blocked_from_autofill_reason: str | None = None,
         match_confidence: float | None = None,
     ) -> dict[str, Any]:
+        candidate_metadata = candidate.candidate.metadata or {}
+        legal_name_note = None
+        if candidate.person_like_legal_name and candidate.alias_match:
+            legal_name_note = (
+                "Razao Social pode ser nome do titular/MEI; confira nome fantasia, endereco e telefone."
+            )
         return {
             "cnpj": candidate.candidate.cnpj,
             "legal_name": candidate.candidate.legal_name,
@@ -1605,6 +1654,7 @@ class CNPJEnrichmentService:
             "website": candidate.candidate.website,
             "domain": candidate.candidate.domain,
             "phones": candidate.candidate.phones,
+            "emails": candidate.candidate.emails,
             "registration_status": candidate.candidate.registration_status,
             "primary_activity": candidate.candidate.primary_activity,
             "provider": candidate.candidate.source_provider,
@@ -1620,8 +1670,12 @@ class CNPJEnrichmentService:
             "source_urls": candidate.source_urls,
             "page_types": candidate.page_types,
             "matched_by": candidate.matched_by,
+            "query_mode": candidate_metadata.get("company_search_query_mode"),
+            "query_mode_label": candidate_metadata.get("company_search_query_mode_label"),
             "blocked_from_autofill_reason": blocked_from_autofill_reason,
             "review_reason": CNPJEnrichmentService._review_reason_text(blocked_from_autofill_reason),
+            "person_like_legal_name": candidate.person_like_legal_name,
+            "legal_name_note": legal_name_note,
         }
 
     def _finalize_review_result(

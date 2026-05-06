@@ -154,16 +154,36 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                   <InfoItem label="Possível CNPJ" value={cnpjCandidateSummary.cnpj ?? "Não disponível"} />
                   <InfoItem label="Razão Social" value={cnpjCandidateSummary.legal_name} />
                   <InfoItem label="Nome Fantasia" value={cnpjCandidateSummary.trade_name} />
+                  <InfoItem label="Modo da busca" value={cnpjCandidateSummary.query_mode_label} />
                   <InfoItem
                     label="Cidade/UF"
                     value={compact([cnpjCandidateSummary.city, cnpjCandidateSummary.state])}
                   />
+                  <InfoItem label="Atividade/CNAE" value={cnpjCandidateSummary.primary_activity} />
+                  <InfoItem label="Telefone(s)" value={joinList(cnpjCandidateSummary.phones)} />
+                  <InfoItem label="Email(s)" value={joinList(cnpjCandidateSummary.emails)} />
                   <InfoItem label="Endereço" value={cnpjCandidateSummary.address} />
                   <InfoItem label="Confiança" value={formatConfidence(cnpjCandidateSummary.match_confidence)} />
                   <InfoItem label="Pontuação" value={formatScore(cnpjCandidateSummary.score)} />
                   <InfoItem label="Motivo da revisão" value={cnpjCandidateSummary.review_reason} />
                   <InfoItem label="Provedor" value={labelToken(cnpjCandidateSummary.provider)} />
                 </InfoGrid>
+                {cnpjCandidateSummary.legal_name_note ? (
+                  <p className="mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
+                    {cnpjCandidateSummary.legal_name_note}
+                  </p>
+                ) : null}
+                {(Object.keys(cnpjCandidateSummary.evidence).length > 0 || cnpjCandidateSummary.penalties.length > 0) ? (
+                  <div className="mt-3 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
+                    <p className="text-xs font-semibold uppercase text-neutral-500">CritÃ©rios do match</p>
+                    <p className="mt-1">{formatEvidenceSummary(cnpjCandidateSummary.evidence)}</p>
+                    {cnpjCandidateSummary.penalties.length > 0 ? (
+                      <p className="mt-1 text-xs text-amber-700">
+                        Penalidades: {cnpjCandidateSummary.penalties.map(labelPenalty).join(", ")}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               {approveCnpjMutation.isError ? (
                 <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
@@ -345,6 +365,9 @@ function CnpjSearchDiagnosticsPanel({
   matchStatus: LeadDetail["cnpj_match_status"];
 }) {
   const primaryMessage = buildCnpjDiagnosticsMessage(diagnostics, matchStatus);
+  const triedModes = diagnostics.search_attempts
+    .map((attempt) => attempt.query_mode_label)
+    .filter((value): value is string => Boolean(value));
   const secondaryFacts = [
     diagnostics.searched_municipality_code
       ? `Município IBGE: ${diagnostics.searched_municipality_code}`
@@ -357,6 +380,7 @@ function CnpjSearchDiagnosticsPanel({
     typeof diagnostics.candidates_returned_count === "number"
       ? `Candidatos retornados: ${diagnostics.candidates_returned_count}`
       : null,
+    triedModes.length ? `Modos: ${triedModes.join(" -> ")}` : null,
   ].filter(Boolean);
 
   if (!primaryMessage && secondaryFacts.length === 0) {
@@ -499,6 +523,47 @@ function formatScore(value?: number | null) {
   return `${Math.round(value)} / 100`;
 }
 
+function joinList(values: string[] | null | undefined) {
+  if (!values?.length) {
+    return null;
+  }
+  return values.join(", ");
+}
+
+function formatEvidenceSummary(evidence: Record<string, number>) {
+  const entries = Object.entries(evidence);
+  if (entries.length === 0) {
+    return "Nenhum critÃ©rio positivo relevante foi registrado.";
+  }
+  return entries
+    .map(([key, value]) => `${labelEvidence(key)} (+${value})`)
+    .join(", ");
+}
+
+function labelEvidence(key: string) {
+  const labels: Record<string, string> = {
+    domain: "DomÃ­nio",
+    phone: "Telefone",
+    alias_name: "Nome fantasia",
+    legal_name: "RazÃ£o social",
+    address: "EndereÃ§o",
+    postal_code: "CEP",
+    city: "Cidade",
+    state: "UF",
+    activity: "Atividade",
+  };
+  return labels[key] ?? key;
+}
+
+function labelPenalty(key: string) {
+  const labels: Record<string, string> = {
+    different_number: "nÃºmero diferente",
+    different_city: "cidade diferente",
+    different_state: "UF diferente",
+  };
+  return labels[key] ?? key;
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) {
     return null;
@@ -591,13 +656,22 @@ function getCnpjCandidateSummary(lead: LeadDetail): LeadCnpjCandidateSummary | n
     city: asNullableString(candidate.city),
     state: asNullableString(candidate.state),
     postal_code: asNullableString(candidate.postal_code),
+    phones: asStringArray(candidate.phones),
+    emails: asStringArray(candidate.emails),
+    primary_activity: asNullableString(candidate.primary_activity),
     provider: asNullableString(candidate.provider),
     score: asNullableNumber(candidate.score),
     match_confidence: asNullableNumber(candidate.match_confidence),
+    evidence: asNumberRecord(candidate.evidence),
+    penalties: asStringArray(candidate.penalties),
+    query_mode: asNullableString(candidate.query_mode),
+    query_mode_label: asNullableString(candidate.query_mode_label),
     blocked_from_autofill_reason: asNullableString(candidate.blocked_from_autofill_reason),
     review_reason:
       asNullableString(candidate.review_reason) ??
       reviewReasonFromCode(asNullableString(candidate.blocked_from_autofill_reason)),
+    person_like_legal_name: Boolean(candidate.person_like_legal_name),
+    legal_name_note: asNullableString(candidate.legal_name_note),
   };
 }
 
@@ -611,14 +685,18 @@ function getCnpjSearchDiagnostics(lead: LeadDetail): LeadCnpjSearchDiagnostics |
 
   return {
     provider: asNullableString(companySearch.provider),
+    searched_alias_names: asStringArray(companySearch.searched_alias_names),
     searched_names: asStringArray(companySearch.searched_names),
+    searched_legal_names: asStringArray(companySearch.searched_legal_names),
     searched_city: asNullableString(companySearch.searched_city),
     searched_state: asNullableString(companySearch.searched_state),
     searched_municipality_code: asNullableString(companySearch.searched_municipality_code),
     searched_zip: asNullableString(companySearch.searched_zip),
     searched_district: asNullableString(companySearch.searched_district),
     searched_phone_area: asNullableString(companySearch.searched_phone_area),
+    searched_email_domain: asNullableString(companySearch.searched_email_domain),
     search_attempts_count: asNullableNumber(companySearch.search_attempts_count),
+    search_attempts: asSearchAttempts(companySearch.search_attempts),
     candidates_returned_count: asNullableNumber(companySearch.candidates_returned_count),
     extracted_zip_from_address: Boolean(companySearch.extracted_zip_from_address),
     cnpja_zero_candidates: Boolean(companySearch.cnpja_zero_candidates),
@@ -772,6 +850,38 @@ function asStringArray(value: unknown): string[] {
     return [];
   }
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function asNumberRecord(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+  );
+}
+
+function asSearchAttempts(value: unknown): LeadCnpjSearchDiagnostics["search_attempts"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .map((item) => ({
+      attempt_index: asNullableNumber(item.attempt_index),
+      query_mode: asNullableString(item.query_mode),
+      query_mode_label: asNullableString(item.query_mode_label),
+      query_param: asNullableString(item.query_param),
+      searched_values: asStringArray(item.searched_values),
+      candidate_count: asNullableNumber(item.candidate_count),
+      municipality_code: asNullableString(item.municipality_code),
+      postal_code: asNullableString(item.postal_code),
+      district: asNullableString(item.district),
+      phone_area: asNullableString(item.phone_area),
+      email_domain: asNullableString(item.email_domain),
+    }));
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

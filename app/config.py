@@ -103,6 +103,14 @@ class Settings(BaseSettings):
         default=2,
         alias="CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD",
     )
+    cnpja_use_email_domain_filter: bool = Field(
+        default=False,
+        alias="CNPJA_USE_EMAIL_DOMAIN_FILTER",
+    )
+    cnpja_use_cnae_search_filter: bool = Field(
+        default=False,
+        alias="CNPJA_USE_CNAE_SEARCH_FILTER",
+    )
     cnpja_rate_limit_per_minute: int = Field(default=10, alias="CNPJA_RATE_LIMIT_PER_MINUTE")
     cnpja_batch_size: int = Field(default=8, alias="CNPJA_BATCH_SIZE")
     cnpja_rate_limit_cooldown_seconds: int = Field(

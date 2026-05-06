@@ -174,23 +174,50 @@ export type LeadCnpjCandidateSummary = {
   city: string | null;
   state: string | null;
   postal_code: string | null;
+  phones: string[];
+  emails: string[];
+  primary_activity: string | null;
   provider: string | null;
   score: number | null;
   match_confidence: number | null;
+  evidence: Record<string, number>;
+  penalties: string[];
+  query_mode: string | null;
+  query_mode_label: string | null;
   blocked_from_autofill_reason: string | null;
   review_reason: string | null;
+  person_like_legal_name: boolean;
+  legal_name_note: string | null;
+};
+
+export type LeadCnpjSearchAttemptDiagnostics = {
+  attempt_index: number | null;
+  query_mode: string | null;
+  query_mode_label: string | null;
+  query_param: string | null;
+  searched_values: string[];
+  candidate_count: number | null;
+  municipality_code: string | null;
+  postal_code: string | null;
+  district: string | null;
+  phone_area: string | null;
+  email_domain: string | null;
 };
 
 export type LeadCnpjSearchDiagnostics = {
   provider: string | null;
+  searched_alias_names: string[];
   searched_names: string[];
+  searched_legal_names: string[];
   searched_city: string | null;
   searched_state: string | null;
   searched_municipality_code: string | null;
   searched_zip: string | null;
   searched_district: string | null;
   searched_phone_area: string | null;
+  searched_email_domain: string | null;
   search_attempts_count: number | null;
+  search_attempts: LeadCnpjSearchAttemptDiagnostics[];
   candidates_returned_count: number | null;
   extracted_zip_from_address: boolean;
   cnpja_zero_candidates: boolean;
