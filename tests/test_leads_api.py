@@ -225,3 +225,114 @@ def test_approve_cnpj_candidate_endpoint_rejects_missing_candidate(client, db_se
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Nenhum CNPJ revisável disponível para este lead."
+
+
+def test_approve_cnpj_candidate_endpoint_can_approve_selected_candidate_cnpj(client, db_session) -> None:
+    lead = _seed_lead(
+        db_session,
+        business_name="Sodimac Campinas",
+        city="Campinas",
+        cnpj_match_status="needs_review",
+        cnpj_match_confidence=1.0,
+        cnpj_source_provider="cnpja_commercial",
+        cnpj_metadata_json={
+            "reason_code": "company_search_needs_review",
+            "candidate_summary": {
+                "cnpj": "11111111000191",
+                "legal_name": "Sodimac A Ltda",
+                "trade_name": "Sodimac",
+                "provider": "cnpja_commercial",
+                "match_confidence": 1.0,
+                "manual_review_approvable": True,
+            },
+            "candidate_summaries": [
+                {
+                    "cnpj": "11111111000191",
+                    "legal_name": "Sodimac A Ltda",
+                    "trade_name": "Sodimac",
+                    "provider": "cnpja_commercial",
+                    "match_confidence": 1.0,
+                    "manual_review_approvable": True,
+                },
+                {
+                    "cnpj": "22222222000191",
+                    "legal_name": "Sodimac B Ltda",
+                    "trade_name": "Sodimac Homecenter",
+                    "provider": "cnpja_commercial",
+                    "match_confidence": 1.0,
+                    "manual_review_approvable": True,
+                },
+            ],
+        },
+    )
+
+    response = client.post(
+        f"/leads/{lead.id}/approve-cnpj-candidate",
+        json={"candidate_cnpj": "22222222000191"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cnpj"] == "22222222000191"
+    assert payload["legal_name"] == "Sodimac B Ltda"
+    assert payload["cnpj_match_status"] == "matched"
+    assert payload["cnpj_metadata_json"]["approved_manually"] is True
+
+
+def test_approve_cnpj_candidate_endpoint_rejects_unknown_candidate_cnpj(client, db_session) -> None:
+    lead = _seed_lead(
+        db_session,
+        business_name="Lead Ambiguo",
+        city="Campinas",
+        cnpj_match_status="needs_review",
+        cnpj_match_confidence=0.78,
+        cnpj_metadata_json={
+            "reason_code": "company_search_needs_review",
+            "candidate_summaries": [
+                {
+                    "cnpj": "17247065000139",
+                    "legal_name": "Lead Ambiguo Ltda",
+                    "provider": "cnpja_commercial",
+                    "match_confidence": 0.78,
+                    "manual_review_approvable": True,
+                }
+            ],
+        },
+    )
+
+    response = client.post(
+        f"/leads/{lead.id}/approve-cnpj-candidate",
+        json={"candidate_cnpj": "00000000000000"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Nenhum CNPJ revisável disponível para este lead."
+
+
+def test_reject_cnpj_candidate_endpoint_marks_lead_as_not_found(client, db_session) -> None:
+    lead = _seed_lead(
+        db_session,
+        business_name="Lead Revisao",
+        city="Campinas",
+        cnpj_match_status="needs_review",
+        cnpj_match_confidence=0.72,
+        cnpj_metadata_json={
+            "reason_code": "company_search_needs_review",
+            "candidate_summary": {
+                "cnpj": "17247065000139",
+                "legal_name": "Lead Revisao Ltda",
+                "provider": "cnpja_commercial",
+                "match_confidence": 0.72,
+                "manual_review_approvable": True,
+            },
+        },
+    )
+
+    response = client.post(f"/leads/{lead.id}/reject-cnpj-candidate", json={})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cnpj"] is None
+    assert payload["cnpj_match_status"] == "not_found"
+    assert payload["cnpj_metadata_json"]["rejected_manually"] is True
+    assert payload["cnpj_metadata_json"]["previous_status"] == "needs_review"

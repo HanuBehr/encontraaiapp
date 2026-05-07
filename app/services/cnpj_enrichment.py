@@ -16,6 +16,8 @@ from app.models.base import utcnow
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.lead import (
     CNPJEnrichmentRunResult,
+    LeadBatchApproveCNPJCandidatesResponse,
+    LeadBatchApproveCNPJCandidatesSummary,
     LeadBatchCNPJEnrichmentResponse,
     LeadBatchCNPJEnrichmentSummary,
 )
@@ -122,6 +124,7 @@ PAID_SEARCH_RECENTLY_ATTEMPTED_REASON = (
     "Busca paga já realizada recentemente para este lead. Use força/limpeza manual se quiser tentar novamente."
 )
 REVIEW_CANDIDATE_EXISTS_REASON = "Candidato encontrado. Revise e aprove antes de consultar novamente."
+REVIEW_CANDIDATE_REJECTED_REASON = "Candidato revisado e mantido sem CNPJ."
 PAID_SEARCH_REPEATABLE_REASON_CODES = {
     REASON_COMPANY_SEARCH_NO_CANDIDATES,
     REASON_CNPJA_ZERO_CANDIDATES,
@@ -506,12 +509,21 @@ class CNPJEnrichmentService:
             summary=summary,
         )
 
-    def approve_cnpj_candidate(self, lead_id: int, *, actor: str = "system"):
+    def approve_cnpj_candidate(
+        self,
+        lead_id: int,
+        *,
+        candidate_cnpj: str | None = None,
+        actor: str = "system",
+    ):
         lead = self.repository.get_by_id(lead_id)
         if lead is None:
             raise ValueError(f"Lead {lead_id} not found.")
 
-        candidate_summary = self._get_reviewable_candidate_summary(lead)
+        candidate_summary = self._resolve_candidate_summary_for_approval(
+            lead,
+            candidate_cnpj=candidate_cnpj,
+        )
         if candidate_summary is None:
             raise CNPJCandidateApprovalError(APPROVE_CNPJ_CANDIDATE_ERROR_MESSAGE)
 
@@ -545,6 +557,7 @@ class CNPJEnrichmentService:
                 "skipped_reason": None,
                 "error_message": None,
                 "candidate_summary": candidate_summary,
+                "candidate_summaries": self._get_candidate_summaries_if_present(lead),
                 "approved_manually": True,
                 "approved_at": approved_at.isoformat(),
                 "previous_status": previous_status,
@@ -577,6 +590,119 @@ class CNPJEnrichmentService:
             raise ValueError(f"Lead {lead_id} not found.")
         return approved_lead
 
+    def reject_cnpj_candidate(
+        self,
+        lead_id: int,
+        *,
+        candidate_cnpj: str | None = None,
+        actor: str = "system",
+    ):
+        lead = self.repository.get_by_id(lead_id)
+        if lead is None:
+            raise ValueError(f"Lead {lead_id} not found.")
+
+        candidate_summary = self._resolve_candidate_summary_for_approval(
+            lead,
+            candidate_cnpj=candidate_cnpj,
+        )
+        if candidate_summary is None:
+            raise CNPJCandidateApprovalError(APPROVE_CNPJ_CANDIDATE_ERROR_MESSAGE)
+
+        previous_status = lead.cnpj_match_status
+        rejected_at = utcnow()
+        lead.cnpj_match_status = "not_found"
+        lead.cnpj_match_confidence = None
+        lead.cnpj_last_enriched_at = rejected_at
+        metadata = dict(lead.cnpj_metadata_json or {})
+        metadata.update(
+            {
+                "match_status": "not_found",
+                "reason_code": REASON_LOW_CONFIDENCE,
+                "skipped_reason": REVIEW_CANDIDATE_REJECTED_REASON,
+                "error_message": None,
+                "candidate_summary": candidate_summary,
+                "candidate_summaries": self._get_candidate_summaries_if_present(lead),
+                "rejected_manually": True,
+                "rejected_at": rejected_at.isoformat(),
+                "previous_status": previous_status,
+            }
+        )
+        lead.cnpj_metadata_json = metadata
+
+        self.db.add(
+            ActivityLog(
+                organization_id=lead.organization_id or self.repository.organization_id,
+                lead_id=lead.id,
+                entity_type="lead",
+                entity_id=lead.id,
+                action=ActivityAction.ENRICHED,
+                actor=actor,
+                message="CNPJ candidate rejected manually.",
+                metadata_json={
+                    "enrichment_type": "cnpj",
+                    "approval_action": "rejected",
+                    "candidate_cnpj": candidate_summary.get("cnpj"),
+                    "previous_status": previous_status,
+                    "source_provider": candidate_summary.get("provider"),
+                },
+            )
+        )
+        self.db.commit()
+        rejected_lead = self.repository.get_detail(lead_id)
+        if rejected_lead is None:
+            raise ValueError(f"Lead {lead_id} not found.")
+        return rejected_lead
+
+    def approve_cnpj_candidates_batch(
+        self,
+        lead_ids: list[int],
+        *,
+        actor: str = "system",
+    ) -> LeadBatchApproveCNPJCandidatesResponse:
+        requested_ids = [int(lead_id) for lead_id in dict.fromkeys(lead_ids)]
+        summary = LeadBatchApproveCNPJCandidatesSummary(requested=len(requested_ids))
+
+        for lead_id in requested_ids:
+            lead = self.repository.get_by_id(lead_id)
+            if lead is None:
+                summary.errors.append(f"Lead {lead_id} not found.")
+                continue
+            summary.processed += 1
+
+            if lead.cnpj_match_status == "matched" and lead.cnpj:
+                summary.skipped_already_matched_count += 1
+                continue
+
+            candidate_summaries = self._get_candidate_summaries_if_present(lead)
+            reviewable_candidates = [
+                item
+                for item in candidate_summaries
+                if normalize_cnpj(item.get("cnpj")) is not None and item.get("manual_review_approvable") is not False
+            ]
+
+            if not reviewable_candidates:
+                summary.skipped_no_candidate_count += 1
+                continue
+
+            if len(reviewable_candidates) > 1:
+                summary.skipped_ambiguous_count += 1
+                continue
+
+            candidate_summary = reviewable_candidates[0]
+            confidence = self._candidate_summary_confidence(candidate_summary, None)
+            if confidence is None or confidence < self._score_to_confidence(REVIEWABLE_COMPANY_SEARCH_SCORE):
+                summary.skipped_low_confidence_count += 1
+                continue
+
+            self.approve_cnpj_candidate(
+                lead.id,
+                candidate_cnpj=candidate_summary.get("cnpj"),
+                actor=actor,
+            )
+            summary.approved_count += 1
+
+        return LeadBatchApproveCNPJCandidatesResponse(summary=summary)
+
     def _build_review_candidate_skip_result(
         self,
         lead,
@@ -584,6 +710,7 @@ class CNPJEnrichmentService:
         actor: str,
         candidate_summary: dict[str, Any],
     ) -> CNPJEnrichmentRunResult:
+        candidate_summaries = self._get_candidate_summaries_if_present(lead)
         self._mark_attempt(
             lead,
             actor=actor,
@@ -594,6 +721,7 @@ class CNPJEnrichmentService:
             error_message=None,
             reason_code=REASON_SKIPPED_REVIEW_CANDIDATE_EXISTS,
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
         )
         return CNPJEnrichmentRunResult(
             lead_id=lead.id,
@@ -633,6 +761,7 @@ class CNPJEnrichmentService:
         )
         match_status = getattr(lead, "cnpj_match_status", None) or "unknown"
         candidate_summary = self._get_candidate_summary_if_present(lead)
+        candidate_summaries = self._get_candidate_summaries_if_present(lead)
         self._mark_attempt(
             lead,
             actor=actor,
@@ -644,6 +773,7 @@ class CNPJEnrichmentService:
             reason_code=REASON_PAID_SEARCH_RECENTLY_ATTEMPTED,
             attempt_metadata=attempt_metadata,
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
         )
         return CNPJEnrichmentRunResult(
             lead_id=lead.id,
@@ -910,11 +1040,10 @@ class CNPJEnrichmentService:
 
     @staticmethod
     def _get_candidate_summary_if_present(lead) -> dict[str, Any] | None:
-        metadata = lead.cnpj_metadata_json or {}
-        candidate_summary = metadata.get("candidate_summary")
-        if not isinstance(candidate_summary, dict):
+        candidate_summaries = CNPJEnrichmentService._get_candidate_summaries_if_present(lead)
+        if not candidate_summaries:
             return None
-        return dict(candidate_summary)
+        return dict(candidate_summaries[0])
 
     def _enrich_known_cnpj_lead(
         self,
@@ -1126,9 +1255,20 @@ class CNPJEnrichmentService:
             if len(scored_candidates) > 1
             else CLEAR_WINNER_GAP
         )
+        strong_review_candidates = self._build_candidate_summaries(
+            scored_candidates,
+            best_score=best_candidate.score,
+            prefer_strong_only=True,
+        )
+        ambiguous_strong_candidates = len(strong_review_candidates) > 1
+        effective_top_gap = (
+            top_gap
+            if search_mode != "delivery" or ambiguous_strong_candidates
+            else CLEAR_WINNER_GAP
+        )
         blocked_reason = self._blocked_from_autofill_reason(
             best_candidate,
-            top_gap=top_gap,
+            top_gap=effective_top_gap,
             require_confirmable_cnpj=True,
         )
         candidate_summary = self._build_candidate_summary(
@@ -1141,6 +1281,15 @@ class CNPJEnrichmentService:
                 else self._score_to_confidence(best_candidate.score)
             ),
         )
+        candidate_summaries = (
+            strong_review_candidates
+            if ambiguous_strong_candidates
+            else self._build_candidate_summaries(
+                scored_candidates,
+                best_score=best_candidate.score,
+                prefer_strong_only=False,
+            )
+        )
         merged_attempt_metadata = self._attach_company_search_candidate_diagnostics(
             merged_attempt_metadata,
             best_candidate=best_candidate,
@@ -1152,7 +1301,7 @@ class CNPJEnrichmentService:
             ),
         )
 
-        if self._is_high_confidence_match(best_candidate, top_gap=top_gap) and blocked_reason is None:
+        if self._is_high_confidence_match(best_candidate, top_gap=effective_top_gap) and blocked_reason is None:
             return self._apply_lookup_result(
                 lead,
                 best_candidate.candidate,
@@ -1160,6 +1309,7 @@ class CNPJEnrichmentService:
                 match_confidence=self._score_to_confidence(best_candidate.score),
                 matched_by="company_search",
                 candidate_summary=candidate_summary,
+                candidate_summaries=candidate_summaries,
                 attempt_metadata=merged_attempt_metadata,
                 reason_code=REASON_COMPANY_SEARCH_MATCHED,
             )
@@ -1170,6 +1320,7 @@ class CNPJEnrichmentService:
                 actor=actor,
                 source_provider=best_candidate.candidate.source_provider,
                 candidate_summary=candidate_summary,
+                candidate_summaries=candidate_summaries,
                 reason_code=(
                     REASON_COMPANY_SEARCH_PREVIEW_ONLY
                     if blocked_reason == BLOCKED_REASON_PROVIDER_PREVIEW_MASKED
@@ -1193,6 +1344,7 @@ class CNPJEnrichmentService:
                     blocked_from_autofill_reason=review_reason,
                     match_confidence=self._review_confidence(best_candidate.score, review_reason),
                 ),
+                candidate_summaries=candidate_summaries,
                 reason_code=(
                     REASON_COMPANY_SEARCH_PREVIEW_ONLY
                     if review_reason == BLOCKED_REASON_PROVIDER_PREVIEW_MASKED
@@ -1212,6 +1364,7 @@ class CNPJEnrichmentService:
             skipped_reason=COMPANY_SEARCH_LOW_CONFIDENCE_REASON,
             matched_by="company_search",
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
             attempt_metadata=merged_attempt_metadata,
         )
 
@@ -1397,6 +1550,11 @@ class CNPJEnrichmentService:
                 else self._score_to_confidence(best_candidate.score)
             ),
         )
+        candidate_summaries = self._build_candidate_summaries(
+            scored_candidates,
+            best_score=best_candidate.score,
+            prefer_strong_only=blocked_reason == BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES,
+        )
         merged_attempt_metadata = self._attach_company_search_candidate_diagnostics(
             merged_attempt_metadata,
             best_candidate=best_candidate,
@@ -1416,6 +1574,7 @@ class CNPJEnrichmentService:
                 match_confidence=self._score_to_confidence(best_candidate.score),
                 matched_by="company_search",
                 candidate_summary=candidate_summary,
+                candidate_summaries=candidate_summaries,
                 attempt_metadata=merged_attempt_metadata,
                 reason_code=REASON_COMPANY_SEARCH_MATCHED,
             )
@@ -1426,6 +1585,7 @@ class CNPJEnrichmentService:
                 actor=actor,
                 source_provider=best_candidate.candidate.source_provider,
                 candidate_summary=candidate_summary,
+                candidate_summaries=candidate_summaries,
                 reason_code=REASON_COMPANY_SEARCH_NEEDS_REVIEW,
                 attempt_metadata=merged_attempt_metadata,
                 matched_by="company_search",
@@ -1445,6 +1605,7 @@ class CNPJEnrichmentService:
                     blocked_from_autofill_reason=review_reason,
                     match_confidence=self._review_confidence(best_candidate.score, review_reason),
                 ),
+                candidate_summaries=candidate_summaries,
                 reason_code=REASON_COMPANY_SEARCH_NEEDS_REVIEW,
                 attempt_metadata=merged_attempt_metadata,
                 matched_by="company_search",
@@ -1460,6 +1621,7 @@ class CNPJEnrichmentService:
             skipped_reason=COMPANY_SEARCH_LOW_CONFIDENCE_REASON,
             matched_by="company_search",
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
             attempt_metadata=merged_attempt_metadata,
         )
 
@@ -1889,6 +2051,11 @@ class CNPJEnrichmentService:
                 else self._score_to_confidence(best_candidate.score)
             ),
         )
+        candidate_summaries = self._build_candidate_summaries(
+            validated_candidates,
+            best_score=best_candidate.score,
+            prefer_strong_only=blocked_reason == BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES,
+        )
 
         if self._is_high_confidence_match(best_candidate, top_gap=top_gap) and blocked_reason is None:
             return _WebsiteEvaluationOutcome(
@@ -1899,6 +2066,7 @@ class CNPJEnrichmentService:
                     match_confidence=self._score_to_confidence(best_candidate.score),
                     matched_by="website_cnpj",
                     candidate_summary=candidate_summary,
+                    candidate_summaries=candidate_summaries,
                     attempt_metadata=extraction.attempt_metadata,
                 ),
                 attempt_metadata=extraction.attempt_metadata,
@@ -1917,6 +2085,7 @@ class CNPJEnrichmentService:
                         blocked_from_autofill_reason=review_reason,
                         match_confidence=self._review_confidence(best_candidate.score, review_reason),
                     ),
+                    candidate_summaries=candidate_summaries,
                     reason_code=REASON_NEEDS_REVIEW,
                     attempt_metadata=extraction.attempt_metadata,
                     matched_by="website_cnpj",
@@ -1982,6 +2151,7 @@ class CNPJEnrichmentService:
         attempt_metadata: dict[str, Any] | None = None,
         matched_by: str | None = None,
         candidate_summary: dict[str, Any] | None = None,
+        candidate_summaries: list[dict[str, Any]] | None = None,
     ) -> CNPJEnrichmentRunResult:
         self._mark_attempt(
             lead,
@@ -1995,6 +2165,7 @@ class CNPJEnrichmentService:
             attempt_metadata=attempt_metadata,
             matched_by=matched_by,
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
         )
         return CNPJEnrichmentRunResult(
             lead_id=lead.id,
@@ -2365,6 +2536,7 @@ class CNPJEnrichmentService:
         match_confidence: float,
         matched_by: str,
         candidate_summary: dict[str, Any] | None,
+        candidate_summaries: list[dict[str, Any]] | None = None,
         attempt_metadata: dict[str, Any] | None = None,
         reason_code: str = REASON_MATCHED,
     ) -> CNPJEnrichmentRunResult:
@@ -2390,6 +2562,7 @@ class CNPJEnrichmentService:
             attempt_metadata=attempt_metadata,
             matched_by=matched_by,
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
         )
         fields_updated.extend(
             [
@@ -2451,6 +2624,7 @@ class CNPJEnrichmentService:
         attempt_metadata: dict[str, Any] | None = None,
         matched_by: str | None = None,
         candidate_summary: dict[str, Any] | None = None,
+        candidate_summaries: list[dict[str, Any]] | None = None,
     ) -> None:
         attempted_at = utcnow()
         lead.cnpj_match_status = match_status
@@ -2468,6 +2642,7 @@ class CNPJEnrichmentService:
             attempt_metadata=attempt_metadata,
             matched_by=matched_by,
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
             attempted_at=attempted_at,
         )
         self.db.add(
@@ -2490,6 +2665,7 @@ class CNPJEnrichmentService:
                     "skipped_reason": skipped_reason,
                     "error_message": error_message,
                     "candidate_summary": candidate_summary,
+                    "candidate_summaries": candidate_summaries,
                 },
             )
         )
@@ -2979,6 +3155,40 @@ class CNPJEnrichmentService:
             "manual_review_approvable": self._candidate_supports_manual_approval(candidate),
         }
 
+    def _build_candidate_summaries(
+        self,
+        scored_candidates: list[_ScoredCandidate],
+        *,
+        best_score: int,
+        prefer_strong_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        summaries: list[dict[str, Any]] = []
+        for candidate in scored_candidates:
+            if normalize_cnpj(candidate.candidate.cnpj) is None:
+                continue
+            if prefer_strong_only and best_score - candidate.score >= CLEAR_WINNER_GAP:
+                continue
+            if prefer_strong_only and candidate.score < HIGH_CONFIDENCE_SCORE:
+                continue
+            if not prefer_strong_only and candidate.score < REVIEWABLE_COMPANY_SEARCH_SCORE:
+                continue
+            if self._has_location_conflict(candidate):
+                continue
+            blocked_reason = BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD
+            if prefer_strong_only:
+                blocked_reason = BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES
+            summaries.append(
+                self._build_candidate_summary(
+                    candidate,
+                    candidate_count=len(scored_candidates),
+                    blocked_from_autofill_reason=blocked_reason,
+                    match_confidence=self._review_confidence(candidate.score, blocked_reason),
+                )
+            )
+            if len(summaries) >= 5:
+                break
+        return summaries
+
     def _finalize_review_result(
         self,
         lead,
@@ -2986,6 +3196,7 @@ class CNPJEnrichmentService:
         actor: str,
         source_provider: str | None,
         candidate_summary: dict[str, Any],
+        candidate_summaries: list[dict[str, Any]] | None,
         reason_code: str,
         attempt_metadata: dict[str, Any] | None,
         matched_by: str,
@@ -3003,6 +3214,7 @@ class CNPJEnrichmentService:
             error_message=None,
             matched_by=matched_by,
             candidate_summary=candidate_summary,
+            candidate_summaries=candidate_summaries,
             reason_code=reason_code,
             attempt_metadata=attempt_metadata,
         )
@@ -3041,13 +3253,49 @@ class CNPJEnrichmentService:
     def _get_reviewable_candidate_summary(lead) -> dict[str, Any] | None:
         if getattr(lead, "cnpj_match_status", None) != "needs_review":
             return None
+        for candidate_summary in CNPJEnrichmentService._get_candidate_summaries_if_present(lead):
+            if normalize_cnpj(candidate_summary.get("cnpj")) is not None:
+                return dict(candidate_summary)
+        return None
+
+    @staticmethod
+    def _get_candidate_summaries_if_present(lead) -> list[dict[str, Any]]:
         metadata = lead.cnpj_metadata_json or {}
+        candidate_summaries = metadata.get("candidate_summaries")
+        normalized: list[dict[str, Any]] = []
+        if isinstance(candidate_summaries, list):
+            for item in candidate_summaries:
+                if isinstance(item, dict):
+                    normalized.append(dict(item))
         candidate_summary = metadata.get("candidate_summary")
-        if not isinstance(candidate_summary, dict):
+        if isinstance(candidate_summary, dict):
+            primary = dict(candidate_summary)
+            primary_cnpj = normalize_cnpj(primary.get("cnpj"))
+            if not normalized:
+                normalized.append(primary)
+            elif primary_cnpj and all(normalize_cnpj(item.get("cnpj")) != primary_cnpj for item in normalized):
+                normalized.insert(0, primary)
+        return normalized
+
+    @staticmethod
+    def _resolve_candidate_summary_for_approval(
+        lead,
+        *,
+        candidate_cnpj: str | None = None,
+    ) -> dict[str, Any] | None:
+        candidate_summaries = CNPJEnrichmentService._get_candidate_summaries_if_present(lead)
+        if not candidate_summaries:
             return None
-        if normalize_cnpj(candidate_summary.get("cnpj")) is None:
+        if candidate_cnpj is None:
+            return dict(candidate_summaries[0])
+
+        normalized_target = normalize_cnpj(candidate_cnpj)
+        if normalized_target is None:
             return None
-        return dict(candidate_summary)
+        for candidate_summary in candidate_summaries:
+            if normalize_cnpj(candidate_summary.get("cnpj")) == normalized_target:
+                return dict(candidate_summary)
+        return None
 
     @staticmethod
     def _build_metadata(
@@ -3061,6 +3309,7 @@ class CNPJEnrichmentService:
         attempt_metadata: dict[str, Any] | None = None,
         matched_by: str | None = None,
         candidate_summary: dict[str, Any] | None = None,
+        candidate_summaries: list[dict[str, Any]] | None = None,
         attempted_at: datetime | None = None,
     ) -> dict:
         metadata = dict(current_metadata or {})
@@ -3076,6 +3325,8 @@ class CNPJEnrichmentService:
             metadata["matched_by"] = matched_by
         if candidate_summary is not None:
             metadata["candidate_summary"] = candidate_summary
+        if candidate_summaries is not None:
+            metadata["candidate_summaries"] = candidate_summaries
         if attempt_metadata is not None:
             metadata["crawl_summary"] = attempt_metadata
             company_search_metadata = attempt_metadata.get("company_search")

@@ -321,6 +321,18 @@ class ExcelExportService:
         score_min = int(leads_df["Ranking"].min()) if not leads_df.empty else 0
         score_avg = float(leads_df["Ranking"].mean()) if not leads_df.empty else 0.0
         score_max = int(leads_df["Ranking"].max()) if not leads_df.empty else 0
+        confirmed_automatically = sum(
+            1
+            for lead in leads
+            if lead.cnpj_match_status == "matched" and not bool((lead.cnpj_metadata_json or {}).get("approved_manually"))
+        )
+        confirmed_manually = sum(
+            1
+            for lead in leads
+            if lead.cnpj_match_status == "matched" and bool((lead.cnpj_metadata_json or {}).get("approved_manually"))
+        )
+        pending_review = sum(1 for lead in leads if lead.cnpj_match_status == "needs_review")
+        not_found = sum(1 for lead in leads if lead.cnpj_match_status == "not_found")
 
         return [
             {"metric": "export_timestamp_utc", "value": datetime.now(timezone.utc).isoformat()},
@@ -337,4 +349,8 @@ class ExcelExportService:
             {"metric": "score_min", "value": score_min},
             {"metric": "score_avg", "value": round(score_avg, 2)},
             {"metric": "score_max", "value": score_max},
+            {"metric": "confirmed_automatically", "value": confirmed_automatically},
+            {"metric": "confirmed_manually", "value": confirmed_manually},
+            {"metric": "pending_review", "value": pending_review},
+            {"metric": "not_found", "value": not_found},
         ]

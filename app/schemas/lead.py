@@ -74,6 +74,8 @@ class LeadSummary(ORMBaseModel):
     business_name: str
     normalized_business_name: str
     category: str | None = None
+    address: str | None = None
+    postal_code: str | None = None
     neighborhood: str | None = None
     city: str | None = None
     state: str | None = None
@@ -87,6 +89,8 @@ class LeadSummary(ORMBaseModel):
     cnpj_match_status: CNPJMatchStatus = "unknown"
     cnpj_match_confidence: float | None = None
     cnpj_last_enriched_at: datetime | None = None
+    cnpj_source_provider: str | None = None
+    cnpj_metadata_json: dict[str, Any] = Field(default_factory=dict)
     lead_score: int
     status: LeadStatus
     lead_source_type: LeadSourceType
@@ -200,6 +204,7 @@ class LeadListFilters(BaseModel):
     city: str | None = None
     state: str | None = None
     status: LeadStatus | None = None
+    cnpj_match_status: CNPJMatchStatus | None = None
     has_email: bool | None = None
     has_whatsapp: bool | None = None
     has_instagram: bool | None = None
@@ -325,6 +330,33 @@ class LeadBatchCNPJEnrichmentRequest(BaseModel):
     force: bool = False
     search_mode: Literal["cheap", "balanced", "delivery"] | None = None
     force_paid_search: bool = False
+
+
+class LeadApproveCNPJCandidateRequest(BaseModel):
+    candidate_cnpj: str | None = None
+
+
+class LeadRejectCNPJCandidateRequest(BaseModel):
+    candidate_cnpj: str | None = None
+
+
+class LeadBatchApproveCNPJCandidatesRequest(BaseModel):
+    lead_ids: list[int] = Field(min_length=1)
+
+
+class LeadBatchApproveCNPJCandidatesSummary(BaseModel):
+    requested: int = 0
+    processed: int = 0
+    approved_count: int = 0
+    skipped_ambiguous_count: int = 0
+    skipped_no_candidate_count: int = 0
+    skipped_low_confidence_count: int = 0
+    skipped_already_matched_count: int = 0
+    errors: list[str] = Field(default_factory=list)
+
+
+class LeadBatchApproveCNPJCandidatesResponse(BaseModel):
+    summary: LeadBatchApproveCNPJCandidatesSummary
 
 
 class EnrichmentAttemptedPage(BaseModel):

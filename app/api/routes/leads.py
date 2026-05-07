@@ -8,8 +8,11 @@ from app.config import Settings
 from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TradeType
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.lead import (
+    LeadApproveCNPJCandidateRequest,
     LeadBatchCNPJEnrichmentRequest,
     LeadBatchCNPJEnrichmentResponse,
+    LeadBatchApproveCNPJCandidatesRequest,
+    LeadBatchApproveCNPJCandidatesResponse,
     LeadAssignmentRunResult,
     LeadAssignmentSuggestionRead,
     LeadBatchAssignmentRequest,
@@ -23,6 +26,7 @@ from app.schemas.lead import (
     LeadListFilters,
     LeadListResponse,
     LeadOptionsResponse,
+    LeadRejectCNPJCandidateRequest,
     LeadScopeRequest,
     LeadScopeResolveResponse,
     LeadSummary,
@@ -45,6 +49,7 @@ def list_leads(
     city: str | None = Query(default=None),
     state: str | None = Query(default=None),
     status: LeadStatus | None = Query(default=None),
+    cnpj_match_status: str | None = Query(default=None),
     has_email: bool | None = Query(default=None),
     has_whatsapp: bool | None = Query(default=None),
     has_instagram: bool | None = Query(default=None),
@@ -72,6 +77,7 @@ def list_leads(
         city=city,
         state=state,
         status=status,
+        cnpj_match_status=cnpj_match_status,
         has_email=has_email,
         has_whatsapp=has_whatsapp,
         has_instagram=has_instagram,
@@ -179,15 +185,54 @@ def enrich_lead_batch_cnpj(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.post("/batch/approve-cnpj-candidates", response_model=LeadBatchApproveCNPJCandidatesResponse)
+def approve_lead_batch_cnpj_candidates(
+    payload: LeadBatchApproveCNPJCandidatesRequest,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> LeadBatchApproveCNPJCandidatesResponse:
+    service = CNPJEnrichmentService(db=db, settings=settings)
+    try:
+        return service.approve_cnpj_candidates_batch(payload.lead_ids, actor="api")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/{lead_id}/approve-cnpj-candidate", response_model=LeadDetail)
 def approve_cnpj_candidate(
     lead_id: int,
+    payload: LeadApproveCNPJCandidateRequest | None = None,
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> LeadDetail:
     service = CNPJEnrichmentService(db=db, settings=settings)
     try:
-        lead = service.approve_cnpj_candidate(lead_id, actor="api")
+        lead = service.approve_cnpj_candidate(
+            lead_id,
+            candidate_cnpj=payload.candidate_cnpj if payload else None,
+            actor="api",
+        )
+    except CNPJCandidateApprovalError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LeadDetail.model_validate(lead)
+
+
+@router.post("/{lead_id}/reject-cnpj-candidate", response_model=LeadDetail)
+def reject_cnpj_candidate(
+    lead_id: int,
+    payload: LeadRejectCNPJCandidateRequest | None = None,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> LeadDetail:
+    service = CNPJEnrichmentService(db=db, settings=settings)
+    try:
+        lead = service.reject_cnpj_candidate(
+            lead_id,
+            candidate_cnpj=payload.candidate_cnpj if payload else None,
+            actor="api",
+        )
     except CNPJCandidateApprovalError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:

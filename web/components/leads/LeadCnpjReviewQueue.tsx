@@ -1,0 +1,475 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  approveLeadBatchCnpjCandidates,
+  approveLeadCnpjCandidateByValue,
+  listLeads,
+  rejectLeadCnpjCandidate,
+} from "@/lib/api/leads";
+import type {
+  LeadBatchApproveCNPJCandidatesResponse,
+  LeadCnpjCandidateSummary,
+  LeadListParams,
+  LeadSummary,
+} from "@/lib/api/types";
+import { formatUserFacingError } from "@/lib/ui/messages";
+
+type LeadCnpjReviewQueueProps = {
+  currentFilters: LeadListParams;
+  onActivateLead: (leadId: number) => void;
+  activeLeadId: number | null;
+};
+
+export function LeadCnpjReviewQueue({
+  currentFilters,
+  onActivateLead,
+  activeLeadId,
+}: LeadCnpjReviewQueueProps) {
+  const queryClient = useQueryClient();
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [lastBulkSummary, setLastBulkSummary] = useState<LeadBatchApproveCNPJCandidatesResponse["summary"] | null>(
+    null,
+  );
+
+  const reviewParams = useMemo<LeadListParams>(
+    () => ({
+      ...currentScopeFilters(currentFilters),
+      limit: 200,
+      offset: 0,
+    }),
+    [currentFilters],
+  );
+
+  const reviewQuery = useQuery({
+    queryKey: ["leads-cnpj-review", reviewParams],
+    queryFn: () => listLeads(reviewParams),
+  });
+
+  const reviewItems = useMemo(
+    () =>
+      (reviewQuery.data?.items ?? []).filter((lead) => {
+        const candidates = getCandidateSummaries(lead);
+        if (candidates.length === 0) {
+          return false;
+        }
+        if (lead.cnpj_match_status === "needs_review") {
+          return true;
+        }
+        return candidates.some((candidate) => candidate.manual_review_approvable);
+      }),
+    [reviewQuery.data?.items],
+  );
+
+  useEffect(() => {
+    const allowed = new Set(
+      reviewItems
+        .filter((lead) => isSingleBulkApprovableLead(lead))
+        .map((lead) => lead.id),
+    );
+    setSelectedIds((current) => current.filter((leadId) => allowed.has(leadId)));
+  }, [reviewItems]);
+
+  const approveMutation = useMutation({
+    mutationFn: ({ leadId, candidateCnpj }: { leadId: number; candidateCnpj: string | null }) =>
+      approveLeadCnpjCandidateByValue(leadId, candidateCnpj),
+    onSuccess: () => {
+      setLastBulkSummary(null);
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["lead-detail"] });
+      void queryClient.invalidateQueries({ queryKey: ["leads-cnpj-review"] });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ leadId, candidateCnpj }: { leadId: number; candidateCnpj: string | null }) =>
+      rejectLeadCnpjCandidate(leadId, candidateCnpj),
+    onSuccess: () => {
+      setLastBulkSummary(null);
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["lead-detail"] });
+      void queryClient.invalidateQueries({ queryKey: ["leads-cnpj-review"] });
+    },
+  });
+
+  const bulkApproveMutation = useMutation({
+    mutationFn: (leadIds: number[]) => approveLeadBatchCnpjCandidates(leadIds),
+    onSuccess: (response) => {
+      setSelectedIds([]);
+      setLastBulkSummary(response.summary);
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["lead-detail"] });
+      void queryClient.invalidateQueries({ queryKey: ["leads-cnpj-review"] });
+    },
+  });
+
+  return (
+    <section className="rounded-md border border-amber-200 bg-white">
+      <div className="flex flex-col gap-3 border-b border-amber-100 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-amber-700">CNPJ</p>
+          <h2 className="mt-1 text-base font-semibold text-neutral-950">Candidatos CNPJ para revisão</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Confira os cadastros encontrados, aprove os casos seguros e mantenha sem CNPJ quando o candidato não servir.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+            {reviewItems.length.toLocaleString()} lead(s) na fila
+          </div>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0 || bulkApproveMutation.isPending}
+            onClick={() => bulkApproveMutation.mutate(selectedIds)}
+            className="rounded-md border border-cyan-700 bg-cyan-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-cyan-200 disabled:bg-cyan-200"
+          >
+            {bulkApproveMutation.isPending ? "Aprovando..." : "Aprovar selecionados"}
+          </button>
+        </div>
+      </div>
+
+      {reviewQuery.isLoading ? (
+        <p className="px-4 py-4 text-sm text-neutral-500">Carregando fila de revisão...</p>
+      ) : null}
+
+      {reviewQuery.isError ? (
+        <p className="px-4 py-4 text-sm text-rose-800">
+          {formatUserFacingError(reviewQuery.error, "Não foi possível carregar a fila de revisão agora.")}
+        </p>
+      ) : null}
+
+      {bulkApproveMutation.isError ? (
+        <p className="mx-4 mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {formatUserFacingError(
+            bulkApproveMutation.error,
+            "Não foi possível aprovar os CNPJs selecionados agora.",
+          )}
+        </p>
+      ) : null}
+
+      {lastBulkSummary ? (
+        <div className="mx-4 mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          {buildBulkApprovalNarrative(lastBulkSummary)}
+        </div>
+      ) : null}
+
+      {!reviewQuery.isLoading && !reviewQuery.isError && reviewItems.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-neutral-500">
+          Nenhum candidato CNPJ pendente de revisão com os filtros atuais.
+        </p>
+      ) : null}
+
+      {reviewItems.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
+            <thead className="bg-neutral-50 text-xs font-semibold uppercase text-neutral-500">
+              <tr>
+                <th className="border-b border-neutral-200 px-3 py-3">Seleção</th>
+                <th className="border-b border-neutral-200 px-3 py-3">Lead</th>
+                <th className="border-b border-neutral-200 px-3 py-3">Endereço atual</th>
+                <th className="border-b border-neutral-200 px-3 py-3">Candidato(s)</th>
+                <th className="border-b border-neutral-200 px-3 py-3">Status</th>
+                <th className="border-b border-neutral-200 px-3 py-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviewItems.map((lead) => {
+                const candidates = getCandidateSummaries(lead);
+                const bulkApprovable = isSingleBulkApprovableLead(lead);
+                const checked = selectedIds.includes(lead.id);
+                const diagnostics = getLeadReviewStatusLabel(lead, candidates);
+                return (
+                  <tr key={lead.id} className={lead.id === activeLeadId ? "bg-cyan-50" : "bg-white"}>
+                    <td className="border-b border-neutral-100 px-3 py-3 align-top">
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar ${lead.business_name}`}
+                        checked={checked}
+                        disabled={!bulkApprovable}
+                        onChange={(event) => {
+                          setSelectedIds((current) =>
+                            event.target.checked
+                              ? [...current, lead.id]
+                              : current.filter((item) => item !== lead.id),
+                          );
+                        }}
+                        className="h-4 w-4 rounded border-neutral-300"
+                      />
+                    </td>
+                    <td className="border-b border-neutral-100 px-3 py-3 align-top">
+                      <button
+                        type="button"
+                        onClick={() => onActivateLead(lead.id)}
+                        className="text-left"
+                      >
+                        <p className="font-medium text-neutral-950">{lead.business_name}</p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {[lead.city, lead.state].filter(Boolean).join("/") || "Local não informado"}
+                        </p>
+                      </button>
+                    </td>
+                    <td className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-700">
+                      {compact([lead.address, lead.neighborhood, lead.postal_code]) || "Não informado"}
+                    </td>
+                    <td className="border-b border-neutral-100 px-3 py-3 align-top">
+                      <div className="space-y-2">
+                        {candidates.map((candidate) => {
+                          const isPrimary = normalizeCnpj(candidate.cnpj) === normalizeCnpj(getPrimaryCandidate(lead)?.cnpj);
+                          return (
+                            <div
+                              key={`${lead.id}-${candidate.cnpj ?? candidate.legal_name ?? "candidate"}`}
+                              className="rounded-md border border-neutral-200 bg-neutral-50 p-2"
+                            >
+                              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-1">
+                                  <p className="font-medium text-neutral-950">
+                                    {candidate.trade_name || candidate.legal_name || "Candidato"}
+                                    {isPrimary ? " · principal" : ""}
+                                  </p>
+                                  <p className="text-xs text-neutral-600">
+                                    CNPJ: {candidate.cnpj || "Não disponível"}
+                                  </p>
+                                  <p className="text-xs text-neutral-600">
+                                    Razão social: {candidate.legal_name || "Não informada"}
+                                  </p>
+                                  {candidate.trade_name ? (
+                                    <p className="text-xs text-neutral-600">Nome fantasia: {candidate.trade_name}</p>
+                                  ) : null}
+                                  <p className="text-xs text-neutral-600">
+                                    {[candidate.city, candidate.state].filter(Boolean).join("/") || "Cidade/UF não informadas"}
+                                  </p>
+                                  <p className="text-xs text-neutral-600">{candidate.address || "Endereço não informado"}</p>
+                                  <p className="text-xs text-neutral-600">
+                                    Confiança: {formatConfidence(candidate.match_confidence)} · Pontuação: {formatScore(candidate.score)}
+                                  </p>
+                                  <p className="text-xs text-neutral-500">
+                                    {candidate.query_mode_label || "Busca cadastral"} · {candidate.provider || "Provedor não informado"}
+                                  </p>
+                                </div>
+                                {candidate.manual_review_approvable ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      approveMutation.mutate({
+                                        leadId: lead.id,
+                                        candidateCnpj: candidate.cnpj,
+                                      })
+                                    }
+                                    disabled={approveMutation.isPending}
+                                    className="rounded-md border border-cyan-700 bg-cyan-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-cyan-200 disabled:bg-cyan-200"
+                                  >
+                                    Aprovar este CNPJ
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-700">
+                      <p className="font-medium text-neutral-950">{diagnostics.label}</p>
+                      <p className="mt-1 text-xs text-neutral-600">{diagnostics.reason}</p>
+                    </td>
+                    <td className="border-b border-neutral-100 px-3 py-3 align-top">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          rejectMutation.mutate({
+                            leadId: lead.id,
+                            candidateCnpj: getPrimaryCandidate(lead)?.cnpj ?? null,
+                          })
+                        }
+                        disabled={rejectMutation.isPending}
+                        className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Manter sem CNPJ
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function getCandidateSummaries(lead: Pick<LeadSummary, "cnpj_metadata_json">): LeadCnpjCandidateSummary[] {
+  const metadata = asRecord(lead.cnpj_metadata_json);
+  const items = Array.isArray(metadata?.candidate_summaries) ? metadata.candidate_summaries : [];
+  const parsed = items
+    .map((candidate) => parseCandidateSummary(candidate))
+    .filter((candidate): candidate is LeadCnpjCandidateSummary => candidate !== null);
+  if (parsed.length > 0) {
+    return parsed;
+  }
+  const singleCandidate = parseCandidateSummary(metadata?.candidate_summary);
+  return singleCandidate ? [singleCandidate] : [];
+}
+
+function getPrimaryCandidate(lead: Pick<LeadSummary, "cnpj_metadata_json">) {
+  return getCandidateSummaries(lead)[0] ?? null;
+}
+
+function parseCandidateSummary(value: unknown): LeadCnpjCandidateSummary | null {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return null;
+  }
+  return {
+    cnpj: asNullableString(candidate.cnpj),
+    legal_name: asNullableString(candidate.legal_name),
+    trade_name: asNullableString(candidate.trade_name),
+    address: asNullableString(candidate.address),
+    city: asNullableString(candidate.city),
+    state: asNullableString(candidate.state),
+    postal_code: asNullableString(candidate.postal_code),
+    phones: asStringArray(candidate.phones),
+    emails: asStringArray(candidate.emails),
+    primary_activity: asNullableString(candidate.primary_activity),
+    provider: asNullableString(candidate.provider),
+    score: asNullableNumber(candidate.score),
+    match_confidence: asNullableNumber(candidate.match_confidence),
+    evidence: asNumberRecord(candidate.evidence),
+    penalties: asStringArray(candidate.penalties),
+    query_mode: asNullableString(candidate.query_mode),
+    query_mode_label: asNullableString(candidate.query_mode_label),
+    blocked_from_autofill_reason: asNullableString(candidate.blocked_from_autofill_reason),
+    review_reason: asNullableString(candidate.review_reason),
+    person_like_legal_name: Boolean(candidate.person_like_legal_name),
+    legal_name_note: asNullableString(candidate.legal_name_note),
+    manual_review_approvable: candidate.manual_review_approvable === false ? false : hasFullCnpj(asNullableString(candidate.cnpj)),
+  };
+}
+
+function isSingleBulkApprovableLead(lead: Pick<LeadSummary, "cnpj_metadata_json">) {
+  const candidates = getCandidateSummaries(lead);
+  return candidates.length === 1 && candidates[0]?.manual_review_approvable && hasFullCnpj(candidates[0].cnpj);
+}
+
+function getLeadReviewStatusLabel(
+  lead: Pick<LeadSummary, "cnpj_match_status" | "cnpj_metadata_json">,
+  candidates: LeadCnpjCandidateSummary[],
+) {
+  const metadata = asRecord(lead.cnpj_metadata_json);
+  const reasonCode = asNullableString(metadata?.reason_code);
+  if (reasonCode === "company_search_rate_limited" || reasonCode === "cnpj_provider_rate_limited") {
+    return {
+      label: "Limite do provedor, tente novamente",
+      reason: "A consulta foi limitada pelo provedor e pode ser tentada novamente depois.",
+    };
+  }
+  if (lead.cnpj_match_status === "needs_review" && candidates.length > 1) {
+    return {
+      label: "Múltiplos candidatos encontrados",
+      reason: "Mais de um candidato forte encontrado. Escolha o cadastro correto.",
+    };
+  }
+  if (lead.cnpj_match_status === "needs_review") {
+    return {
+      label: "Candidato encontrado",
+      reason: candidates[0]?.review_reason || "A busca encontrou um candidato, mas precisa de revisão manual.",
+    };
+  }
+  if (reasonCode === "company_search_low_confidence" && candidates.length > 0) {
+    return {
+      label: "Candidatos fracos",
+      reason: "Os candidatos encontrados não atingiram confiança suficiente para confirmação automática.",
+    };
+  }
+  return {
+    label: "Não encontrado",
+    reason: "Nenhum candidato revisável ficou disponível para aprovação.",
+  };
+}
+
+function buildBulkApprovalNarrative(summary: LeadBatchApproveCNPJCandidatesResponse["summary"]) {
+  const parts = [
+    `${summary.approved_count.toLocaleString()} aprovado(s)`,
+    summary.skipped_ambiguous_count
+      ? `${summary.skipped_ambiguous_count.toLocaleString()} ambíguo(s) pulado(s)`
+      : null,
+    summary.skipped_no_candidate_count
+      ? `${summary.skipped_no_candidate_count.toLocaleString()} sem candidato pulado(s)`
+      : null,
+    summary.skipped_low_confidence_count
+      ? `${summary.skipped_low_confidence_count.toLocaleString()} abaixo do mínimo pulado(s)`
+      : null,
+    summary.skipped_already_matched_count
+      ? `${summary.skipped_already_matched_count.toLocaleString()} já confirmado(s)`
+      : null,
+  ].filter(Boolean);
+  return `Aprovação em lote concluída: ${parts.join(", ")}.`;
+}
+
+function currentScopeFilters(filters: LeadListParams): LeadListParams {
+  const { limit: _limit, offset: _offset, cnpj_match_status: _cnpjMatchStatus, ...scopeFilters } = filters;
+  return scopeFilters;
+}
+
+function compact(values: Array<string | null | undefined>) {
+  const parts = values.filter((value): value is string => Boolean(value && value.trim()));
+  return parts.length ? parts.join(" · ") : null;
+}
+
+function formatConfidence(value?: number | null) {
+  if (typeof value !== "number") {
+    return "Não informado";
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatScore(value?: number | null) {
+  if (typeof value !== "number") {
+    return "Não informado";
+  }
+  return `${Math.round(value)} / 100`;
+}
+
+function hasFullCnpj(value?: string | null) {
+  return normalizeCnpj(value) !== null;
+}
+
+function normalizeCnpj(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  const digits = value.replace(/\D/g, "");
+  return digits.length === 14 ? digits : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asNullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function asNumberRecord(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+  );
+}

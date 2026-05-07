@@ -3568,3 +3568,152 @@ def test_cnpj_batch_summary_mentions_candidates_needing_review() -> None:
     batch_actions_file = (REPO_ROOT / "web/components/leads/LeadBatchActions.tsx").read_text(encoding="utf-8")
 
     assert "candidatos encontrados precisam revisão" in batch_actions_file
+
+
+def test_ambiguous_high_score_candidates_are_stored_in_candidate_summaries(db_session) -> None:
+    lead = _lead(cnpj=None, website=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                cnpj="37335118000180",
+                legal_name="Empresa A Ltda",
+                trade_name="Marca A",
+                source_provider="cnpja_commercial",
+            ),
+            _lookup_result(
+                cnpj="17247065000139",
+                legal_name="Empresa B Ltda",
+                trade_name="Marca B",
+                source_provider="cnpja_commercial",
+            ),
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert response.results[0].match_status == "needs_review"
+    assert lead.cnpj is None
+    candidate_summaries = lead.cnpj_metadata_json["candidate_summaries"]
+    assert len(candidate_summaries) == 2
+    assert {item["cnpj"] for item in candidate_summaries} == {"37335118000180", "17247065000139"}
+
+
+def test_batch_approve_cnpj_candidates_only_approves_single_valid_candidates(db_session) -> None:
+    matched_lead = _lead(cnpj="37335118000180", legal_name="Ja Confirmado Ltda", match_status="matched")
+    single_candidate_lead = _lead(cnpj=None, website=None, business_name="Fila A")
+    ambiguous_lead = _lead(cnpj=None, website=None, business_name="Fila B")
+    no_candidate_lead = _lead(cnpj=None, website=None, business_name="Fila C")
+    low_confidence_lead = _lead(cnpj=None, website=None, business_name="Fila D")
+    db_session.add_all(
+        [
+            matched_lead,
+            single_candidate_lead,
+            ambiguous_lead,
+            no_candidate_lead,
+            low_confidence_lead,
+        ]
+    )
+    db_session.commit()
+
+    single_candidate_lead.cnpj_match_status = "needs_review"
+    single_candidate_lead.cnpj_metadata_json = {
+        "candidate_summary": {
+            "cnpj": "47007836000181",
+            "legal_name": "Casa Nova Ltda",
+            "provider": "cnpja_commercial",
+            "match_confidence": 0.78,
+            "manual_review_approvable": True,
+        },
+        "candidate_summaries": [
+            {
+                "cnpj": "47007836000181",
+                "legal_name": "Casa Nova Ltda",
+                "provider": "cnpja_commercial",
+                "match_confidence": 0.78,
+                "manual_review_approvable": True,
+            }
+        ],
+    }
+    ambiguous_lead.cnpj_match_status = "needs_review"
+    ambiguous_lead.cnpj_metadata_json = {
+        "candidate_summaries": [
+            {
+                "cnpj": "11111111000191",
+                "legal_name": "Ambigua A Ltda",
+                "provider": "cnpja_commercial",
+                "match_confidence": 0.9,
+                "manual_review_approvable": True,
+            },
+            {
+                "cnpj": "22222222000191",
+                "legal_name": "Ambigua B Ltda",
+                "provider": "cnpja_commercial",
+                "match_confidence": 0.88,
+                "manual_review_approvable": True,
+            },
+        ]
+    }
+    low_confidence_lead.cnpj_match_status = "needs_review"
+    low_confidence_lead.cnpj_metadata_json = {
+        "candidate_summaries": [
+            {
+                "cnpj": "33333333000191",
+                "legal_name": "Baixa Confianca Ltda",
+                "provider": "cnpja_commercial",
+                "match_confidence": 0.3,
+                "manual_review_approvable": True,
+            }
+        ]
+    }
+    db_session.commit()
+
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=FakeCNPJAProvider(),  # type: ignore[arg-type]
+    )
+
+    response = service.approve_cnpj_candidates_batch(
+        [
+            matched_lead.id,
+            single_candidate_lead.id,
+            ambiguous_lead.id,
+            no_candidate_lead.id,
+            low_confidence_lead.id,
+        ],
+        actor="test",
+    )
+    db_session.refresh(single_candidate_lead)
+    db_session.refresh(ambiguous_lead)
+    db_session.refresh(low_confidence_lead)
+
+    assert response.summary.approved_count == 1
+    assert response.summary.skipped_already_matched_count == 1
+    assert response.summary.skipped_ambiguous_count == 1
+    assert response.summary.skipped_no_candidate_count == 1
+    assert response.summary.skipped_low_confidence_count == 1
+    assert single_candidate_lead.cnpj == "47007836000181"
+    assert single_candidate_lead.cnpj_match_status == "matched"
+    assert single_candidate_lead.cnpj_metadata_json["approved_manually"] is True
+    assert ambiguous_lead.cnpj is None
+    assert low_confidence_lead.cnpj is None

@@ -1,5 +1,6 @@
 import { getJson, postBlob, postJson } from "@/lib/api/client";
 import type {
+  LeadBatchApproveCNPJCandidatesResponse,
   LeadBatchAssignmentResponse,
   LeadBatchCNPJEnrichmentResponse,
   LeadBatchEnrichmentResponse,
@@ -66,7 +67,26 @@ export function enrichLeadBatchCnpj(
 }
 
 export function approveLeadCnpjCandidate(leadId: number) {
-  return postJson<LeadDetail, Record<string, never>>(`/leads/${leadId}/approve-cnpj-candidate`, {});
+  return postJson<LeadDetail, { candidate_cnpj?: string }>(`/leads/${leadId}/approve-cnpj-candidate`, {});
+}
+
+export function approveLeadCnpjCandidateByValue(leadId: number, candidateCnpj?: string | null) {
+  return postJson<LeadDetail, { candidate_cnpj?: string }>(`/leads/${leadId}/approve-cnpj-candidate`, {
+    ...(candidateCnpj ? { candidate_cnpj: candidateCnpj } : {}),
+  });
+}
+
+export function rejectLeadCnpjCandidate(leadId: number, candidateCnpj?: string | null) {
+  return postJson<LeadDetail, { candidate_cnpj?: string }>(`/leads/${leadId}/reject-cnpj-candidate`, {
+    ...(candidateCnpj ? { candidate_cnpj: candidateCnpj } : {}),
+  });
+}
+
+export function approveLeadBatchCnpjCandidates(leadIds: number[]) {
+  return postJson<LeadBatchApproveCNPJCandidatesResponse, { lead_ids: number[] }>(
+    "/leads/batch/approve-cnpj-candidates",
+    { lead_ids: leadIds },
+  );
 }
 
 export function assignLeadBatch(scope: LeadScopeRequest) {

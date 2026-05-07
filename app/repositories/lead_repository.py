@@ -781,6 +781,8 @@ class LeadRepository:
             conditions.append(Lead.state.ilike(filters.state))
         if filters.status:
             conditions.append(Lead.status == filters.status)
+        if filters.cnpj_match_status:
+            conditions.append(Lead.cnpj_match_status == filters.cnpj_match_status)
         if filters.category:
             conditions.append(Lead.category.ilike(f"%{filters.category}%"))
         if filters.lead_source_type:

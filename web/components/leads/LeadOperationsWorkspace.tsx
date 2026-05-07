@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { LeadBatchActions } from "@/components/leads/LeadBatchActions";
+import { LeadCnpjReviewQueue } from "@/components/leads/LeadCnpjReviewQueue";
 import { LeadDetailPanel } from "@/components/leads/LeadDetailPanel";
 import { LeadQueueFilters } from "@/components/leads/LeadQueueFilters";
 import { LeadQueueTable } from "@/components/leads/LeadQueueTable";
@@ -207,6 +208,12 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         currentFilters={queryParams}
         currentTotal={currentFilteredTotal}
         searchActive={Boolean(searchTerm)}
+      />
+
+      <LeadCnpjReviewQueue
+        currentFilters={queryParams}
+        onActivateLead={setActiveLeadId}
+        activeLeadId={detailLeadId}
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">

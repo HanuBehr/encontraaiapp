@@ -76,6 +76,8 @@ export type LeadSummary = {
   business_name: string;
   normalized_business_name: string;
   category: string | null;
+  address: string | null;
+  postal_code: string | null;
   neighborhood: string | null;
   city: string | null;
   state: string | null;
@@ -89,6 +91,8 @@ export type LeadSummary = {
   cnpj_match_status: CNPJMatchStatus;
   cnpj_match_confidence: number | null;
   cnpj_last_enriched_at: string | null;
+  cnpj_source_provider: string | null;
+  cnpj_metadata_json: Record<string, unknown>;
   lead_score: number;
   status: LeadStatus;
   lead_source_type: LeadSourceType;
@@ -266,6 +270,7 @@ export type LeadListParams = {
   city?: string;
   state?: string;
   status?: LeadStatus;
+  cnpj_match_status?: CNPJMatchStatus;
   has_email?: boolean;
   has_whatsapp?: boolean;
   has_instagram?: boolean;
@@ -442,6 +447,19 @@ export type LeadBatchCNPJEnrichmentResponse = {
     provider_rate_limited_count: number;
     provider_error_count: number;
     error_count: number;
+    errors: string[];
+  };
+};
+
+export type LeadBatchApproveCNPJCandidatesResponse = {
+  summary: {
+    requested: number;
+    processed: number;
+    approved_count: number;
+    skipped_ambiguous_count: number;
+    skipped_no_candidate_count: number;
+    skipped_low_confidence_count: number;
+    skipped_already_matched_count: number;
     errors: string[];
   };
 };

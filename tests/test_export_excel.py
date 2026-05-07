@@ -511,3 +511,67 @@ def test_import_batch_lead_id_resolution_is_distinct_latest_and_org_scoped(db_se
     assert repository.get_latest_completed_import_batch().id == new_batch.id
     assert repository.list_lead_ids_for_import_batch(new_batch.id) == [new_lead.id]
     assert repository.list_lead_ids_for_import_batch(old_batch.id) == [old_lead.id]
+
+
+def test_excel_export_includes_only_matched_cnpj_and_tracks_review_counts(db_session) -> None:
+    organization = Organization(slug="default", name="Default Organization", display_name="Default Organization")
+    manual = _lead("Casa Nova", organization=organization, city="Itu")
+    manual.cnpj = "47007836000181"
+    manual.legal_name = "Casa Nova Ltda"
+    manual.cnpj_match_status = "matched"
+    manual.cnpj_metadata_json = {"approved_manually": True}
+
+    automatic = _lead("Buzzo Materiais", organization=organization, city="Itu")
+    automatic.cnpj = "65539918000159"
+    automatic.legal_name = "BUZZO COMERCIO DE MATERIAIS PARA CONSTRUCAO LTDA"
+    automatic.cnpj_match_status = "matched"
+    automatic.cnpj_metadata_json = {}
+
+    review = _lead("M2 Materiais", organization=organization, city="Campinas")
+    review.cnpj_match_status = "needs_review"
+    review.cnpj_metadata_json = {
+      "candidate_summary": {
+        "cnpj": "11111111000191",
+        "legal_name": "M2 Materiais Ltda",
+      }
+    }
+
+    not_found = _lead("Sofal", organization=organization, city="Campinas")
+    not_found.cnpj_match_status = "not_found"
+
+    db_session.add_all([organization, manual, automatic, review, not_found])
+    db_session.commit()
+
+    service = ExcelExportService(db_session)
+    _, payload = service.build_workbook(LeadListFilters())
+
+    workbook = load_workbook(BytesIO(payload))
+    rows = [
+        {headers[i]: values[i] for i in range(len(headers))}
+        for headers, values in [
+            (
+                [cell.value for cell in workbook["Empresas"][1]],
+                [cell.value for cell in row],
+            )
+            for row in workbook["Empresas"].iter_rows(min_row=2, max_row=5)
+        ]
+    ]
+    metadata = {
+        row[0].value: row[1].value
+        for row in workbook["Metadata"].iter_rows(min_row=2, max_col=2)
+        if row[0].value
+    }
+
+    casa_nova = next(row for row in rows if row["Nome"] == "Casa Nova")
+    buzzo = next(row for row in rows if row["Nome"] == "Buzzo Materiais")
+    m2 = next(row for row in rows if row["Nome"] == "M2 Materiais")
+
+    assert casa_nova["CNPJ"] == "47007836000181"
+    assert casa_nova["Razão Social"] == "Casa Nova Ltda"
+    assert buzzo["CNPJ"] == "65539918000159"
+    assert m2["CNPJ"] is None
+    assert m2["Razão Social"] is None
+    assert metadata["confirmed_automatically"] == 1
+    assert metadata["confirmed_manually"] == 1
+    assert metadata["pending_review"] == 1
+    assert metadata["not_found"] == 1
