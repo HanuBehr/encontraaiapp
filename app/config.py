@@ -100,8 +100,16 @@ class Settings(BaseSettings):
     cnpja_company_search_limit: int = Field(default=10, alias="CNPJA_COMPANY_SEARCH_LIMIT")
     cnpja_name_variant_limit: int = Field(default=4, alias="CNPJA_NAME_VARIANT_LIMIT")
     cnpja_max_search_attempts_per_lead: int = Field(
-        default=2,
+        default=1,
         alias="CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD",
+    )
+    cnpja_enable_strict_address_attempt: bool = Field(
+        default=False,
+        alias="CNPJA_ENABLE_STRICT_ADDRESS_ATTEMPT",
+    )
+    cnpja_enable_legal_name_attempt: bool = Field(
+        default=False,
+        alias="CNPJA_ENABLE_LEGAL_NAME_ATTEMPT",
     )
     cnpja_use_email_domain_filter: bool = Field(
         default=False,
@@ -120,6 +128,10 @@ class Settings(BaseSettings):
     cnpja_stop_batch_on_rate_limit: bool = Field(
         default=True,
         alias="CNPJA_STOP_BATCH_ON_RATE_LIMIT",
+    )
+    cnpj_paid_search_repeat_cooldown_hours: int = Field(
+        default=24,
+        alias="CNPJ_PAID_SEARCH_REPEAT_COOLDOWN_HOURS",
     )
 
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")

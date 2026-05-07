@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 import re
 from typing import Any
 
@@ -18,6 +21,7 @@ from app.schemas.lead import (
 )
 from app.services.cnpj_category_cnae import category_activity_matches
 from app.services.enrichment import EnrichmentService
+from app.services.geo.ibge_municipalities import lookup_ibge_municipality_code
 from app.services.normalization import (
     normalize_brazilian_state,
     normalize_business_name,
@@ -59,10 +63,12 @@ CNPJ_WS_PUBLIC_BATCH_LIMIT_MESSAGE = (
 )
 HIGH_CONFIDENCE_SCORE = 80
 MEDIUM_CONFIDENCE_SCORE = 60
+REVIEWABLE_COMPANY_SEARCH_SCORE = 50
 CLEAR_WINNER_GAP = 10
 MAX_WEBSITE_CNPJ_CANDIDATES = 3
 MAX_WEBSITE_FALLBACK_BATCH = 10
 _CNPJ_PATTERN = re.compile(r"(?<!\d)(?:\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}|\d{14})(?!\d)")
+_ZIP_PATTERN = re.compile(r"(?<!\d)(\d{5})-?(\d{3})(?!\d)")
 
 REASON_ALREADY_MATCHED = "already_matched"
 REASON_SKIPPED_NO_WEBSITE = "skipped_no_website"
@@ -85,6 +91,8 @@ REASON_COMPANY_SEARCH_PROVIDER_ERROR = "company_search_provider_error"
 REASON_COMPANY_SEARCH_RATE_LIMITED = "company_search_rate_limited"
 REASON_COMPANY_SEARCH_PREVIEW_ONLY = "company_search_preview_only"
 REASON_COMPANY_SEARCH_PENDING_RETRY = "company_search_pending_retry"
+REASON_PAID_SEARCH_RECENTLY_ATTEMPTED = "paid_search_recently_attempted"
+REASON_SKIPPED_REVIEW_CANDIDATE_EXISTS = "skipped_review_candidate_exists"
 BLOCKED_REASON_MISSING_FULL_CNPJ = "missing_full_cnpj"
 BLOCKED_REASON_CITY_STATE_CONFLICT = "city_state_conflict"
 BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES = "ambiguous_top_candidates"
@@ -103,6 +111,27 @@ COMPANY_SEARCH_RATE_LIMIT_RETRY_REASON = (
     "Busca CNPJ limitada pelo provedor. Aguarde cerca de 1 minuto e tente novamente."
 )
 APPROVE_CNPJ_CANDIDATE_ERROR_MESSAGE = "Nenhum CNPJ revisável disponível para este lead."
+PAID_SEARCH_RECENTLY_ATTEMPTED_REASON = (
+    "Busca paga ja realizada recentemente para este lead. Use forca/limpeza manual se quiser tentar novamente."
+)
+REVIEW_CANDIDATE_EXISTS_REASON = "Candidato encontrado. Revise e aprove antes de consultar novamente."
+PAID_SEARCH_REPEATABLE_REASON_CODES = {
+    REASON_COMPANY_SEARCH_NO_CANDIDATES,
+    REASON_CNPJA_ZERO_CANDIDATES,
+    REASON_COMPANY_SEARCH_LOW_CONFIDENCE,
+    REASON_COMPANY_SEARCH_NEEDS_REVIEW,
+    REASON_COMPANY_SEARCH_PREVIEW_ONLY,
+}
+COMPANY_SEARCH_EXECUTED_REASON_CODES = {
+    REASON_COMPANY_SEARCH_MATCHED,
+    REASON_COMPANY_SEARCH_NEEDS_REVIEW,
+    REASON_COMPANY_SEARCH_PREVIEW_ONLY,
+    REASON_COMPANY_SEARCH_NO_CANDIDATES,
+    REASON_CNPJA_ZERO_CANDIDATES,
+    REASON_COMPANY_SEARCH_LOW_CONFIDENCE,
+    REASON_COMPANY_SEARCH_PROVIDER_ERROR,
+    REASON_COMPANY_SEARCH_RATE_LIMITED,
+}
 
 
 @dataclass(slots=True)
@@ -272,6 +301,18 @@ class CNPJEnrichmentService:
                 )
                 continue
 
+            if not force:
+                reviewable_candidate = self._get_reviewable_candidate_summary(lead)
+                if reviewable_candidate is not None:
+                    results.append(
+                        self._build_review_candidate_skip_result(
+                            lead,
+                            actor=actor,
+                            candidate_summary=reviewable_candidate,
+                        )
+                    )
+                    continue
+
             normalized_cnpj = normalize_cnpj(lead.cnpj)
             if normalized_cnpj is not None:
                 pending_lookups.append(_PendingLookup(lead_id=lead.id, cnpj=normalized_cnpj))
@@ -302,6 +343,15 @@ class CNPJEnrichmentService:
                     )
                 )
                 continue
+
+            if not force and self.settings.cnpj_company_search_configured:
+                recent_search_skip = self._build_recent_paid_search_skip_result(
+                    lead,
+                    actor=actor,
+                )
+                if recent_search_skip is not None:
+                    results.append(recent_search_skip)
+                    continue
 
             pending_searches.append(_PendingSearch(lead_id=lead.id))
 
@@ -405,6 +455,191 @@ class CNPJEnrichmentService:
         if approved_lead is None:
             raise ValueError(f"Lead {lead_id} not found.")
         return approved_lead
+
+    def _build_review_candidate_skip_result(
+        self,
+        lead,
+        *,
+        actor: str,
+        candidate_summary: dict[str, Any],
+    ) -> CNPJEnrichmentRunResult:
+        self._mark_attempt(
+            lead,
+            actor=actor,
+            match_status="needs_review",
+            match_confidence=self._candidate_summary_confidence(candidate_summary, lead.cnpj_match_confidence),
+            source_provider=self._candidate_summary_text(candidate_summary, "provider") or lead.cnpj_source_provider,
+            skipped_reason=REVIEW_CANDIDATE_EXISTS_REASON,
+            error_message=None,
+            reason_code=REASON_SKIPPED_REVIEW_CANDIDATE_EXISTS,
+            candidate_summary=candidate_summary,
+        )
+        return CNPJEnrichmentRunResult(
+            lead_id=lead.id,
+            business_name=lead.business_name,
+            success=True,
+            cnpj=lead.cnpj,
+            legal_name=lead.legal_name,
+            match_status="needs_review",
+            match_confidence=lead.cnpj_match_confidence,
+            reason_code=REASON_SKIPPED_REVIEW_CANDIDATE_EXISTS,
+            skipped_reason=REVIEW_CANDIDATE_EXISTS_REASON,
+            last_enriched_at=lead.cnpj_last_enriched_at,
+        )
+
+    def _build_recent_paid_search_skip_result(
+        self,
+        lead,
+        *,
+        actor: str,
+    ) -> CNPJEnrichmentRunResult | None:
+        provider = self._company_search_source_provider()
+        signature_payload = self._build_company_search_signature_payload(lead, provider=provider)
+        signature = self._build_company_search_signature(signature_payload)
+        if not self._should_skip_recent_paid_search(lead, signature=signature, provider=provider):
+            return None
+
+        attempt_metadata = self._build_recent_paid_search_attempt_metadata(
+            lead,
+            signature=signature,
+            signature_payload=signature_payload,
+            provider=provider,
+        )
+        match_status = getattr(lead, "cnpj_match_status", None) or "unknown"
+        candidate_summary = self._get_candidate_summary_if_present(lead)
+        self._mark_attempt(
+            lead,
+            actor=actor,
+            match_status=match_status,
+            match_confidence=lead.cnpj_match_confidence,
+            source_provider=lead.cnpj_source_provider or provider,
+            skipped_reason=PAID_SEARCH_RECENTLY_ATTEMPTED_REASON,
+            error_message=None,
+            reason_code=REASON_PAID_SEARCH_RECENTLY_ATTEMPTED,
+            attempt_metadata=attempt_metadata,
+            candidate_summary=candidate_summary,
+        )
+        return CNPJEnrichmentRunResult(
+            lead_id=lead.id,
+            business_name=lead.business_name,
+            success=True,
+            cnpj=lead.cnpj,
+            legal_name=lead.legal_name,
+            match_status=match_status,
+            match_confidence=lead.cnpj_match_confidence,
+            reason_code=REASON_PAID_SEARCH_RECENTLY_ATTEMPTED,
+            skipped_reason=PAID_SEARCH_RECENTLY_ATTEMPTED_REASON,
+            last_enriched_at=lead.cnpj_last_enriched_at,
+        )
+
+    def _should_skip_recent_paid_search(
+        self,
+        lead,
+        *,
+        signature: str,
+        provider: str,
+    ) -> bool:
+        metadata = lead.cnpj_metadata_json or {}
+        last_signature = metadata.get("cnpj_paid_search_last_signature")
+        last_provider = metadata.get("cnpj_paid_search_last_provider")
+        last_reason_code = metadata.get("cnpj_paid_search_last_result_status")
+        last_attempt_at = self._parse_metadata_datetime(metadata.get("cnpj_paid_search_last_attempt_at"))
+        if (
+            not isinstance(last_signature, str)
+            or last_signature != signature
+            or not isinstance(last_provider, str)
+            or last_provider != provider
+            or not isinstance(last_reason_code, str)
+            or last_reason_code not in PAID_SEARCH_REPEATABLE_REASON_CODES
+            or last_attempt_at is None
+        ):
+            return False
+        cooldown = timedelta(hours=max(1, self.settings.cnpj_paid_search_repeat_cooldown_hours))
+        return utcnow() - last_attempt_at < cooldown
+
+    def _build_recent_paid_search_attempt_metadata(
+        self,
+        lead,
+        *,
+        signature: str,
+        signature_payload: dict[str, Any],
+        provider: str,
+    ) -> dict[str, Any]:
+        metadata = dict(lead.cnpj_metadata_json or {})
+        last_attempt_at = metadata.get("cnpj_paid_search_last_attempt_at")
+        last_result_status = metadata.get("cnpj_paid_search_last_result_status")
+        last_candidates_count = metadata.get("cnpj_paid_search_last_candidates_count")
+        return {
+            "company_search": {
+                "provider": provider,
+                "actual_request_made": False,
+                "recent_search_skipped": True,
+                "query_signature": signature,
+                "signature_payload": signature_payload,
+                "repeat_cooldown_hours": self.settings.cnpj_paid_search_repeat_cooldown_hours,
+                "last_attempt_at": last_attempt_at,
+                "last_result_status": last_result_status,
+                "last_candidates_count": last_candidates_count,
+            }
+        }
+
+    def _build_company_search_signature_payload(
+        self,
+        lead,
+        *,
+        provider: str,
+    ) -> dict[str, Any]:
+        normalized_business_name = normalize_text(lead.business_name)
+        normalized_state = normalize_brazilian_state(lead.state) or normalize_text(lead.state)
+        normalized_postal_code = self._normalize_postal_code(lead.postal_code)
+        extracted_postal_code = (
+            normalized_postal_code
+            or self._extract_postal_code_from_text(getattr(lead, "address", None))
+        )
+        municipality_code = lookup_ibge_municipality_code(lead.city, lead.state)
+        phone_area = self._extract_area_code(lead.phone) or self._extract_area_code(lead.whatsapp)
+        return {
+            "lead_id": lead.id,
+            "provider": provider,
+            "business_name": normalized_business_name,
+            "city": normalize_text(lead.city),
+            "state": normalized_state,
+            "municipality_code": municipality_code,
+            "postal_code": extracted_postal_code,
+            "phone_area": phone_area,
+            "website_domain": normalize_domain(lead.website) or normalize_domain(lead.domain),
+            "query_mode": "staged_company_search",
+            "max_attempts_per_lead": self.settings.cnpja_max_search_attempts_per_lead,
+            "name_variant_limit": self.settings.cnpja_name_variant_limit,
+            "strict_address_attempt_enabled": self.settings.cnpja_enable_strict_address_attempt,
+            "legal_name_attempt_enabled": self.settings.cnpja_enable_legal_name_attempt,
+            "email_domain_filter_enabled": self.settings.cnpja_use_email_domain_filter,
+        }
+
+    @staticmethod
+    def _build_company_search_signature(payload: dict[str, Any]) -> str:
+        encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _parse_metadata_datetime(value: Any) -> datetime | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    @staticmethod
+    def _get_candidate_summary_if_present(lead) -> dict[str, Any] | None:
+        metadata = lead.cnpj_metadata_json or {}
+        candidate_summary = metadata.get("candidate_summary")
+        if not isinstance(candidate_summary, dict):
+            return None
+        return dict(candidate_summary)
 
     def _enrich_known_cnpj_lead(
         self,
@@ -511,6 +746,9 @@ class CNPJEnrichmentService:
         attempt_metadata: dict[str, Any] | None,
     ) -> CNPJEnrichmentRunResult:
         provider_attempt_metadata: dict[str, Any] | None = None
+        provider = self._company_search_source_provider()
+        search_signature_payload = self._build_company_search_signature_payload(lead, provider=provider)
+        search_signature = self._build_company_search_signature(search_signature_payload)
         try:
             candidates = self.provider.search_companies(
                 business_name=lead.business_name,
@@ -523,9 +761,21 @@ class CNPJEnrichmentService:
                 address=lead.address,
                 neighborhood=lead.neighborhood,
             )
-            provider_attempt_metadata = getattr(self.provider, "last_company_search_metadata", None)
+            provider_attempt_metadata = self._with_company_search_request_metadata(
+                getattr(self.provider, "last_company_search_metadata", None),
+                query_signature=search_signature,
+                signature_payload=search_signature_payload,
+                provider=provider,
+                actual_request_made=True,
+            )
         except CNPJAProviderError as exc:
-            provider_attempt_metadata = getattr(self.provider, "last_company_search_metadata", None)
+            provider_attempt_metadata = self._with_company_search_request_metadata(
+                getattr(self.provider, "last_company_search_metadata", None),
+                query_signature=search_signature,
+                signature_payload=search_signature_payload,
+                provider=provider,
+                actual_request_made=True,
+            )
             reason_code = self._provider_reason_code(str(exc), company_search=True)
             if (
                 reason_code == REASON_COMPANY_SEARCH_RATE_LIMITED
@@ -538,7 +788,7 @@ class CNPJEnrichmentService:
                 actor=actor,
                 error_message=str(exc),
                 errors=errors,
-                source_provider=self._company_search_source_provider(),
+                source_provider=provider,
                 reason_code=reason_code,
                 attempt_metadata=self._merge_attempt_metadata(
                     attempt_metadata,
@@ -554,7 +804,7 @@ class CNPJEnrichmentService:
             return self._finalize_missing_cnpj_result(
                 lead,
                 actor=actor,
-                source_provider=self._company_search_source_provider(),
+                source_provider=provider,
                 reason_code=(
                     REASON_CNPJA_ZERO_CANDIDATES
                     if self._is_cnpja_zero_candidates(provider_attempt_metadata)
@@ -634,7 +884,7 @@ class CNPJEnrichmentService:
                 blocked_reason=blocked_reason,
             )
 
-        if best_candidate.score >= MEDIUM_CONFIDENCE_SCORE and not self._has_location_conflict(best_candidate):
+        if self._is_reviewable_company_search_candidate(best_candidate):
             review_reason = blocked_reason or BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD
             return self._finalize_review_result(
                 lead,
@@ -929,6 +1179,22 @@ class CNPJEnrichmentService:
             skipped_reason=COMPANY_SEARCH_RATE_LIMIT_RETRY_REASON,
             last_enriched_at=lead.cnpj_last_enriched_at,
         )
+
+    @staticmethod
+    def _with_company_search_request_metadata(
+        provider_attempt_metadata: dict[str, Any] | None,
+        *,
+        query_signature: str,
+        signature_payload: dict[str, Any],
+        provider: str,
+        actual_request_made: bool,
+    ) -> dict[str, Any]:
+        merged = dict(provider_attempt_metadata or {})
+        merged["provider"] = provider
+        merged["query_signature"] = query_signature
+        merged["signature_payload"] = signature_payload
+        merged["actual_request_made"] = actual_request_made
+        return merged
 
     @staticmethod
     def _merge_attempt_metadata(
@@ -1291,9 +1557,10 @@ class CNPJEnrichmentService:
         matched_by: str | None = None,
         candidate_summary: dict[str, Any] | None = None,
     ) -> None:
+        attempted_at = utcnow()
         lead.cnpj_match_status = match_status
         lead.cnpj_match_confidence = match_confidence
-        lead.cnpj_last_enriched_at = utcnow()
+        lead.cnpj_last_enriched_at = attempted_at
         if source_provider:
             lead.cnpj_source_provider = source_provider
         lead.cnpj_metadata_json = self._build_metadata(
@@ -1306,6 +1573,7 @@ class CNPJEnrichmentService:
             attempt_metadata=attempt_metadata,
             matched_by=matched_by,
             candidate_summary=candidate_summary,
+            attempted_at=attempted_at,
         )
         self.db.add(
             ActivityLog(
@@ -1531,6 +1799,24 @@ class CNPJEnrichmentService:
         digits = "".join(character for character in value if character.isdigit())
         return digits or None
 
+    @staticmethod
+    def _extract_postal_code_from_text(value: str | None) -> str | None:
+        if not value:
+            return None
+        match = _ZIP_PATTERN.search(value)
+        if not match:
+            return None
+        return f"{match.group(1)}{match.group(2)}"
+
+    @staticmethod
+    def _extract_area_code(value: str | None) -> str | None:
+        if not value:
+            return None
+        digits = "".join(character for character in value if character.isdigit())
+        if len(digits) < 10:
+            return None
+        return digits[:2] if len(digits) == 10 else digits[-10:-8]
+
     def _get_website_batch_limit_error(self, pending_search_count: int) -> CNPJAProviderError | None:
         if pending_search_count <= MAX_WEBSITE_FALLBACK_BATCH:
             return None
@@ -1561,6 +1847,17 @@ class CNPJEnrichmentService:
             and candidate.supportive_signal_count >= 1
             and not self._has_location_conflict(candidate)
         )
+
+    def _is_reviewable_company_search_candidate(self, candidate: _ScoredCandidate) -> bool:
+        if self._has_location_conflict(candidate):
+            return False
+        if candidate.score < REVIEWABLE_COMPANY_SEARCH_SCORE:
+            return False
+        if not self._candidate_has_confirmable_cnpj(candidate):
+            return False
+        has_name_support = candidate.alias_match or candidate.legal_name_match or candidate.strong_name_match
+        has_location_support = "city" in candidate.evidence and "state" in candidate.evidence
+        return has_name_support and has_location_support
 
     @staticmethod
     def _candidate_has_confirmable_cnpj(candidate: _ScoredCandidate) -> bool:
@@ -1616,17 +1913,17 @@ class CNPJEnrichmentService:
     @staticmethod
     def _review_reason_text(blocked_reason: str | None) -> str | None:
         if blocked_reason == BLOCKED_REASON_MISSING_FULL_CNPJ:
-            return "O provedor nÃ£o retornou um CNPJ completo para confirmaÃ§Ã£o automÃ¡tica."
+            return "O provedor não retornou um CNPJ completo para confirmação automática."
         if blocked_reason == BLOCKED_REASON_CITY_STATE_CONFLICT:
             return "Cidade ou UF do candidato conflita com o lead."
         if blocked_reason == BLOCKED_REASON_AMBIGUOUS_TOP_CANDIDATES:
             return "Mais de um candidato forte foi encontrado."
         if blocked_reason == BLOCKED_REASON_PROVIDER_PREVIEW_MASKED:
-            return "O provedor retornou dados em modo prÃ©via ou mascarados."
+            return "O provedor retornou dados em modo prévia ou mascarados."
         if blocked_reason == BLOCKED_REASON_INSUFFICIENT_IDENTITY_SUPPORT:
-            return "Os sinais de identidade ainda nÃ£o sÃ£o suficientes para preencher automaticamente."
+            return "Os sinais de identidade ainda não são suficientes para preencher automaticamente."
         if blocked_reason == BLOCKED_REASON_BELOW_AUTOFILL_THRESHOLD:
-            return "O candidato ficou abaixo do limite de confirmaÃ§Ã£o automÃ¡tica."
+            return "O candidato ficou abaixo do limite de confirmação automática."
         return None
 
     @staticmethod
@@ -1760,6 +2057,7 @@ class CNPJEnrichmentService:
         attempt_metadata: dict[str, Any] | None = None,
         matched_by: str | None = None,
         candidate_summary: dict[str, Any] | None = None,
+        attempted_at: datetime | None = None,
     ) -> dict:
         metadata = dict(current_metadata or {})
         metadata.update(
@@ -1776,6 +2074,35 @@ class CNPJEnrichmentService:
             metadata["candidate_summary"] = candidate_summary
         if attempt_metadata is not None:
             metadata["crawl_summary"] = attempt_metadata
+            company_search_metadata = attempt_metadata.get("company_search")
+            if isinstance(company_search_metadata, dict) and company_search_metadata.get("actual_request_made"):
+                last_attempt_at = attempted_at or utcnow()
+                previous_attempt_at = CNPJEnrichmentService._parse_metadata_datetime(
+                    metadata.get("cnpj_paid_search_last_attempt_at")
+                )
+                attempts_today = metadata.get("cnpj_paid_search_attempts_today")
+                if not isinstance(attempts_today, int):
+                    attempts_today = 0
+                if (
+                    previous_attempt_at is not None
+                    and previous_attempt_at.date() == last_attempt_at.date()
+                ):
+                    attempts_today += 1
+                else:
+                    attempts_today = 1
+                metadata.update(
+                    {
+                        "cnpj_paid_search_last_signature": company_search_metadata.get("query_signature"),
+                        "cnpj_paid_search_last_attempt_at": last_attempt_at.isoformat(),
+                        "cnpj_paid_search_last_result_status": reason_code,
+                        "cnpj_paid_search_last_candidates_count": company_search_metadata.get(
+                            "candidates_returned_count",
+                            0,
+                        ),
+                        "cnpj_paid_search_last_provider": company_search_metadata.get("provider"),
+                        "cnpj_paid_search_attempts_today": attempts_today,
+                    }
+                )
         if lookup is not None:
             metadata.update(
                 {
@@ -1820,6 +2147,12 @@ class CNPJEnrichmentService:
             skipped_known_count=sum(
                 1 for item in results if item.skipped_reason == SKIPPED_KNOWN_CNPJ_REASON
             ),
+            skipped_review_candidate_count=sum(
+                1 for item in results if item.reason_code == REASON_SKIPPED_REVIEW_CANDIDATE_EXISTS
+            ),
+            paid_search_recently_attempted_count=sum(
+                1 for item in results if item.reason_code == REASON_PAID_SEARCH_RECENTLY_ATTEMPTED
+            ),
             no_website_count=sum(1 for item in results if item.reason_code == REASON_SKIPPED_NO_WEBSITE),
             no_cnpj_on_website_count=sum(1 for item in results if item.reason_code == REASON_NO_CNPJ_ON_WEBSITE),
             website_timeout_count=sum(1 for item in results if item.reason_code == REASON_WEBSITE_TIMEOUT),
@@ -1860,6 +2193,9 @@ class CNPJEnrichmentService:
             ),
             company_search_provider_error_count=sum(
                 1 for item in results if item.reason_code == REASON_COMPANY_SEARCH_PROVIDER_ERROR
+            ),
+            company_search_consulted_now_count=sum(
+                1 for item in results if item.reason_code in COMPANY_SEARCH_EXECUTED_REASON_CODES
             ),
             provider_rate_limited_count=sum(
                 1 for item in results if item.reason_code == REASON_CNPJ_PROVIDER_RATE_LIMITED

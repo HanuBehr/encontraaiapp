@@ -379,13 +379,16 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
       <ResultBox
         title={`${hasErrors ? "Enriquecimento CNPJ concluído com alertas" : "Enriquecimento CNPJ concluído"} - ${formatScopeLabel(result.scopeLabel)}`}
       >
-        <ResultNarrative text={buildCnpjNarrative(result.summary)} />
+        <ResultNarrative text={buildCnpjNarrativeV2(result.summary)} />
         <ResultMetric label="Solicitados" value={result.requested} />
         <ResultMetric label="Processados" value={result.summary.processed} />
         <ResultMetric label="Preenchidos" value={result.summary.matched_count} />
         <ResultMetric label="Precisam revisão" value={result.summary.needs_review_count} />
         <ResultMetric label="Sem correspondência" value={result.summary.not_found_count} />
         <ResultMetric label="Já tinham CNPJ" value={result.summary.skipped_known_count} />
+        <ResultMetric label="Aguardando revisão" value={result.summary.skipped_review_candidate_count} />
+        <ResultMetric label="Busca paga recente" value={result.summary.paid_search_recently_attempted_count} />
+        <ResultMetric label="Consultados agora" value={result.summary.company_search_consulted_now_count} />
         <ResultMetric label="Erros" value={result.summary.error_count} />
         {hasErrors ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
@@ -665,12 +668,33 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
       ? `${summary.company_search_matched_count.toLocaleString()} encontrados via busca cadastral`
       : null,
     summary.company_search_needs_review_count
-      ? `${summary.company_search_needs_review_count.toLocaleString()} da busca cadastral precisam revisão`
+      ? `${summary.company_search_needs_review_count.toLocaleString()} candidatos da busca cadastral precisam revisão`
       : null,
   ].filter(Boolean);
 
   const paidSearchSuffix = paidSearchParts.length ? ` ${paidSearchParts.join(", ")}.` : "";
-  return `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.${paidSearchSuffix}`;
+  return `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} candidatos encontrados precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.${paidSearchSuffix}`;
+}
+
+function buildCnpjNarrativeV2(summary: LeadBatchCNPJEnrichmentResponse["summary"]) {
+  const baseNarrative = buildCnpjNarrative(summary);
+  const extras = [
+    summary.skipped_review_candidate_count
+      ? `${summary.skipped_review_candidate_count.toLocaleString()} candidatos aguardando revisão`
+      : null,
+    summary.paid_search_recently_attempted_count
+      ? `${summary.paid_search_recently_attempted_count.toLocaleString()} buscas pagas puladas por tentativa recente`
+      : null,
+    summary.company_search_consulted_now_count
+      ? `${summary.company_search_consulted_now_count.toLocaleString()} consultados agora`
+      : null,
+  ].filter(Boolean);
+
+  if (extras.length === 0) {
+    return baseNarrative;
+  }
+
+  return `${baseNarrative} ${extras.join(", ")}.`;
 }
 
 function formatScopeLabel(scopeLabel: string) {

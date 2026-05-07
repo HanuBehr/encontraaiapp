@@ -808,6 +808,9 @@ class CNPJAProvider:
         max_attempts: int,
     ) -> list[CommercialSearchAttempt]:
         attempts: list[CommercialSearchAttempt] = []
+        has_strong_brand_variant = any(
+            _has_strong_brand_variant(variant) for variant in variant_groups.alias_variants
+        )
 
         if variant_groups.alias_variants:
             attempts.append(
@@ -819,7 +822,12 @@ class CNPJAProvider:
                 )
             )
 
-        if variant_groups.names_variants and (state_available or municipality_code or phone_area or postal_code):
+        allow_names_attempt = bool(
+            variant_groups.names_variants
+            and has_strong_brand_variant
+            and (municipality_code or postal_code or phone_area)
+        )
+        if allow_names_attempt:
             attempts.append(
                 CommercialSearchAttempt(
                     mode="names",
@@ -831,6 +839,8 @@ class CNPJAProvider:
             )
 
         if (
+            self.settings.cnpja_enable_legal_name_attempt
+            and
             variant_groups.legal_name_variants
             and _looks_legal_company_name(business_name)
             and (state_available or municipality_code or postal_code)
@@ -850,7 +860,12 @@ class CNPJAProvider:
             or variant_groups.legal_name_variants[:2]
         )
         has_strict_filters = any((postal_code, district, phone_area, email_domain))
-        if strict_variants and has_strict_filters and (municipality_code or postal_code or phone_area):
+        if (
+            self.settings.cnpja_enable_strict_address_attempt
+            and strict_variants
+            and has_strict_filters
+            and (municipality_code or postal_code or phone_area)
+        ):
             attempts.append(
                 CommercialSearchAttempt(
                     mode="address",
@@ -1467,6 +1482,20 @@ def _looks_generic_only_variant(value: str | None) -> bool:
     if not tokens:
         return True
     return all(token in _GENERIC_ONLY_VARIANT_TERMS for token in tokens)
+
+
+def _has_strong_brand_variant(value: str | None) -> bool:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return False
+    if _looks_generic_only_variant(normalized) or _looks_like_address_only_variant(normalized):
+        return False
+    tokens = [token for token in normalized.split() if token not in _SEARCH_CONNECTOR_WORDS]
+    if not tokens:
+        return False
+    if len(tokens) == 1:
+        return len(tokens[0]) >= 4
+    return len(tokens) <= 3 and any(len(token) >= 4 for token in tokens)
 
 
 def _select_company_search_fallback_variant(search_variants: list[str]) -> str | None:

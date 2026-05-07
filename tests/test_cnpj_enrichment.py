@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from datetime import timedelta
+from pathlib import Path
+
 import pytest
 import requests
 
 from app.config import Settings
+from app.models.base import utcnow
 from app.models.lead import Lead
 from app.schemas.lead import LeadDetail
 from app.services.cnpj_enrichment import (
@@ -32,6 +36,9 @@ from app.services.providers.cnpja import (
 )
 from app.services.providers.cnpjota import CNPJotaProvider
 from app.services.providers.cnpj_ws import CNPJWSProvider
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakeResponse:
@@ -416,6 +423,14 @@ def test_ibge_municipality_lookup_maps_londrina_pr() -> None:
     assert lookup_ibge_municipality_code("Londrina", "PR") == "4113700"
 
 
+def test_ibge_municipality_lookup_maps_itu_sp() -> None:
+    assert lookup_ibge_municipality_code("Itu", "SP") == "3523909"
+
+
+def test_ibge_municipality_lookup_maps_laguna_sc() -> None:
+    assert lookup_ibge_municipality_code("Laguna", "SC") == "4209409"
+
+
 def test_ibge_municipality_lookup_maps_sao_paulo_sp() -> None:
     assert lookup_ibge_municipality_code("São Paulo", "SP") == "3550308"
 
@@ -640,7 +655,7 @@ def test_cnpja_commercial_search_builds_office_endpoint_and_auth_header() -> Non
     assert results[0].metadata["company_search_query_mode"] == "alias"
 
 
-def test_cnpja_commercial_search_uses_alias_first_and_names_second() -> None:
+def test_cnpja_commercial_search_uses_alias_first_and_names_second_when_strong_filters_exist() -> None:
     session = FakeHTTPSession(
         {
             "https://api.cnpja.com/office": FakeResponse(payload={"records": []})
@@ -654,13 +669,16 @@ def test_cnpja_commercial_search_uses_alias_first_and_names_second() -> None:
             CNPJA_API_KEY="cnpja-key",
             CNPJA_API_BASE_URL="https://api.cnpja.com",
             CNPJA_NAME_VARIANT_LIMIT=4,
+            CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD=2,
         ),
         http_session=session,
     )
 
     results = provider.search_companies(
         business_name="Pet Shop Bela Vista | Banho Carinhoso",
+        city="Londrina",
         state="SP",
+        phone="(43) 3322-0000",
     )
 
     assert results == []
@@ -677,6 +695,35 @@ def test_cnpja_commercial_search_uses_alias_first_and_names_second() -> None:
         "Bela Vista",
         "Banho Carinhoso",
     ]
+
+
+def test_cnpja_commercial_does_not_run_second_attempt_without_municipality_zip_or_phone_area() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://api.cnpja.com/office": FakeResponse(payload={"records": []})
+        },
+        default_status_code=None,
+    )
+    provider = CNPJAProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJA_NAME_VARIANT_LIMIT=4,
+            CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD=2,
+        ),
+        http_session=session,
+    )
+
+    results = provider.search_companies(
+        business_name="Pet Shop Bela Vista | Banho Carinhoso",
+        state="SP",
+    )
+
+    assert results == []
+    assert len(session.get_calls) == 1
+    assert session.get_calls[0][1]["params"]["alias.in"] == "Pet Shop Bela Vista,Bela Vista,Banho Carinhoso"
 
 
 def test_cnpja_commercial_search_skips_municipality_when_city_mapping_is_missing() -> None:
@@ -831,6 +878,7 @@ def test_cnpja_commercial_search_uses_company_name_for_legal_like_names() -> Non
             CNPJA_API_KEY="cnpja-key",
             CNPJA_API_BASE_URL="https://api.cnpja.com",
             CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD=3,
+            CNPJA_ENABLE_LEGAL_NAME_ATTEMPT=True,
         ),
         http_session=session,
     )
@@ -844,7 +892,66 @@ def test_cnpja_commercial_search_uses_company_name_for_legal_like_names() -> Non
     assert any("company.name.in" in call[1]["params"] for call in session.get_calls)
 
 
+def test_cnpja_commercial_legal_name_attempt_is_disabled_by_default() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://api.cnpja.com/office": FakeResponse(payload={"records": []})
+        },
+        default_status_code=None,
+    )
+    provider = CNPJAProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD=3,
+        ),
+        http_session=session,
+    )
+
+    provider.search_companies(
+        business_name="Tecnocell Comercio e Servicos LTDA",
+        city="Guarulhos",
+        state="SP",
+    )
+
+    assert all("company.name.in" not in call[1]["params"] for call in session.get_calls)
+
+
 def test_cnpja_commercial_strict_attempt_can_send_zip_and_district() -> None:
+    session = FakeHTTPSession(
+        {
+            "https://api.cnpja.com/office": FakeResponse(payload={"records": []})
+        },
+        default_status_code=None,
+    )
+    provider = CNPJAProvider(
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD=4,
+            CNPJA_ENABLE_STRICT_ADDRESS_ATTEMPT=True,
+        ),
+        http_session=session,
+    )
+
+    provider.search_companies(
+        business_name="Empório dos Animais Pet Shop - Av. Higienópolis",
+        city="Londrina",
+        state="PR",
+        address="Av. Higienópolis, 2657 - Guanabara - 86050-000",
+        neighborhood="Guanabara",
+        phone="(43) 3322-0000",
+    )
+
+    assert any("address.zip.in" in call[1]["params"] for call in session.get_calls)
+    assert any("address.district.in" in call[1]["params"] for call in session.get_calls)
+
+
+def test_cnpja_commercial_strict_attempt_is_disabled_by_default() -> None:
     session = FakeHTTPSession(
         {
             "https://api.cnpja.com/office": FakeResponse(payload={"records": []})
@@ -863,16 +970,16 @@ def test_cnpja_commercial_strict_attempt_can_send_zip_and_district() -> None:
     )
 
     provider.search_companies(
-        business_name="Empório dos Animais Pet Shop - Av. Higienópolis",
+        business_name="EmpÃ³rio dos Animais Pet Shop - Av. HigienÃ³polis",
         city="Londrina",
         state="PR",
-        address="Av. Higienópolis, 2657 - Guanabara - 86050-000",
+        address="Av. HigienÃ³polis, 2657 - Guanabara - 86050-000",
         neighborhood="Guanabara",
         phone="(43) 3322-0000",
     )
 
-    assert any("address.zip.in" in call[1]["params"] for call in session.get_calls)
-    assert any("address.district.in" in call[1]["params"] for call in session.get_calls)
+    assert all("address.zip.in" not in call[1]["params"] for call in session.get_calls)
+    assert all("address.district.in" not in call[1]["params"] for call in session.get_calls)
 
 
 def test_cnpja_commercial_does_not_send_email_domain_filter_by_default() -> None:
@@ -2558,6 +2665,125 @@ def test_cnpja_batch_size_limit_prevents_extra_paid_calls(db_session) -> None:
     ]
 
 
+def test_same_lead_query_signature_does_not_call_paid_search_twice_within_cooldown(db_session) -> None:
+    lead = _lead(cnpj=None, website=None, business_name="Cobasi Londrina Centro", city="Londrina", state="PR")
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[],
+        search_metadata={
+            "provider": "cnpja_commercial",
+            "cnpja_zero_candidates": True,
+            "searched_names": ["Cobasi", "Cobasi Londrina"],
+            "candidates_returned_count": 0,
+        },
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJ_PAID_SEARCH_REPEAT_COOLDOWN_HOURS=24,
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    first_response = service.enrich_lead_ids([lead.id], actor="test")
+    second_response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert first_response.results[0].reason_code == "cnpja_zero_candidates"
+    assert len(fake_provider.search_calls) == 1
+    assert second_response.summary.paid_search_recently_attempted_count == 1
+    assert second_response.results[0].reason_code == "paid_search_recently_attempted"
+
+
+def test_needs_review_lead_with_valid_candidate_is_skipped_before_repeating_paid_search(db_session) -> None:
+    lead = _lead(cnpj=None, website=None, phone=None, whatsapp=None, postal_code=None)
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[
+            _lookup_result(
+                source_provider="cnpja_commercial",
+                phones=[],
+                website=None,
+                metadata_extra={
+                    "company_search_query_mode": "alias",
+                    "company_search_query_mode_label": "Nome fantasia",
+                },
+            )
+        ]
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    first_response = service.enrich_lead_ids([lead.id], actor="test")
+    second_response = service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+
+    assert first_response.results[0].reason_code == "company_search_needs_review"
+    assert len(fake_provider.search_calls) == 1
+    assert second_response.summary.skipped_review_candidate_count == 1
+    assert second_response.results[0].reason_code == "skipped_review_candidate_exists"
+    assert lead.cnpj is None
+    assert lead.cnpj_match_status == "needs_review"
+
+
+def test_expired_paid_search_cooldown_allows_new_company_search(db_session) -> None:
+    lead = _lead(cnpj=None, website=None, business_name="Cobasi Londrina Centro", city="Londrina", state="PR")
+    db_session.add(lead)
+    db_session.commit()
+    db_session.refresh(lead)
+
+    fake_provider = FakeCNPJAProvider(
+        search_results=[],
+        search_metadata={
+            "provider": "cnpja_commercial",
+            "cnpja_zero_candidates": True,
+            "searched_names": ["Cobasi", "Cobasi Londrina"],
+            "candidates_returned_count": 0,
+        },
+    )
+    service = CNPJEnrichmentService(
+        db_session,
+        _settings(
+            CNPJ_COMPANY_SEARCH_ENABLED=True,
+            CNPJ_COMPANY_SEARCH_PROVIDER="cnpja_commercial",
+            CNPJA_API_KEY="cnpja-key",
+            CNPJA_API_BASE_URL="https://api.cnpja.com",
+            CNPJ_PAID_SEARCH_REPEAT_COOLDOWN_HOURS=24,
+        ),
+        provider=fake_provider,  # type: ignore[arg-type]
+    )
+
+    service.enrich_lead_ids([lead.id], actor="test")
+    db_session.refresh(lead)
+    metadata = dict(lead.cnpj_metadata_json or {})
+    metadata["cnpj_paid_search_last_attempt_at"] = (utcnow() - timedelta(hours=25)).isoformat()
+    lead.cnpj_metadata_json = metadata
+    db_session.commit()
+    db_session.refresh(lead)
+
+    response = service.enrich_lead_ids([lead.id], actor="test")
+
+    assert len(fake_provider.search_calls) == 2
+    assert response.summary.paid_search_recently_attempted_count == 0
+
+
 def test_company_search_high_confidence_candidate_fills_cnpj(db_session) -> None:
     lead = _lead(cnpj=None, website=None)
     db_session.add(lead)
@@ -2876,3 +3102,29 @@ def test_website_extraction_runs_before_paid_company_search(db_session) -> None:
 def test_no_cpf_fields_were_added() -> None:
     assert "cpf" not in Lead.__table__.c
     assert "cpf" not in LeadDetail.model_fields
+
+
+def test_cnpj_review_copy_uses_proper_portuguese_accents_in_backend_messages() -> None:
+    service_file = (REPO_ROOT / "app/services/cnpj_enrichment.py").read_text(encoding="utf-8")
+
+    assert "confirmação automática" in service_file
+    assert "modo prévia ou mascarados" in service_file
+    for bad in ("confirmaÃ", "automÃ", "prÃ©via", "nÃ£o sÃ£o"):
+        assert bad not in service_file
+
+
+def test_cnpj_review_ui_copy_has_no_mojibake_and_shows_manual_review_labels() -> None:
+    panel_file = (REPO_ROOT / "web/components/leads/LeadDetailPanel.tsx").read_text(encoding="utf-8")
+
+    assert "Candidato em revisão" in panel_file
+    assert "Confira os dados encontrados antes de confirmar o CNPJ deste lead." in panel_file
+    assert "Aprovado manualmente." in panel_file
+    assert "O candidato ficou abaixo do limite de confirmação automática." in panel_file
+    for bad in ("confirmaÃ", "automÃ", "revisÃ", "RazÃ", "EndereÃ", "nÃ£o"):
+        assert bad not in panel_file
+
+
+def test_cnpj_batch_summary_mentions_candidates_needing_review() -> None:
+    batch_actions_file = (REPO_ROOT / "web/components/leads/LeadBatchActions.tsx").read_text(encoding="utf-8")
+
+    assert "candidatos encontrados precisam revisão" in batch_actions_file

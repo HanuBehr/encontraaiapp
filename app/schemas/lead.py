@@ -413,6 +413,8 @@ class LeadBatchCNPJEnrichmentSummary(BaseModel):
     needs_review_count: int = 0
     not_found_count: int = 0
     skipped_known_count: int = 0
+    skipped_review_candidate_count: int = 0
+    paid_search_recently_attempted_count: int = 0
     no_website_count: int = 0
     no_cnpj_on_website_count: int = 0
     website_timeout_count: int = 0
@@ -428,6 +430,7 @@ class LeadBatchCNPJEnrichmentSummary(BaseModel):
     company_search_pending_retry_count: int = 0
     company_search_rate_limited_count: int = 0
     company_search_provider_error_count: int = 0
+    company_search_consulted_now_count: int = 0
     provider_rate_limited_count: int = 0
     provider_error_count: int = 0
     error_count: int = 0

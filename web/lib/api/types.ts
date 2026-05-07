@@ -223,6 +223,9 @@ export type LeadCnpjSearchDiagnostics = {
   cnpja_zero_candidates: boolean;
   top_candidate_score: number | null;
   top_candidate_rejection_reason: string | null;
+  recent_search_skipped: boolean;
+  repeat_cooldown_hours: number | null;
+  last_result_status: string | null;
 };
 
 export type LeadDetail = LeadSummary & {
@@ -407,6 +410,8 @@ export type LeadBatchCNPJEnrichmentResponse = {
     needs_review_count: number;
     not_found_count: number;
     skipped_known_count: number;
+    skipped_review_candidate_count: number;
+    paid_search_recently_attempted_count: number;
     no_website_count: number;
     no_cnpj_on_website_count: number;
     website_timeout_count: number;
@@ -422,6 +427,7 @@ export type LeadBatchCNPJEnrichmentResponse = {
     company_search_pending_retry_count: number;
     company_search_rate_limited_count: number;
     company_search_provider_error_count: number;
+    company_search_consulted_now_count: number;
     provider_rate_limited_count: number;
     provider_error_count: number;
     error_count: number;

@@ -65,11 +65,13 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   }
 
   const lead = detailQuery.data;
+  const cnpjMetadata = asRecord(lead.cnpj_metadata_json);
   const latestEnrichment = lead.enrichments[0];
   const latestEnrichmentAudit = getLatestEnrichmentAudit(lead);
-  const cnpjStatusHint = getCnpjStatusHint(lead);
+  const cnpjStatusHint = getCnpjStatusHintV2(lead);
   const cnpjCandidateSummary = getCnpjCandidateSummary(lead);
   const cnpjSearchDiagnostics = getCnpjSearchDiagnostics(lead);
+  const cnpjApprovedManually = Boolean(cnpjMetadata?.approved_manually);
   const canApproveCnpjCandidate =
     lead.cnpj_match_status === "needs_review" && hasFullCnpj(cnpjCandidateSummary?.cnpj);
 
@@ -117,6 +119,11 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
               {cnpjStatusHint}
             </p>
           ) : null}
+          {cnpjApprovedManually ? (
+            <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              Aprovado manualmente.
+            </p>
+          ) : null}
           {cnpjSearchDiagnostics && lead.cnpj_match_status !== "matched" ? (
             <CnpjSearchDiagnosticsPanel
               diagnostics={cnpjSearchDiagnostics}
@@ -134,7 +141,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                   </p>
                   <p className="mt-1 text-sm text-neutral-700">
                     {lead.cnpj_match_status === "needs_review"
-                      ? "Confira o cadastro encontrado antes de confirmar o CNPJ neste lead."
+                      ? "Confira os dados encontrados antes de confirmar o CNPJ deste lead."
                       : "A busca encontrou um candidato, mas ele ainda não foi confirmado automaticamente."}
                   </p>
                 </div>
@@ -165,7 +172,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                   <InfoItem label="Endereço" value={cnpjCandidateSummary.address} />
                   <InfoItem label="Confiança" value={formatConfidence(cnpjCandidateSummary.match_confidence)} />
                   <InfoItem label="Pontuação" value={formatScore(cnpjCandidateSummary.score)} />
-                  <InfoItem label="Motivo da revisão" value={cnpjCandidateSummary.review_reason} />
+                  <InfoItem label="Motivo" value={cnpjCandidateSummary.review_reason} />
                   <InfoItem label="Provedor" value={labelToken(cnpjCandidateSummary.provider)} />
                 </InfoGrid>
                 {cnpjCandidateSummary.legal_name_note ? (
@@ -175,7 +182,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                 ) : null}
                 {(Object.keys(cnpjCandidateSummary.evidence).length > 0 || cnpjCandidateSummary.penalties.length > 0) ? (
                   <div className="mt-3 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
-                    <p className="text-xs font-semibold uppercase text-neutral-500">CritÃ©rios do match</p>
+                    <p className="text-xs font-semibold uppercase text-neutral-500">Crit?rios do match</p>
                     <p className="mt-1">{formatEvidenceSummary(cnpjCandidateSummary.evidence)}</p>
                     {cnpjCandidateSummary.penalties.length > 0 ? (
                       <p className="mt-1 text-xs text-amber-700">
@@ -364,7 +371,7 @@ function CnpjSearchDiagnosticsPanel({
   diagnostics: LeadCnpjSearchDiagnostics;
   matchStatus: LeadDetail["cnpj_match_status"];
 }) {
-  const primaryMessage = buildCnpjDiagnosticsMessage(diagnostics, matchStatus);
+  const primaryMessage = buildCnpjDiagnosticsMessageV2(diagnostics, matchStatus);
   const triedModes = diagnostics.search_attempts
     .map((attempt) => attempt.query_mode_label)
     .filter((value): value is string => Boolean(value));
@@ -533,7 +540,7 @@ function joinList(values: string[] | null | undefined) {
 function formatEvidenceSummary(evidence: Record<string, number>) {
   const entries = Object.entries(evidence);
   if (entries.length === 0) {
-    return "Nenhum critÃ©rio positivo relevante foi registrado.";
+    return "Nenhum crit?rio positivo relevante foi registrado.";
   }
   return entries
     .map(([key, value]) => `${labelEvidence(key)} (+${value})`)
@@ -542,11 +549,11 @@ function formatEvidenceSummary(evidence: Record<string, number>) {
 
 function labelEvidence(key: string) {
   const labels: Record<string, string> = {
-    domain: "DomÃ­nio",
+    domain: "Dom?nio",
     phone: "Telefone",
     alias_name: "Nome fantasia",
-    legal_name: "RazÃ£o social",
-    address: "EndereÃ§o",
+    legal_name: "Raz?o social",
+    address: "Endere?o",
     postal_code: "CEP",
     city: "Cidade",
     state: "UF",
@@ -557,7 +564,7 @@ function labelEvidence(key: string) {
 
 function labelPenalty(key: string) {
   const labels: Record<string, string> = {
-    different_number: "nÃºmero diferente",
+    different_number: "n?mero diferente",
     different_city: "cidade diferente",
     different_state: "UF diferente",
   };
@@ -587,7 +594,75 @@ function getCnpjStatusHint(lead: LeadDetail) {
   const candidateSummary = getCnpjCandidateSummary(lead);
 
   if (lead.cnpj_match_status === "needs_review" && candidateSummary) {
-    return candidateSummary.review_reason ?? "Possível CNPJ encontrado, precisa revisão.";
+    return candidateSummary.review_reason ?? "A busca encontrou um candidato, mas precisa de revisão manual.";
+  }
+
+  if (reasonCode === "no_cnpj_on_website") {
+    return "CNPJ não encontrado no site.";
+  }
+  if (reasonCode === "skipped_no_website") {
+    return "Este lead não tem site público para consulta de CNPJ.";
+  }
+  if (reasonCode === "website_unreachable") {
+    return "Site sem resposta.";
+  }
+  if (reasonCode === "website_timeout") {
+    return "O site demorou demais para responder.";
+  }
+  if (reasonCode === "cnpj_provider_rate_limited") {
+    return "Consulta pública limitada/rate limit.";
+  }
+  if (reasonCode === "company_search_not_configured") {
+    return "Busca cadastral paga não configurada.";
+  }
+  if (reasonCode === "cnpja_zero_candidates") {
+    return "A CNPJá não retornou candidatos para este lead.";
+  }
+  if (reasonCode === "company_search_no_candidates") {
+    return "Nenhum candidato encontrado na busca cadastral.";
+  }
+  if (reasonCode === "company_search_low_confidence") {
+    return "A busca cadastral encontrou candidatos, mas sem confiança suficiente para preencher automaticamente.";
+  }
+  if (reasonCode === "company_search_needs_review") {
+    return "Possível CNPJ encontrado na busca cadastral, precisa revisão.";
+  }
+  if (reasonCode === "company_search_rate_limited") {
+    return "Busca cadastral temporariamente limitada pelo provedor.";
+  }
+  if (reasonCode === "company_search_pending_retry") {
+    return "Busca cadastral pausada por limite do provedor. Tente novamente em cerca de 1 minuto.";
+  }
+  if (reasonCode === "company_search_provider_error") {
+    return "Falha temporária na busca cadastral paga.";
+  }
+  if (reasonCode === "provider_error") {
+    return "Falha temporária na consulta pública de CNPJ.";
+  }
+  if (reasonCode === "cnpj_validation_failed") {
+    return "Um CNPJ foi encontrado, mas a validação pública não confirmou a empresa.";
+  }
+  if (reasonCode === "low_confidence") {
+    return "Um possível CNPJ foi encontrado, mas sem confiança suficiente para preencher automaticamente.";
+  }
+
+  return null;
+}
+
+function getCnpjStatusHintV2(lead: LeadDetail) {
+  const metadata = asRecord(lead.cnpj_metadata_json);
+  const reasonCode = typeof metadata?.reason_code === "string" ? metadata.reason_code : null;
+  const candidateSummary = getCnpjCandidateSummary(lead);
+
+  if (reasonCode === "paid_search_recently_attempted") {
+    return "Busca paga já feita recentemente para este lead. Resultado anterior preservado para evitar gastar créditos de novo.";
+  }
+
+  if (lead.cnpj_match_status === "needs_review" && candidateSummary) {
+    if (reasonCode === "skipped_review_candidate_exists") {
+      return "Candidato encontrado. Revise e aprove antes de consultar novamente.";
+    }
+    return candidateSummary.review_reason ?? "A busca encontrou um candidato, mas precisa de revisão manual.";
   }
 
   if (reasonCode === "no_cnpj_on_website") {
@@ -650,28 +725,28 @@ function getCnpjCandidateSummary(lead: LeadDetail): LeadCnpjCandidateSummary | n
   }
   return {
     cnpj: asNullableString(candidate.cnpj),
-    legal_name: asNullableString(candidate.legal_name),
-    trade_name: asNullableString(candidate.trade_name),
-    address: asNullableString(candidate.address),
-    city: asNullableString(candidate.city),
-    state: asNullableString(candidate.state),
-    postal_code: asNullableString(candidate.postal_code),
+    legal_name: normalizeMojibakeText(asNullableString(candidate.legal_name)),
+    trade_name: normalizeMojibakeText(asNullableString(candidate.trade_name)),
+    address: normalizeMojibakeText(asNullableString(candidate.address)),
+    city: normalizeMojibakeText(asNullableString(candidate.city)),
+    state: normalizeMojibakeText(asNullableString(candidate.state)),
+    postal_code: normalizeMojibakeText(asNullableString(candidate.postal_code)),
     phones: asStringArray(candidate.phones),
     emails: asStringArray(candidate.emails),
-    primary_activity: asNullableString(candidate.primary_activity),
-    provider: asNullableString(candidate.provider),
+    primary_activity: normalizeMojibakeText(asNullableString(candidate.primary_activity)),
+    provider: normalizeMojibakeText(asNullableString(candidate.provider)),
     score: asNullableNumber(candidate.score),
     match_confidence: asNullableNumber(candidate.match_confidence),
     evidence: asNumberRecord(candidate.evidence),
     penalties: asStringArray(candidate.penalties),
-    query_mode: asNullableString(candidate.query_mode),
-    query_mode_label: asNullableString(candidate.query_mode_label),
-    blocked_from_autofill_reason: asNullableString(candidate.blocked_from_autofill_reason),
+    query_mode: normalizeMojibakeText(asNullableString(candidate.query_mode)),
+    query_mode_label: normalizeMojibakeText(asNullableString(candidate.query_mode_label)),
+    blocked_from_autofill_reason: normalizeMojibakeText(asNullableString(candidate.blocked_from_autofill_reason)),
     review_reason:
-      asNullableString(candidate.review_reason) ??
+      normalizeMojibakeText(asNullableString(candidate.review_reason)) ??
       reviewReasonFromCode(asNullableString(candidate.blocked_from_autofill_reason)),
     person_like_legal_name: Boolean(candidate.person_like_legal_name),
-    legal_name_note: asNullableString(candidate.legal_name_note),
+    legal_name_note: normalizeMojibakeText(asNullableString(candidate.legal_name_note)),
   };
 }
 
@@ -702,6 +777,9 @@ function getCnpjSearchDiagnostics(lead: LeadDetail): LeadCnpjSearchDiagnostics |
     cnpja_zero_candidates: Boolean(companySearch.cnpja_zero_candidates),
     top_candidate_score: asNullableNumber(companySearch.top_candidate_score),
     top_candidate_rejection_reason: asNullableString(companySearch.top_candidate_rejection_reason),
+    recent_search_skipped: Boolean(companySearch.recent_search_skipped),
+    repeat_cooldown_hours: asNullableNumber(companySearch.repeat_cooldown_hours),
+    last_result_status: asNullableString(companySearch.last_result_status),
   };
 }
 
@@ -756,10 +834,59 @@ function buildCnpjDiagnosticsMessage(
   }
 
   if (matchStatus === "needs_review" && (diagnostics.candidates_returned_count ?? 0) > 0) {
-    return `${providerLabel} encontrou um candidato promissor, mas ele ainda precisa revisão manual.`;
+    return `${providerLabel} encontrou um candidato promissor, mas ele ainda precisa de revisão manual.`;
   }
 
   return null;
+}
+
+function buildCnpjDiagnosticsMessageV2(
+  diagnostics: LeadCnpjSearchDiagnostics,
+  matchStatus: LeadDetail["cnpj_match_status"],
+) {
+  if (diagnostics.recent_search_skipped) {
+    return "Busca paga já feita recentemente para este lead. Resultado anterior preservado para evitar gastar créditos de novo.";
+  }
+  return buildCnpjDiagnosticsMessage(diagnostics, matchStatus);
+}
+
+function normalizeMojibakeText(value?: string | null) {
+  if (!value || (!value.includes("\u00c3") && !value.includes("\u00c2"))) {
+    return value ?? null;
+  }
+
+  const replacements: Array<[string, string]> = [
+    ["\u00c3\u0192\u00c2\u00a3", "?"],
+    ["\u00c3\u0192\u00c2\u00a1", "?"],
+    ["\u00c3\u0192\u00c2\u00a2", "?"],
+    ["\u00c3\u0192\u00c2\u00aa", "?"],
+    ["\u00c3\u0192\u00c2\u00a9", "?"],
+    ["\u00c3\u0192\u00c2\u00ad", "?"],
+    ["\u00c3\u0192\u00c2\u00b3", "?"],
+    ["\u00c3\u0192\u00c2\u00b4", "?"],
+    ["\u00c3\u0192\u00c2\u00ba", "?"],
+    ["\u00c3\u0192\u00c2\u00a7", "?"],
+    ["\u00c3\u0192\u00c2\u00b5", "?"],
+    ["\u00c3\u00a3", "?"],
+    ["\u00c3\u00a1", "?"],
+    ["\u00c3\u00a2", "?"],
+    ["\u00c3\u00aa", "?"],
+    ["\u00c3\u00a9", "?"],
+    ["\u00c3\u00ad", "?"],
+    ["\u00c3\u00b3", "?"],
+    ["\u00c3\u00b4", "?"],
+    ["\u00c3\u00ba", "?"],
+    ["\u00c3\u00a7", "?"],
+    ["\u00c3\u00b5", "?"],
+    ["\u00c2\u00ba", "?"],
+    ["\u00c2\u00aa", "?"],
+  ];
+
+  let normalized = value;
+  for (const [source, target] of replacements) {
+    normalized = normalized.replaceAll(source, target);
+  }
+  return normalized;
 }
 
 type EnrichmentAuditData = {
