@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -55,12 +56,36 @@ def print_heading(title: str) -> None:
     print(f"\n{'=' * 80}\n{title}\n{'=' * 80}")
 
 
+def _is_sensitive_key(key: Any) -> bool:
+    key_text = str(key).strip().lower()
+    return any(marker in key_text for marker in ("authorization", "api_key", "token", "secret"))
+
+
+def _redact_sensitive(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "[redacted]" if _is_sensitive_key(key) else _redact_sensitive(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_redact_sensitive(item) for item in value]
+    return value
+
+
+def render_value(value: Any) -> str:
+    if value is None or value == "":
+        return "-"
+    if isinstance(value, (dict, list, tuple)):
+        redacted = _redact_sensitive(value)
+        try:
+            return json.dumps(redacted, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        except TypeError:
+            return str(redacted)
+    return str(value)
+
+
 def print_key_value(label: str, value: Any) -> None:
-    if isinstance(value, list):
-        rendered = ", ".join(str(item) for item in value) if value else "-"
-    else:
-        rendered = value if value not in {None, ""} else "-"
-    print(f"- {label}: {rendered}")
+    print(f"- {label}: {render_value(value)}")
 
 
 def summarize_score(candidate_summary: dict[str, Any]) -> None:
