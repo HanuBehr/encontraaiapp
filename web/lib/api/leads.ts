@@ -38,12 +38,29 @@ export function enrichLeadBatch(leadIds: number[]) {
   });
 }
 
-export function enrichLeadBatchCnpj(leadIds: number[], force = false) {
-  return postJson<LeadBatchCNPJEnrichmentResponse, { lead_ids: number[]; force: boolean }>(
+export function enrichLeadBatchCnpj(
+  leadIds: number[],
+  options: {
+    force?: boolean;
+    searchMode?: "cheap" | "balanced" | "delivery";
+    forcePaidSearch?: boolean;
+  } = {},
+) {
+  return postJson<
+    LeadBatchCNPJEnrichmentResponse,
+    {
+      lead_ids: number[];
+      force: boolean;
+      search_mode?: "cheap" | "balanced" | "delivery";
+      force_paid_search?: boolean;
+    }
+  >(
     "/leads/batch/enrich-cnpj",
     {
       lead_ids: leadIds,
-      force,
+      force: options.force ?? false,
+      search_mode: options.searchMode,
+      force_paid_search: options.forcePaidSearch ?? false,
     },
   );
 }

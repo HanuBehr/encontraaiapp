@@ -188,6 +188,7 @@ export type LeadCnpjCandidateSummary = {
   review_reason: string | null;
   person_like_legal_name: boolean;
   legal_name_note: string | null;
+  manual_review_approvable: boolean;
 };
 
 export type LeadCnpjSearchAttemptDiagnostics = {
@@ -195,8 +196,11 @@ export type LeadCnpjSearchAttemptDiagnostics = {
   query_mode: string | null;
   query_mode_label: string | null;
   query_param: string | null;
+  status: string | null;
+  reason: string | null;
   searched_values: string[];
   candidate_count: number | null;
+  candidates_returned_count: number | null;
   municipality_code: string | null;
   postal_code: string | null;
   district: string | null;
@@ -216,11 +220,15 @@ export type LeadCnpjSearchDiagnostics = {
   searched_district: string | null;
   searched_phone_area: string | null;
   searched_email_domain: string | null;
+  search_mode: string | null;
   search_attempts_count: number | null;
   search_attempts: LeadCnpjSearchAttemptDiagnostics[];
   candidates_returned_count: number | null;
   extracted_zip_from_address: boolean;
   cnpja_zero_candidates: boolean;
+  paid_calls_made: number | null;
+  paid_calls_skipped_duplicate: number | null;
+  paid_calls_skipped_recent: number | null;
   top_candidate_score: number | null;
   top_candidate_rejection_reason: string | null;
   recent_search_skipped: boolean;
@@ -428,6 +436,9 @@ export type LeadBatchCNPJEnrichmentResponse = {
     company_search_rate_limited_count: number;
     company_search_provider_error_count: number;
     company_search_consulted_now_count: number;
+    paid_calls_made: number;
+    paid_calls_skipped_duplicate: number;
+    paid_calls_skipped_recent: number;
     provider_rate_limited_count: number;
     provider_error_count: number;
     error_count: number;

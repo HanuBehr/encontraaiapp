@@ -7,7 +7,10 @@ from typing import Any
 import requests
 
 from app.config import Settings
-from app.services.geo.ibge_municipalities import lookup_ibge_municipality_code
+from app.services.geo.ibge_municipalities import (
+    lookup_expected_phone_area,
+    lookup_ibge_municipality_code,
+)
 from app.services.normalization import (
     format_street_address,
     normalize_brazilian_state,
@@ -112,16 +115,46 @@ _GENERIC_ONLY_VARIANT_TERMS = {
     "eletronica",
 }
 _EMAIL_DOMAIN_FILTER_BLOCKLIST = {
+    "aol.com",
+    "bit.ly",
+    "blogspot.com",
+    "bol.com.br",
     "facebook.com",
-    "instagram.com",
-    "google.com",
     "gmail.com",
+    "instagram.com",
+    "icloud.com",
+    "linktree.com",
+    "linktr.ee",
+    "live.com",
+    "mercadolivre.com.br",
+    "google.com",
     "googleusercontent.com",
+    "hotmail.com",
+    "outlook.com",
+    "proton.me",
+    "protonmail.com",
+    "terra.com.br",
+    "uol.com.br",
     "whatsapp.com",
     "wa.me",
-    "linktr.ee",
-    "linktree.ee",
-    "mercadolivre.com.br",
+    "wixsite.com",
+    "wordpress.com",
+    "yahoo.com",
+}
+_BRAND_PHRASE_STOP_TOKENS = {
+    "sociedade",
+    "comercial",
+    "comercio",
+    "servicos",
+    "service",
+    "materiais",
+    "material",
+    "construcao",
+    "construcoes",
+    "ltda",
+    "me",
+    "mei",
+    "eireli",
 }
 
 
@@ -348,6 +381,80 @@ class CNPJAProvider:
                 continue
         return matches
 
+    def execute_commercial_search_attempt(
+        self,
+        *,
+        mode: str,
+        label: str,
+        query_param: str | None,
+        searched_values: list[str],
+        params: dict[str, str],
+        reason: str | None = None,
+    ) -> tuple[list[CNPJLookupResult], dict[str, Any]]:
+        base_url = (self.settings.cnpja_api_base_url or "").rstrip("/")
+        if not base_url or not self.settings.cnpja_api_key:
+            raise CNPJAProviderError(MISSING_CNPJA_API_KEY_BATCH_MESSAGE, status_code=503)
+
+        response = self.http.get(
+            f"{base_url}/office",
+            headers={
+                "Authorization": self.settings.cnpja_api_key,
+                "Accept": "application/json",
+            },
+            params=params,
+            timeout=self.REQUEST_TIMEOUT_SECONDS,
+        )
+        payload = self._json_value_or_raise(response)
+        raw_candidates = self._extract_search_candidates(payload)
+
+        matches: list[CNPJLookupResult] = []
+        seen_cnpjs: set[str] = set()
+        for candidate_payload in raw_candidates:
+            try:
+                normalized_candidate = self._normalize_lookup_payload(
+                    candidate_payload,
+                    source_provider="cnpja_commercial",
+                    requested_cnpj="",
+                    strategy=None,
+                )
+            except CNPJANotFoundError:
+                continue
+            if normalized_candidate.cnpj in seen_cnpjs:
+                continue
+            seen_cnpjs.add(normalized_candidate.cnpj)
+            normalized_candidate.metadata.update(
+                {
+                    "company_search_query_mode": mode,
+                    "company_search_query_mode_label": label,
+                    "company_search_query_param": query_param,
+                    "company_search_terms": searched_values,
+                    "company_search_filters": {
+                        key: value for key, value in params.items() if key != query_param
+                    },
+                }
+            )
+            matches.append(normalized_candidate)
+
+        attempt_metadata = {
+            "query_mode": mode,
+            "query_mode_label": label,
+            "query_param": query_param,
+            "searched_values": searched_values,
+            "candidate_count": len(raw_candidates),
+            "candidates_returned_count": len(matches),
+            "limit": params.get("limit"),
+            "state": params.get("address.state.in"),
+            "municipality_code": params.get("address.municipality.in"),
+            "postal_code": params.get("address.zip.in"),
+            "district": params.get("address.district.in"),
+            "phone_area": params.get("phones.area.in"),
+            "email_domain": params.get("emails.domain.in"),
+            "reason": reason,
+            "provider_status": "success",
+            "params_sent": dict(params),
+        }
+        return matches, attempt_metadata
+
     def _search_companies_commercial(
         self,
         *,
@@ -387,12 +494,22 @@ class CNPJAProvider:
         )
         normalized_state = normalize_brazilian_state(state)
         municipality_code = lookup_ibge_municipality_code(city, normalized_state)
-        phone_area = _extract_area_code(phone) or _extract_area_code(whatsapp)
-        district = _first_text(neighborhood)
-        email_domain = _resolve_company_email_domain_filter(
-            website,
-            enabled=self.settings.cnpja_use_email_domain_filter,
+        raw_phone_area = _extract_area_code(phone) or _extract_area_code(whatsapp)
+        phone_area, phone_area_conflict, expected_phone_area = resolve_validated_phone_area(
+            phone_area=raw_phone_area,
+            city=city,
+            state=normalized_state,
+            municipality_code=municipality_code,
+            allow_without_mapping=self.settings.cnpja_allow_unmapped_phone_area_filter,
         )
+        district = _first_text(neighborhood)
+        email_domain, email_domain_source = resolve_company_searchable_domain(
+            email_domain=None,
+            website_domain=website,
+        )
+        if not self.settings.cnpja_use_email_domain_filter:
+            email_domain = None
+            email_domain_source = None
         search_attempts = max(1, min(self.settings.cnpja_max_search_attempts_per_lead, 4))
         search_plan = self._build_commercial_search_attempts(
             business_name=business_name,
@@ -416,12 +533,15 @@ class CNPJAProvider:
             city=city,
             state=normalized_state,
             postal_code=effective_postal_code,
-            phone=phone,
-            whatsapp=whatsapp,
+            phone_area=phone_area,
+            raw_phone_area=raw_phone_area,
+            phone_area_conflict=phone_area_conflict,
+            expected_phone_area=expected_phone_area,
             neighborhood=neighborhood,
             municipality_code=municipality_code,
             extracted_zip_from_address=extracted_zip_from_address,
             email_domain=email_domain,
+            email_domain_source=email_domain_source,
         )
 
         for attempt_index, attempt in enumerate(search_plan, start=1):
@@ -517,6 +637,8 @@ class CNPJAProvider:
             params["strategy"] = effective_strategy
         if self.settings.cnpja_search_max_age > 0:
             params["maxAge"] = str(self.settings.cnpja_search_max_age)
+        if self.settings.cnpja_search_max_stale > 0:
+            params["maxStale"] = str(self.settings.cnpja_search_max_stale)
 
         response = self.http.get(
             f"{base_url}/office/{cnpj}",
@@ -652,6 +774,22 @@ class CNPJAProvider:
             office.get("postalCode"),
             payload.get("postalCode"),
         )
+        municipality_raw = address.get("municipality")
+        municipality_code = None
+        if isinstance(municipality_raw, dict):
+            municipality_code = _first_text(
+                municipality_raw.get("id"),
+                municipality_raw.get("code"),
+                municipality_raw.get("ibge"),
+            )
+        elif isinstance(municipality_raw, str):
+            municipality_code = municipality_raw.strip() or None
+        district = _first_text(
+            address.get("district"),
+            address.get("neighborhood"),
+            office.get("district"),
+            payload.get("district"),
+        )
         website = _first_text(
             office.get("website"),
             office.get("url"),
@@ -688,9 +826,14 @@ class CNPJAProvider:
             "city": city,
             "state": state,
             "postal_code": postal_code,
+            "municipality_code": municipality_code,
+            "neighborhood": district,
+            "street_name": street_name,
+            "street_number": street_number,
             "website": website,
             "phones_found": len(phone_values),
             "emails_found": len(email_values),
+            "email_domains": unique_email_domains(email_values),
         }
         if office.get("updated") is not None:
             metadata["office_updated"] = office.get("updated")
@@ -771,12 +914,15 @@ class CNPJAProvider:
         city: str | None,
         state: str | None,
         postal_code: str | None,
-        phone: str | None,
-        whatsapp: str | None,
+        phone_area: str | None,
+        raw_phone_area: str | None,
+        phone_area_conflict: bool,
+        expected_phone_area: str | None,
         neighborhood: str | None,
         municipality_code: str | None = None,
         extracted_zip_from_address: bool = False,
         email_domain: str | None = None,
+        email_domain_source: str | None = None,
     ) -> dict[str, Any]:
         return {
             "provider": "cnpja_commercial",
@@ -789,8 +935,12 @@ class CNPJAProvider:
             "municipality_mapping_found": municipality_code is not None,
             "searched_zip": _normalize_postal_code(postal_code),
             "searched_district": _first_text(neighborhood),
-            "searched_phone_area": _extract_area_code(phone) or _extract_area_code(whatsapp),
+            "searched_phone_area": phone_area,
+            "raw_phone_area": raw_phone_area,
+            "expected_phone_area": expected_phone_area,
+            "phone_area_conflict": phone_area_conflict,
             "searched_email_domain": email_domain,
+            "searched_email_domain_source": email_domain_source,
             "extracted_zip_from_address": extracted_zip_from_address,
         }
 
@@ -1006,6 +1156,50 @@ def _extract_area_code(value: str | None) -> str | None:
     return digits[-10:-8]
 
 
+def is_blocked_company_search_domain(domain: str | None) -> bool:
+    host = (domain or "").strip().lower()
+    if not host:
+        return True
+    return any(host == blocked or host.endswith(f".{blocked}") for blocked in _EMAIL_DOMAIN_FILTER_BLOCKLIST)
+
+
+def resolve_company_searchable_domain(
+    *,
+    email_domain: str | None,
+    website_domain: str | None,
+) -> tuple[str | None, str | None]:
+    normalized_email_domain = normalize_domain(email_domain) or (email_domain or "").strip().lower() or None
+    normalized_website_domain = normalize_domain(website_domain) or (website_domain or "").strip().lower() or None
+
+    if normalized_email_domain and not is_blocked_company_search_domain(normalized_email_domain):
+        return normalized_email_domain, "email_domain"
+    if normalized_website_domain and not is_blocked_company_search_domain(normalized_website_domain):
+        return normalized_website_domain, "website_domain_as_email_domain"
+    return None, None
+
+
+def resolve_validated_phone_area(
+    *,
+    phone_area: str | None,
+    city: str | None,
+    state: str | None,
+    municipality_code: str | None,
+    allow_without_mapping: bool,
+) -> tuple[str | None, bool, str | None]:
+    if not phone_area:
+        return None, False, lookup_expected_phone_area(city, state, municipality_code)
+
+    expected_phone_area = lookup_expected_phone_area(city, state, municipality_code)
+    if expected_phone_area:
+        if phone_area == expected_phone_area:
+            return phone_area, False, expected_phone_area
+        return None, True, expected_phone_area
+
+    if allow_without_mapping:
+        return phone_area, False, None
+    return None, False, None
+
+
 def build_company_search_name_variants(
     business_name: str,
     category: str | None = None,
@@ -1174,6 +1368,9 @@ def _build_alias_search_variants(
         normalized_source = normalize_text(source)
         if normalized_source is None:
             return
+        register(_extract_first_token_brand_variant(normalized_source))
+        register(_extract_leading_brand_phrase_variant(normalized_source))
+        register(_drop_connector_words_variant(_extract_leading_brand_phrase_variant(normalized_source)))
         for candidate in _extract_known_brand_variants(normalized_source):
             register(candidate)
         stripped_source = _strip_city_tokens(_strip_address_suffix(normalized_source))
@@ -1401,6 +1598,82 @@ def _drop_generic_prefix_variant(value: str | None) -> str | None:
     return remainder or None
 
 
+def _extract_first_token_brand_variant(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    stripped = _strip_city_tokens(_strip_address_suffix(normalized)) or normalized
+    tokens = [token for token in stripped.split() if token not in _SEARCH_CONNECTOR_WORDS]
+    if not tokens:
+        return None
+    first_token = tokens[0]
+    if (
+        first_token in _GENERIC_BRAND_PREFIX_TOKENS
+        or first_token in _ADDRESS_PREFIX_TOKENS
+        or first_token in _COMMON_CITY_PHRASES
+        or first_token in _GENERIC_ONLY_VARIANT_TERMS
+    ):
+        return None
+    if len(first_token) < 2:
+        return None
+    if len(tokens) == 1:
+        return first_token
+
+    second_token = tokens[1]
+    known_chain_first_tokens = {brand.split()[0] for brand in _KNOWN_CHAIN_BRANDS}
+    if (
+        first_token in known_chain_first_tokens
+        or any(character.isdigit() for character in first_token)
+        or len(first_token) <= 3
+        or second_token in _BRAND_PHRASE_STOP_TOKENS
+        or second_token in _COMMON_CITY_PHRASES
+        or second_token in {"homecenter", "center", "centro", "catuai"}
+    ):
+        return first_token
+    return None
+
+
+def _extract_leading_brand_phrase_variant(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    stripped = _strip_city_tokens(_strip_address_suffix(normalized)) or normalized
+    raw_tokens = stripped.split()
+    if not raw_tokens:
+        return None
+
+    brand_tokens: list[str] = []
+    significant_count = 0
+    allow_single_category_after_short_brand = False
+    for token in raw_tokens:
+        if token in _COMMON_CITY_PHRASES or token in _ADDRESS_PREFIX_TOKENS:
+            break
+        if token in _SEARCH_CONNECTOR_WORDS:
+            if brand_tokens:
+                brand_tokens.append(token)
+            continue
+        if token in _BRAND_PHRASE_STOP_TOKENS and significant_count >= 1:
+            if allow_single_category_after_short_brand and token in {"construcao", "homecenter", "petshop"}:
+                brand_tokens.append(token)
+                significant_count += 1
+                allow_single_category_after_short_brand = False
+                if significant_count >= 2:
+                    break
+                continue
+            break
+        brand_tokens.append(token)
+        significant_count += 1
+        if significant_count == 1:
+            allow_single_category_after_short_brand = len(token) <= 3 and token.isalpha()
+        if significant_count >= 2:
+            break
+
+    candidate = " ".join(brand_tokens).strip()
+    if not candidate or candidate == normalized:
+        return candidate or None
+    return candidate
+
+
 def _extract_known_brand_variants(value: str | None) -> list[str]:
     normalized = normalize_text(value)
     if normalized is None:
@@ -1450,7 +1723,10 @@ def _looks_like_address_only_variant(value: str | None) -> bool:
 
 def _is_meaningful_company_search_variant(value: str | None) -> bool:
     normalized = normalize_text(value)
-    if normalized is None or len(normalized) < 3:
+    if normalized is None:
+        return False
+    compact = normalized.replace(" ", "")
+    if len(normalized) < 3 and not (any(character.isdigit() for character in compact) and len(compact) >= 2):
         return False
     tokens = [token for token in normalized.split() if token not in _SEARCH_CONNECTOR_WORDS]
     if not tokens:
@@ -1546,9 +1822,8 @@ def _resolve_company_email_domain_filter(website: str | None, *, enabled: bool) 
     normalized_domain = normalize_domain(website)
     if not normalized_domain:
         return None
-    for blocked_domain in _EMAIL_DOMAIN_FILTER_BLOCKLIST:
-        if normalized_domain == blocked_domain or normalized_domain.endswith(f".{blocked_domain}"):
-            return None
+    if is_blocked_company_search_domain(normalized_domain):
+        return None
     return normalized_domain
 
 
@@ -1557,3 +1832,17 @@ def _normalize_cnae_id(value: str | None) -> str | None:
         return None
     digits = "".join(character for character in str(value) if character.isdigit())
     return digits or None
+
+
+def unique_email_domains(values: list[str]) -> list[str]:
+    domains: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if "@" not in value:
+            continue
+        domain = value.split("@", 1)[1].strip().lower()
+        if not domain or domain in seen:
+            continue
+        seen.add(domain)
+        domains.append(domain)
+    return domains

@@ -79,6 +79,8 @@ export function LeadBatchActions({
   const [scope, setScope] = useState<ActionScope>("selected");
   const [lastResult, setLastResult] = useState<ActionResult | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
+  const [deliverySearchMode, setDeliverySearchMode] = useState(false);
+  const [forcePaidSearch, setForcePaidSearch] = useState(false);
   const previousSelectedCount = useRef(selectedLeadIds.length);
 
   useEffect(() => {
@@ -120,7 +122,10 @@ export function LeadBatchActions({
         if (resolvedScope.leadIds.length === 0) {
           throw new Error("Nenhum lead encontrado nesse escopo.");
         }
-        const response = await enrichLeadBatchCnpj(resolvedScope.leadIds);
+        const response = await enrichLeadBatchCnpj(resolvedScope.leadIds, {
+          searchMode: deliverySearchMode ? "delivery" : "balanced",
+          forcePaidSearch,
+        });
         return {
           kind,
           scopeLabel: resolvedScope.scopeLabel,
@@ -195,6 +200,27 @@ export function LeadBatchActions({
           <p className="mt-1 text-xs text-neutral-500">
             O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
           </p>
+          <label className="mt-2 flex items-start gap-2 text-xs text-neutral-600">
+            <input
+              type="checkbox"
+              checked={deliverySearchMode}
+              onChange={(event) => setDeliverySearchMode(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-cyan-700"
+            />
+            <span>Buscar com máxima cobertura (usa mais créditos)</span>
+          </label>
+          <label className="mt-1 flex items-start gap-2 text-xs text-neutral-600">
+            <input
+              type="checkbox"
+              checked={forcePaidSearch}
+              onChange={(event) => setForcePaidSearch(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-cyan-700"
+            />
+            <span>Forçar nova busca mesmo se já consultado recentemente</span>
+          </label>
+          {deliverySearchMode ? (
+            <p className="mt-1 text-xs text-amber-700">Modo cobertura pode fazer mais consultas pagas por lead.</p>
+          ) : null}
           {searchActive ? (
             <p className="mt-2 text-xs text-neutral-500">
               A busca rápida atua só sobre a tabela carregada. A lista filtrada usa os filtros acima.
@@ -389,6 +415,8 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
         <ResultMetric label="Aguardando revisão" value={result.summary.skipped_review_candidate_count} />
         <ResultMetric label="Busca paga recente" value={result.summary.paid_search_recently_attempted_count} />
         <ResultMetric label="Consultados agora" value={result.summary.company_search_consulted_now_count} />
+        <ResultMetric label="Consultas pagas" value={result.summary.paid_calls_made} />
+        <ResultMetric label="Duplicadas evitadas" value={result.summary.paid_calls_skipped_duplicate} />
         <ResultMetric label="Erros" value={result.summary.error_count} />
         {hasErrors ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
@@ -687,6 +715,10 @@ function buildCnpjNarrativeV2(summary: LeadBatchCNPJEnrichmentResponse["summary"
       : null,
     summary.company_search_consulted_now_count
       ? `${summary.company_search_consulted_now_count.toLocaleString()} consultados agora`
+      : null,
+    summary.paid_calls_made ? `${summary.paid_calls_made.toLocaleString()} consultas pagas feitas` : null,
+    summary.paid_calls_skipped_duplicate
+      ? `${summary.paid_calls_skipped_duplicate.toLocaleString()} consultas duplicadas evitadas`
       : null,
   ].filter(Boolean);
 

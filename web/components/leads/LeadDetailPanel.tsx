@@ -73,7 +73,9 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   const cnpjSearchDiagnostics = getCnpjSearchDiagnostics(lead);
   const cnpjApprovedManually = Boolean(cnpjMetadata?.approved_manually);
   const canApproveCnpjCandidate =
-    lead.cnpj_match_status === "needs_review" && hasFullCnpj(cnpjCandidateSummary?.cnpj);
+    lead.cnpj_match_status === "needs_review" &&
+    hasFullCnpj(cnpjCandidateSummary?.cnpj) &&
+    Boolean(cnpjCandidateSummary?.manual_review_approvable);
 
   return (
     <aside className="rounded-md border border-neutral-200 bg-white">
@@ -384,6 +386,14 @@ function CnpjSearchDiagnosticsPanel({
       : null,
     diagnostics.searched_phone_area ? `DDD usado: ${diagnostics.searched_phone_area}` : null,
     diagnostics.search_attempts_count ? `Tentativas: ${diagnostics.search_attempts_count}` : null,
+    diagnostics.search_mode ? `Modo: ${diagnostics.search_mode}` : null,
+    typeof diagnostics.paid_calls_made === "number" ? `Consultas pagas: ${diagnostics.paid_calls_made}` : null,
+    typeof diagnostics.paid_calls_skipped_duplicate === "number" && diagnostics.paid_calls_skipped_duplicate > 0
+      ? `Duplicadas evitadas: ${diagnostics.paid_calls_skipped_duplicate}`
+      : null,
+    typeof diagnostics.paid_calls_skipped_recent === "number" && diagnostics.paid_calls_skipped_recent > 0
+      ? `Puladas por cooldown: ${diagnostics.paid_calls_skipped_recent}`
+      : null,
     typeof diagnostics.candidates_returned_count === "number"
       ? `Candidatos retornados: ${diagnostics.candidates_returned_count}`
       : null,
@@ -399,6 +409,24 @@ function CnpjSearchDiagnosticsPanel({
       {primaryMessage ? <p>{primaryMessage}</p> : null}
       {secondaryFacts.length ? (
         <p className="mt-1 text-xs text-neutral-500">{secondaryFacts.join(" - ")}</p>
+      ) : null}
+      {diagnostics.search_attempts.length ? (
+        <div className="mt-2 space-y-1 text-xs text-neutral-600">
+          {diagnostics.search_attempts.slice(0, 4).map((attempt, index) => (
+            <p key={`${attempt.query_mode ?? "attempt"}-${index}`}>
+              {[
+                attempt.query_mode_label ?? "Tentativa",
+                attempt.searched_values.length ? attempt.searched_values.join(", ") : null,
+                typeof attempt.candidates_returned_count === "number"
+                  ? `${attempt.candidates_returned_count} candidatos`
+                  : null,
+                attempt.status ? `status: ${attempt.status}` : null,
+              ]
+                .filter(Boolean)
+                .join(" - ")}
+            </p>
+          ))}
+        </div>
       ) : null}
     </div>
   );
@@ -747,6 +775,8 @@ function getCnpjCandidateSummary(lead: LeadDetail): LeadCnpjCandidateSummary | n
       reviewReasonFromCode(asNullableString(candidate.blocked_from_autofill_reason)),
     person_like_legal_name: Boolean(candidate.person_like_legal_name),
     legal_name_note: normalizeMojibakeText(asNullableString(candidate.legal_name_note)),
+    manual_review_approvable:
+      candidate.manual_review_approvable === false ? false : hasFullCnpj(asNullableString(candidate.cnpj)),
   };
 }
 
@@ -770,11 +800,15 @@ function getCnpjSearchDiagnostics(lead: LeadDetail): LeadCnpjSearchDiagnostics |
     searched_district: asNullableString(companySearch.searched_district),
     searched_phone_area: asNullableString(companySearch.searched_phone_area),
     searched_email_domain: asNullableString(companySearch.searched_email_domain),
+    search_mode: asNullableString(companySearch.search_mode),
     search_attempts_count: asNullableNumber(companySearch.search_attempts_count),
     search_attempts: asSearchAttempts(companySearch.search_attempts),
     candidates_returned_count: asNullableNumber(companySearch.candidates_returned_count),
     extracted_zip_from_address: Boolean(companySearch.extracted_zip_from_address),
     cnpja_zero_candidates: Boolean(companySearch.cnpja_zero_candidates),
+    paid_calls_made: asNullableNumber(companySearch.paid_calls_made),
+    paid_calls_skipped_duplicate: asNullableNumber(companySearch.paid_calls_skipped_duplicate),
+    paid_calls_skipped_recent: asNullableNumber(companySearch.paid_calls_skipped_recent),
     top_candidate_score: asNullableNumber(companySearch.top_candidate_score),
     top_candidate_rejection_reason: asNullableString(companySearch.top_candidate_rejection_reason),
     recent_search_skipped: Boolean(companySearch.recent_search_skipped),
@@ -1001,8 +1035,11 @@ function asSearchAttempts(value: unknown): LeadCnpjSearchDiagnostics["search_att
       query_mode: asNullableString(item.query_mode),
       query_mode_label: asNullableString(item.query_mode_label),
       query_param: asNullableString(item.query_param),
+      status: asNullableString(item.status) ?? asNullableString(item.provider_status),
+      reason: asNullableString(item.reason),
       searched_values: asStringArray(item.searched_values),
       candidate_count: asNullableNumber(item.candidate_count),
+      candidates_returned_count: asNullableNumber(item.candidates_returned_count),
       municipality_code: asNullableString(item.municipality_code),
       postal_code: asNullableString(item.postal_code),
       district: asNullableString(item.district),

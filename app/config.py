@@ -99,9 +99,29 @@ class Settings(BaseSettings):
     cnpja_search_max_age: int = Field(default=45, alias="CNPJA_SEARCH_MAX_AGE")
     cnpja_company_search_limit: int = Field(default=10, alias="CNPJA_COMPANY_SEARCH_LIMIT")
     cnpja_name_variant_limit: int = Field(default=4, alias="CNPJA_NAME_VARIANT_LIMIT")
+    cnpja_search_mode: Literal["cheap", "balanced", "delivery"] = Field(
+        default="balanced",
+        alias="CNPJA_SEARCH_MODE",
+    )
     cnpja_max_search_attempts_per_lead: int = Field(
-        default=1,
+        default=4,
         alias="CNPJA_MAX_SEARCH_ATTEMPTS_PER_LEAD",
+    )
+    cnpja_max_paid_calls_per_lead: int = Field(
+        default=4,
+        alias="CNPJA_MAX_PAID_CALLS_PER_LEAD",
+    )
+    cnpja_enable_zip_fallback: bool = Field(
+        default=True,
+        alias="CNPJA_ENABLE_ZIP_FALLBACK",
+    )
+    cnpja_enable_email_domain_search: bool = Field(
+        default=True,
+        alias="CNPJA_ENABLE_EMAIL_DOMAIN_SEARCH",
+    )
+    cnpja_allow_unmapped_phone_area_filter: bool = Field(
+        default=True,
+        alias="CNPJA_ALLOW_UNMAPPED_PHONE_AREA_FILTER",
     )
     cnpja_enable_strict_address_attempt: bool = Field(
         default=False,
@@ -133,6 +153,7 @@ class Settings(BaseSettings):
         default=24,
         alias="CNPJ_PAID_SEARCH_REPEAT_COOLDOWN_HOURS",
     )
+    cnpja_search_max_stale: int = Field(default=365, alias="CNPJA_SEARCH_MAX_STALE")
 
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")

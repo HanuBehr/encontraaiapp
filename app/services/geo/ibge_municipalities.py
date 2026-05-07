@@ -52,12 +52,53 @@ _KNOWN_MUNICIPALITY_CODES: dict[tuple[str, str], str] = {
     ("embu das artes", "SP"): "3515004",
 }
 
+_KNOWN_PHONE_AREAS_BY_CITY_STATE: dict[tuple[str, str], str] = {
+    ("campinas", "SP"): "19",
+    ("sao paulo", "SP"): "11",
+    ("guarulhos", "SP"): "11",
+    ("itu", "SP"): "11",
+    ("curitiba", "PR"): "41",
+    ("londrina", "PR"): "43",
+    ("laguna", "SC"): "48",
+    ("belo horizonte", "MG"): "31",
+    ("rio de janeiro", "RJ"): "21",
+}
+
+_KNOWN_PHONE_AREAS_BY_MUNICIPALITY_CODE: dict[str, str] = {
+    _KNOWN_MUNICIPALITY_CODES[("campinas", "SP")]: "19",
+    _KNOWN_MUNICIPALITY_CODES[("sao paulo", "SP")]: "11",
+    _KNOWN_MUNICIPALITY_CODES[("guarulhos", "SP")]: "11",
+    _KNOWN_MUNICIPALITY_CODES[("itu", "SP")]: "11",
+    _KNOWN_MUNICIPALITY_CODES[("curitiba", "PR")]: "41",
+    _KNOWN_MUNICIPALITY_CODES[("londrina", "PR")]: "43",
+    _KNOWN_MUNICIPALITY_CODES[("laguna", "SC")]: "48",
+    _KNOWN_MUNICIPALITY_CODES[("belo horizonte", "MG")]: "31",
+    _KNOWN_MUNICIPALITY_CODES[("rio de janeiro", "RJ")]: "21",
+}
+
 
 def lookup_ibge_municipality_code(city: str | None, state: str | None = None) -> str | None:
     normalized_city, normalized_state = normalize_city_state_for_ibge(city, state)
     if normalized_city is None or normalized_state is None:
         return None
     return _KNOWN_MUNICIPALITY_CODES.get((normalized_city, normalized_state))
+
+
+def lookup_expected_phone_area(
+    city: str | None,
+    state: str | None = None,
+    municipality_code: str | None = None,
+) -> str | None:
+    normalized_code = str(municipality_code).strip() if municipality_code else None
+    if normalized_code:
+        expected_by_code = _KNOWN_PHONE_AREAS_BY_MUNICIPALITY_CODE.get(normalized_code)
+        if expected_by_code:
+            return expected_by_code
+
+    normalized_city, normalized_state = normalize_city_state_for_ibge(city, state)
+    if normalized_city is None or normalized_state is None:
+        return None
+    return _KNOWN_PHONE_AREAS_BY_CITY_STATE.get((normalized_city, normalized_state))
 
 
 def normalize_city_state_for_ibge(

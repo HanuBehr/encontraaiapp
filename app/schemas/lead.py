@@ -323,6 +323,8 @@ class LeadBatchEnrichmentRequest(BaseModel):
 class LeadBatchCNPJEnrichmentRequest(BaseModel):
     lead_ids: list[int] = Field(min_length=1)
     force: bool = False
+    search_mode: Literal["cheap", "balanced", "delivery"] | None = None
+    force_paid_search: bool = False
 
 
 class EnrichmentAttemptedPage(BaseModel):
@@ -431,6 +433,9 @@ class LeadBatchCNPJEnrichmentSummary(BaseModel):
     company_search_rate_limited_count: int = 0
     company_search_provider_error_count: int = 0
     company_search_consulted_now_count: int = 0
+    paid_calls_made: int = 0
+    paid_calls_skipped_duplicate: int = 0
+    paid_calls_skipped_recent: int = 0
     provider_rate_limited_count: int = 0
     provider_error_count: int = 0
     error_count: int = 0

@@ -168,6 +168,8 @@ def enrich_lead_batch_cnpj(
         return service.enrich_lead_ids(
             payload.lead_ids,
             force=payload.force,
+            search_mode=payload.search_mode,
+            force_paid_search=payload.force_paid_search,
             actor="api",
             scope_label="api lead ids",
         )
