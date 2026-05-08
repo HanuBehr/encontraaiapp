@@ -1,0 +1,23 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+COPY requirements.txt ./
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY scripts ./scripts
+COPY .env.example ./.env.example
+
+RUN chmod +x /app/scripts/docker_backend_entrypoint.sh
+
+EXPOSE 8000
+
+CMD ["sh", "/app/scripts/docker_backend_entrypoint.sh"]
+
