@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $distRoot = Join-Path $projectRoot "dist"
-$packageRoot = Join-Path $distRoot "client-package"
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$stagingRoot = Join-Path $distRoot ("client-package-build-" + $timestamp)
 $zipPath = Join-Path $distRoot "encontraai-client-package.zip"
 
 function Invoke-RobocopyCopy {
@@ -35,6 +36,7 @@ function Invoke-RobocopyCopy {
         "/XF",
         ".env",
         "app.db",
+        "*.tsbuildinfo",
         "*.pyc",
         "*.pyo"
     )
@@ -45,33 +47,40 @@ function Invoke-RobocopyCopy {
     }
 }
 
-if (Test-Path -LiteralPath $packageRoot) {
-    Remove-Item -LiteralPath $packageRoot -Recurse -Force
-}
 if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -LiteralPath $zipPath -Force
+    try {
+        Remove-Item -LiteralPath $zipPath -Force -ErrorAction Stop
+    } catch {
+        $zipPath = Join-Path $distRoot ("encontraai-client-package-" + $timestamp + ".zip")
+        Write-Warning "Could not replace the existing zip. Using fallback path: $zipPath"
+    }
 }
 
-New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 
-foreach ($folder in @("app", "web", "scripts")) {
-    Invoke-RobocopyCopy -Source (Join-Path $projectRoot $folder) -Destination (Join-Path $packageRoot $folder)
+foreach ($folder in @("app", "web", "scripts", "docs", "deploy")) {
+    Invoke-RobocopyCopy -Source (Join-Path $projectRoot $folder) -Destination (Join-Path $stagingRoot $folder)
 }
 
 foreach ($file in @(
+    "README.md",
     "requirements.txt",
     "Dockerfile.backend",
     "docker-compose.yml",
-    ".env.client.example",
     ".env.example",
     ".dockerignore",
-    "README_CLIENT_INSTALL.md"
+    "pytest.ini"
 )) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination (Join-Path $packageRoot $file) -Force
+    Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination (Join-Path $stagingRoot $file) -Force
 }
 
-Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $zipPath -Force
+Compress-Archive -Path (Join-Path $stagingRoot "*") -DestinationPath $zipPath -Force
+
+try {
+    Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction Stop
+} catch {
+    Write-Warning "Temporary staging folder could not be removed automatically: $stagingRoot"
+}
 
 Write-Host "Client package created:" -ForegroundColor Green
 Write-Host $zipPath
-

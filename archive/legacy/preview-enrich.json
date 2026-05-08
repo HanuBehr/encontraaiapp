@@ -1,8 +1,8 @@
-{
+﻿{
     "preview": {
         "provider": "google_places",
         "resolved_location": {
-            "label": "São Paulo, SP, Brasil",
+            "label": "SÃ£o Paulo, SP, Brasil",
             "latitude": -23.5557714,
             "longitude": -46.6395571
         },
@@ -16,7 +16,7 @@
                 "raw_payload": {
                     "id": "ChIJ_XUPW7JZzpQRIk2JsWXCk6k",
                     "nationalPhoneNumber": "(11) 3105-4712",
-                    "formattedAddress": "R. Maj. Diogo, 326 - Bela Vista, São Paulo - SP, 01324-000",
+                    "formattedAddress": "R. Maj. Diogo, 326 - Bela Vista, SÃ£o Paulo - SP, 01324-000",
                     "addressComponents": [
                         {
                             "longText": "326",
@@ -45,8 +45,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -54,7 +54,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -91,7 +91,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -99,11 +99,11 @@
                 "candidate": {
                     "business_name": "Tintas Bela Vista",
                     "normalized_business_name": "tintas bela vista",
-                    "category": "Loja de materiais de construção",
-                    "address": "R. Maj. Diogo, 326 - Bela Vista, São Paulo - SP, 01324-000",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "R. Maj. Diogo, 326 - Bela Vista, SÃ£o Paulo - SP, 01324-000",
                     "neighborhood": "Bela Vista",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01324-000",
                     "latitude": -23.554052,
                     "longitude": -46.643287,
@@ -760,7 +760,7 @@
                 "raw_payload": {
                     "id": "ChIJtV3XykhYzpQRRAYO3VX1Eis",
                     "nationalPhoneNumber": "(11) 3337-2109",
-                    "formattedAddress": "Rua Gen. Jardim, 145 - Centro Histórico de São Paulo, São Paulo - SP, 01223-011",
+                    "formattedAddress": "Rua Gen. Jardim, 145 - Centro HistÃ³rico de SÃ£o Paulo, SÃ£o Paulo - SP, 01223-011",
                     "addressComponents": [
                         {
                             "longText": "145",
@@ -779,8 +779,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "Centro Histórico de São Paulo",
-                            "shortText": "Centro Histórico de São Paulo",
+                            "longText": "Centro HistÃ³rico de SÃ£o Paulo",
+                            "shortText": "Centro HistÃ³rico de SÃ£o Paulo",
                             "types": [
                                 "sublocality_level_1",
                                 "sublocality",
@@ -789,8 +789,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -798,7 +798,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -835,7 +835,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -843,11 +843,11 @@
                 "candidate": {
                     "business_name": "Multitintas Centro",
                     "normalized_business_name": "multitintas centro",
-                    "category": "Loja de materiais de construção",
-                    "address": "Rua Gen. Jardim, 145 - Centro Histórico de São Paulo, São Paulo - SP, 01223-011",
-                    "neighborhood": "Centro Histórico de São Paulo",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "Rua Gen. Jardim, 145 - Centro HistÃ³rico de SÃ£o Paulo, SÃ£o Paulo - SP, 01223-011",
+                    "neighborhood": "Centro HistÃ³rico de SÃ£o Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01223-011",
                     "latitude": -23.5448354,
                     "longitude": -46.646014,
@@ -880,7 +880,7 @@
                 "raw_payload": {
                     "id": "ChIJY8SSRLFZzpQREb9cgwWoi7o",
                     "nationalPhoneNumber": "(11) 3253-0123",
-                    "formattedAddress": "R. Rui Barbosa, 226 - Bela Vista, São Paulo - SP, 01326-010",
+                    "formattedAddress": "R. Rui Barbosa, 226 - Bela Vista, SÃ£o Paulo - SP, 01326-010",
                     "addressComponents": [
                         {
                             "longText": "226",
@@ -909,8 +909,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -918,7 +918,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -955,7 +955,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -963,11 +963,11 @@
                 "candidate": {
                     "business_name": "Bazar das Tintas",
                     "normalized_business_name": "bazar das tintas",
-                    "category": "Loja de materiais de construção",
-                    "address": "R. Rui Barbosa, 226 - Bela Vista, São Paulo - SP, 01326-010",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "R. Rui Barbosa, 226 - Bela Vista, SÃ£o Paulo - SP, 01326-010",
                     "neighborhood": "Bela Vista",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01326-010",
                     "latitude": -23.5575214,
                     "longitude": -46.6458276,
@@ -1165,7 +1165,7 @@
                 "raw_payload": {
                     "id": "ChIJazGJAwBZzpQRCFWvCbTmVm0",
                     "nationalPhoneNumber": "(11) 3228-3611",
-                    "formattedAddress": "R. Brg. Tobias, 421 - Centro Histórico de São Paulo, São Paulo - SP, 01032-000",
+                    "formattedAddress": "R. Brg. Tobias, 421 - Centro HistÃ³rico de SÃ£o Paulo, SÃ£o Paulo - SP, 01032-000",
                     "addressComponents": [
                         {
                             "longText": "421",
@@ -1184,8 +1184,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "Centro Histórico de São Paulo",
-                            "shortText": "Centro Histórico de São Paulo",
+                            "longText": "Centro HistÃ³rico de SÃ£o Paulo",
+                            "shortText": "Centro HistÃ³rico de SÃ£o Paulo",
                             "types": [
                                 "sublocality_level_1",
                                 "sublocality",
@@ -1194,8 +1194,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -1203,7 +1203,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -1239,7 +1239,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -1247,11 +1247,11 @@
                 "candidate": {
                     "business_name": "Bazar das Tintas",
                     "normalized_business_name": "bazar das tintas",
-                    "category": "Loja de materiais de construção",
-                    "address": "R. Brg. Tobias, 421 - Centro Histórico de São Paulo, São Paulo - SP, 01032-000",
-                    "neighborhood": "Centro Histórico de São Paulo",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "R. Brg. Tobias, 421 - Centro HistÃ³rico de SÃ£o Paulo, SÃ£o Paulo - SP, 01032-000",
+                    "neighborhood": "Centro HistÃ³rico de SÃ£o Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01032-000",
                     "latitude": -23.539281,
                     "longitude": -46.6352118,
@@ -1284,7 +1284,7 @@
                 "raw_payload": {
                     "id": "ChIJUygrhBJZzpQRPCD76ltxOgo",
                     "nationalPhoneNumber": "(11) 3208-7519",
-                    "formattedAddress": "R. Luís Gama, 798 - Cambuci, São Paulo - SP, 01519-010",
+                    "formattedAddress": "R. LuÃ­s Gama, 798 - Cambuci, SÃ£o Paulo - SP, 01519-010",
                     "addressComponents": [
                         {
                             "longText": "798",
@@ -1295,8 +1295,8 @@
                             "languageCode": "pt-BR"
                         },
                         {
-                            "longText": "Rua Luís Gama",
-                            "shortText": "R. Luís Gama",
+                            "longText": "Rua LuÃ­s Gama",
+                            "shortText": "R. LuÃ­s Gama",
                             "types": [
                                 "route"
                             ],
@@ -1313,8 +1313,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -1322,7 +1322,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -1359,7 +1359,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -1367,11 +1367,11 @@
                 "candidate": {
                     "business_name": "Casa de Tintas Lopes",
                     "normalized_business_name": "casa de tintas lopes",
-                    "category": "Loja de materiais de construção",
-                    "address": "R. Luís Gama, 798 - Cambuci, São Paulo - SP, 01519-010",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "R. LuÃ­s Gama, 798 - Cambuci, SÃ£o Paulo - SP, 01519-010",
                     "neighborhood": "Cambuci",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01519-010",
                     "latitude": -23.5607272,
                     "longitude": -46.6218298,
@@ -1404,7 +1404,7 @@
                 "raw_payload": {
                     "id": "ChIJO73qLzlYzpQRn8qUSqbEIHs",
                     "nationalPhoneNumber": "(11) 3666-4844",
-                    "formattedAddress": "R. Martim Francisco, 519 - Vila Buarque, São Paulo - SP, 01226-001",
+                    "formattedAddress": "R. Martim Francisco, 519 - Vila Buarque, SÃ£o Paulo - SP, 01226-001",
                     "addressComponents": [
                         {
                             "longText": "519",
@@ -1433,8 +1433,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -1442,7 +1442,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -1479,7 +1479,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -1487,11 +1487,11 @@
                 "candidate": {
                     "business_name": "Clodoaldo Tintas",
                     "normalized_business_name": "clodoaldo tintas",
-                    "category": "Loja de materiais de construção",
-                    "address": "R. Martim Francisco, 519 - Vila Buarque, São Paulo - SP, 01226-001",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "R. Martim Francisco, 519 - Vila Buarque, SÃ£o Paulo - SP, 01226-001",
                     "neighborhood": "Vila Buarque",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01226-001",
                     "latitude": -23.541232299999997,
                     "longitude": -46.6541055,
@@ -1524,7 +1524,7 @@
                 "raw_payload": {
                     "id": "ChIJjyXWH7FZzpQREXg3E4U1ZRg",
                     "nationalPhoneNumber": "(11) 3284-1471",
-                    "formattedAddress": "R. Rui Barbosa, 399 - Bela Vista, São Paulo - SP, 01326-010",
+                    "formattedAddress": "R. Rui Barbosa, 399 - Bela Vista, SÃ£o Paulo - SP, 01326-010",
                     "addressComponents": [
                         {
                             "longText": "399",
@@ -1553,8 +1553,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -1562,7 +1562,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -1599,7 +1599,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -1607,11 +1607,11 @@
                 "candidate": {
                     "business_name": "Multitintas Bela Vista",
                     "normalized_business_name": "multitintas bela vista",
-                    "category": "Loja de materiais de construção",
-                    "address": "R. Rui Barbosa, 399 - Bela Vista, São Paulo - SP, 01326-010",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "R. Rui Barbosa, 399 - Bela Vista, SÃ£o Paulo - SP, 01326-010",
                     "neighborhood": "Bela Vista",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01326-010",
                     "latitude": -23.559003999999998,
                     "longitude": -46.645066,
@@ -1644,7 +1644,7 @@
                 "raw_payload": {
                     "id": "ChIJ_12QL1hYzpQR9ByaIrXvt3I",
                     "nationalPhoneNumber": "(11) 3325-3610",
-                    "formattedAddress": "Av. Prestes Maia, 635 - Centro Histórico de São Paulo, São Paulo - SP, 01031-020",
+                    "formattedAddress": "Av. Prestes Maia, 635 - Centro HistÃ³rico de SÃ£o Paulo, SÃ£o Paulo - SP, 01031-020",
                     "addressComponents": [
                         {
                             "longText": "635",
@@ -1663,8 +1663,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "Centro Histórico de São Paulo",
-                            "shortText": "Centro Histórico de São Paulo",
+                            "longText": "Centro HistÃ³rico de SÃ£o Paulo",
+                            "shortText": "Centro HistÃ³rico de SÃ£o Paulo",
                             "types": [
                                 "sublocality_level_1",
                                 "sublocality",
@@ -1673,8 +1673,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -1682,7 +1682,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -1718,7 +1718,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -1726,11 +1726,11 @@
                 "candidate": {
                     "business_name": "Bazar das Tintas",
                     "normalized_business_name": "bazar das tintas",
-                    "category": "Loja de materiais de construção",
-                    "address": "Av. Prestes Maia, 635 - Centro Histórico de São Paulo, São Paulo - SP, 01031-020",
-                    "neighborhood": "Centro Histórico de São Paulo",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "Av. Prestes Maia, 635 - Centro HistÃ³rico de SÃ£o Paulo, SÃ£o Paulo - SP, 01031-020",
+                    "neighborhood": "Centro HistÃ³rico de SÃ£o Paulo",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01031-020",
                     "latitude": -23.538933,
                     "longitude": -46.634064699999996,
@@ -1763,7 +1763,7 @@
                 "raw_payload": {
                     "id": "ChIJGz0hy9pZzpQReZ4r7x9CTGM",
                     "nationalPhoneNumber": "(11) 3120-3129",
-                    "formattedAddress": "Rua Peixoto Gomide, 58 - Consolação, São Paulo - SP, 01409-000",
+                    "formattedAddress": "Rua Peixoto Gomide, 58 - ConsolaÃ§Ã£o, SÃ£o Paulo - SP, 01409-000",
                     "addressComponents": [
                         {
                             "longText": "58",
@@ -1782,8 +1782,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "Consolação",
-                            "shortText": "Consolação",
+                            "longText": "ConsolaÃ§Ã£o",
+                            "shortText": "ConsolaÃ§Ã£o",
                             "types": [
                                 "sublocality_level_1",
                                 "sublocality",
@@ -1792,8 +1792,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -1801,7 +1801,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -1838,7 +1838,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -1846,11 +1846,11 @@
                 "candidate": {
                     "business_name": "Multitintas Augusta",
                     "normalized_business_name": "multitintas augusta",
-                    "category": "Loja de materiais de construção",
-                    "address": "Rua Peixoto Gomide, 58 - Consolação, São Paulo - SP, 01409-000",
-                    "neighborhood": "Consolação",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "Rua Peixoto Gomide, 58 - ConsolaÃ§Ã£o, SÃ£o Paulo - SP, 01409-000",
+                    "neighborhood": "ConsolaÃ§Ã£o",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "01409-000",
                     "latitude": -23.5544381,
                     "longitude": -46.655660499999996,
@@ -1883,7 +1883,7 @@
                 "raw_payload": {
                     "id": "ChIJOZCdGMBZzpQRqdZn2qzhT-Q",
                     "nationalPhoneNumber": "(11) 3052-0450",
-                    "formattedAddress": "R. Tutóia, 262 - Paraíso, São Paulo - SP, 04007-001",
+                    "formattedAddress": "R. TutÃ³ia, 262 - ParaÃ­so, SÃ£o Paulo - SP, 04007-001",
                     "addressComponents": [
                         {
                             "longText": "262",
@@ -1894,16 +1894,16 @@
                             "languageCode": "pt-BR"
                         },
                         {
-                            "longText": "Rua Tutóia",
-                            "shortText": "R. Tutóia",
+                            "longText": "Rua TutÃ³ia",
+                            "shortText": "R. TutÃ³ia",
                             "types": [
                                 "route"
                             ],
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "Paraíso",
-                            "shortText": "Paraíso",
+                            "longText": "ParaÃ­so",
+                            "shortText": "ParaÃ­so",
                             "types": [
                                 "sublocality_level_1",
                                 "sublocality",
@@ -1912,8 +1912,8 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
-                            "shortText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
+                            "shortText": "SÃ£o Paulo",
                             "types": [
                                 "administrative_area_level_2",
                                 "political"
@@ -1921,7 +1921,7 @@
                             "languageCode": "pt"
                         },
                         {
-                            "longText": "São Paulo",
+                            "longText": "SÃ£o Paulo",
                             "shortText": "SP",
                             "types": [
                                 "administrative_area_level_1",
@@ -1958,7 +1958,7 @@
                         "languageCode": "pt"
                     },
                     "primaryTypeDisplayName": {
-                        "text": "Loja de materiais de construção",
+                        "text": "Loja de materiais de construÃ§Ã£o",
                         "languageCode": "pt-BR"
                     },
                     "primaryType": "building_materials_store"
@@ -1966,11 +1966,11 @@
                 "candidate": {
                     "business_name": "Multitintas Tutoia",
                     "normalized_business_name": "multitintas tutoia",
-                    "category": "Loja de materiais de construção",
-                    "address": "R. Tutóia, 262 - Paraíso, São Paulo - SP, 04007-001",
-                    "neighborhood": "Paraíso",
-                    "city": "São Paulo",
-                    "state": "São Paulo",
+                    "category": "Loja de materiais de construÃ§Ã£o",
+                    "address": "R. TutÃ³ia, 262 - ParaÃ­so, SÃ£o Paulo - SP, 04007-001",
+                    "neighborhood": "ParaÃ­so",
+                    "city": "SÃ£o Paulo",
+                    "state": "SÃ£o Paulo",
                     "postal_code": "04007-001",
                     "latitude": -23.57368,
                     "longitude": -46.651693099999996,
@@ -2286,7 +2286,7 @@
                             "normalized_value": "+5511940071820",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=common/home&utm_source=google&utm_medium=perfil_empresa&utm_campaign=tutoia_ficha",
                             "confidence": 0.99,
-                            "label": "Loja Cerq César",
+                            "label": "Loja Cerq CÃ©sar",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2296,7 +2296,7 @@
                             "normalized_value": "+5511940018138",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=common/home&utm_source=google&utm_medium=perfil_empresa&utm_campaign=tutoia_ficha",
                             "confidence": 0.99,
-                            "label": "Loja Tutóia",
+                            "label": "Loja TutÃ³ia",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2346,7 +2346,7 @@
                             "normalized_value": "+551136730842",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=common/home&utm_source=google&utm_medium=perfil_empresa&utm_campaign=tutoia_ficha",
                             "confidence": 0.99,
-                            "label": "Loja Sumaré",
+                            "label": "Loja SumarÃ©",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2506,7 +2506,7 @@
                             "normalized_value": "+5511940071820",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=information/information&information_id=4",
                             "confidence": 0.99,
-                            "label": "Loja Cerq César",
+                            "label": "Loja Cerq CÃ©sar",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2516,7 +2516,7 @@
                             "normalized_value": "+5511940018138",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=information/information&information_id=4",
                             "confidence": 0.99,
-                            "label": "Loja Tutóia",
+                            "label": "Loja TutÃ³ia",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2566,7 +2566,7 @@
                             "normalized_value": "+551136730842",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=information/information&information_id=4",
                             "confidence": 0.99,
-                            "label": "Loja Sumaré",
+                            "label": "Loja SumarÃ©",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2726,7 +2726,7 @@
                             "normalized_value": "+5511940071820",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=information/contact",
                             "confidence": 0.99,
-                            "label": "Loja Cerq César",
+                            "label": "Loja Cerq CÃ©sar",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2736,7 +2736,7 @@
                             "normalized_value": "+5511940018138",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=information/contact",
                             "confidence": 0.99,
-                            "label": "Loja Tutóia",
+                            "label": "Loja TutÃ³ia",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2786,7 +2786,7 @@
                             "normalized_value": "+551136730842",
                             "source_url": "https://multitintasbrasil.com.br/loja/index.php?route=information/contact",
                             "confidence": 0.99,
-                            "label": "Loja Sumaré",
+                            "label": "Loja SumarÃ©",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2956,7 +2956,7 @@
                             "normalized_value": "+5511940071820",
                             "source_url": "https://multitintasbrasil.com.br/loja/empresa",
                             "confidence": 0.99,
-                            "label": "Loja Cerq César",
+                            "label": "Loja Cerq CÃ©sar",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -2966,7 +2966,7 @@
                             "normalized_value": "+5511940018138",
                             "source_url": "https://multitintasbrasil.com.br/loja/empresa",
                             "confidence": 0.99,
-                            "label": "Loja Tutóia",
+                            "label": "Loja TutÃ³ia",
                             "note": null,
                             "added_to_lead": false
                         },
@@ -3016,7 +3016,7 @@
                             "normalized_value": "+551136730842",
                             "source_url": "https://multitintasbrasil.com.br/loja/empresa",
                             "confidence": 0.99,
-                            "label": "Loja Sumaré",
+                            "label": "Loja SumarÃ©",
                             "note": null,
                             "added_to_lead": false
                         },

@@ -25,7 +25,7 @@ Nothing in this guide requires the client to install Python, Node.js, npm, or a 
 - Windows 10 or Windows 11
 - Docker Desktop installed and running
 - A Google API key
-- A CNPJa API key
+- A CNPJA API key
 - Git is optional if the project is delivered as a zip package
 
 ## Recommended Installation Path
@@ -58,6 +58,8 @@ Do not install the project inside OneDrive. A normal local folder such as `C:\En
 
 8. Open:
    - [http://localhost:3000](http://localhost:3000)
+
+The install script copies `deploy/client/.env.client.example` to the project root as `.env` when `.env` does not exist yet.
 
 ## Daily Commands
 
@@ -121,7 +123,7 @@ Always back up before updating.
 - **Invalid API key**  
   Recheck `GOOGLE_API_KEY` and `CNPJA_API_KEY` in `.env`.
 
-- **CNPJa rate limit**  
+- **CNPJA rate limit**  
   Wait about one minute and retry the operation.
 
 - **Google Places quota**  

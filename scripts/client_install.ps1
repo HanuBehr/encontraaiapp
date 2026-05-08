@@ -15,7 +15,11 @@ foreach ($folder in @("data", "exports", "backups")) {
 }
 
 $envPath = Join-Path $projectRoot ".env"
-$clientExamplePath = Join-Path $projectRoot ".env.client.example"
+$clientExamplePath = Join-Path $projectRoot "deploy\\client\\.env.client.example"
+
+if (-not (Test-Path -LiteralPath $clientExamplePath)) {
+    throw "Missing deploy\\client\\.env.client.example. Restore the client install template before continuing."
+}
 
 if (-not (Test-Path -LiteralPath $envPath)) {
     Copy-Item -LiteralPath $clientExamplePath -Destination $envPath
@@ -26,4 +30,3 @@ Write-Host ""
 Write-Host "Client install preparation complete." -ForegroundColor Green
 Write-Host "Next command:" -ForegroundColor Yellow
 Write-Host ".\scripts\client_start.ps1"
-

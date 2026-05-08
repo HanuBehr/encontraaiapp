@@ -135,7 +135,7 @@ notepad .env
 
 Then open [http://localhost:3000](http://localhost:3000).
 
-Full practical install guide: [README_CLIENT_INSTALL.md](README_CLIENT_INSTALL.md)
+For local client-machine installation, see the [client install guide](docs/client-install/README.md) and the [client install checklist](docs/client-install/CHECKLIST.md).
 
 ### Option B - Local development
 
@@ -173,7 +173,7 @@ Open:
 Core templates:
 
 - [`.env.example`](.env.example)
-- [`.env.client.example`](.env.client.example)
+- [`deploy/client/.env.client.example`](deploy/client/.env.client.example)
 - [`web/.env.example`](web/.env.example)
 
 Important runtime values include:
