@@ -1,4 +1,10 @@
+# Local environment files
 .env
+.env.*
+!.env.example
+web/.env.*
+!web/.env.example
+
 .venv/
 __pycache__/
 *.py[cod]
@@ -29,7 +35,6 @@ write_test.txt
 web/node_modules/
 web/.next/
 web/out/
-web/.env.local
 web/*.tsbuildinfo
 exports/
 backups/

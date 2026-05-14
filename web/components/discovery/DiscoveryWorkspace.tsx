@@ -90,17 +90,63 @@ const defaultForm: DiscoveryFormState = {
   customTerms: "",
 };
 
-const searchTermOptions = [
-  "dentistas",
-  "restaurantes",
-  "clínicas de estética",
-  "academias",
-  "lojas de móveis",
-  "oficinas mecânicas",
-  "fornecedores de embalagens",
-  "pet shops",
-  "escritórios de contabilidade",
-  "clínicas veterinárias",
+const searchTermGroups = [
+  {
+    category: "Varejo / Atacado / Distribuidores",
+    terms: [
+      "Materiais de construção",
+      "Casa e construção",
+      "Ferragens",
+      "Depósito de materiais",
+      "Distribuidor de tintas",
+      "Atacadista de construção",
+      "Loja de tintas",
+      "Revendedor de impermeabilizantes",
+    ],
+  },
+  {
+    category: "Construtoras / Incorporadoras",
+    terms: [
+      "Construtora",
+      "Incorporadora",
+      "Empreiteira",
+      "Obra civil",
+      "Engenharia e construção",
+      "Empresa de reformas",
+    ],
+  },
+  {
+    category: "Instaladores / Aplicadores",
+    terms: [
+      "Impermeabilizador",
+      "Aplicador de impermeabilização",
+      "Empresa de reforma e manutenção",
+      "Manutenção predial",
+      "Pintores e reformas",
+      "Dedetizadora e manutenção",
+      "Marmoraria",
+    ],
+  },
+  {
+    category: "Indústria",
+    terms: [
+      "Indústria moveleira",
+      "Fábrica de móveis",
+      "Indústria metalúrgica",
+      "Manutenção industrial",
+      "Metalúrgica",
+      "Serralheria",
+      "Marcenaria",
+    ],
+  },
+  {
+    category: "E-commerce / Revendas Online",
+    terms: [
+      "Marketplace de construção",
+      "Loja virtual de ferragens",
+      "Distribuidor online de materiais",
+    ],
+  },
 ];
 const discoveryExampleQueries = [
   "dentistas em São Paulo",
@@ -806,17 +852,27 @@ export function DiscoveryWorkspace() {
             <p className="mt-2 text-xs text-neutral-500">
               Opcional. Use para buscar variações do mesmo nicho. A prévia remove duplicatas automaticamente.
             </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {searchTermOptions.map((term) => (
-                <label key={term} className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-                  <input
-                    type="checkbox"
-                    checked={form.selectedTerms.includes(term)}
-                    onChange={() => toggleSearchTerm(term)}
-                    className="h-4 w-4 rounded border-neutral-300"
-                  />
-                  <span>{term}</span>
-                </label>
+            <div className="mt-3 space-y-4">
+              {searchTermGroups.map((group) => (
+                <section key={group.category}>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-600">{group.category}</h3>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {group.terms.map((term) => (
+                      <label
+                        key={term}
+                        className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.selectedTerms.includes(term)}
+                          onChange={() => toggleSearchTerm(term)}
+                          className="h-4 w-4 rounded border-neutral-300"
+                        />
+                        <span>{term}</span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
             <label className="mt-4 block">
