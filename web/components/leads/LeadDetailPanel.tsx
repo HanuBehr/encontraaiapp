@@ -62,9 +62,9 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
 
   if (leadId === null) {
     return (
-      <aside className="rounded-md border border-neutral-200 bg-white p-6">
-        <p className="text-sm font-medium text-neutral-950">Selecione um lead</p>
-        <p className="mt-1 text-sm text-neutral-500">
+      <aside className="ea-card p-6">
+        <p className="text-sm font-semibold text-brand-graphite">Selecione um lead</p>
+        <p className="mt-1 text-sm leading-6 text-brand-muted">
           Os detalhes da empresa, contatos, enriquecimento e histórico aparecem aqui.
         </p>
       </aside>
@@ -73,8 +73,8 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
 
   if (detailQuery.isLoading) {
     return (
-      <aside className="rounded-md border border-neutral-200 bg-white p-6">
-        <p className="text-sm text-neutral-500">Carregando detalhes do lead...</p>
+      <aside className="ea-card p-6">
+        <p className="text-sm text-brand-muted">Carregando detalhes do lead...</p>
       </aside>
     );
   }
@@ -104,14 +104,14 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
     lead.cnpj_match_status === "needs_review" && cnpjCandidateSummaries.length > 0;
 
   return (
-    <aside className="rounded-md border border-neutral-200 bg-white">
-      <div className="border-b border-neutral-200 p-4">
-        <p className="text-xs font-semibold uppercase text-cyan-700">Detalhes do lead</p>
+    <aside className="ea-card overflow-hidden">
+      <div className="border-b border-brand-mist/80 p-4">
+        <p className="ea-kicker">Detalhes do lead</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-semibold text-neutral-950">{lead.business_name}</h2>
+          <h2 className="text-lg font-semibold text-brand-graphite">{lead.business_name}</h2>
           {lead.is_blocked ? <BlockedBadge /> : null}
         </div>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-brand-muted">
           {[lead.category, lead.city, lead.state].filter(Boolean).join(" - ") || "Local não informado"}
         </p>
         {lead.is_blocked ? (
@@ -121,7 +121,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
         ) : null}
       </div>
 
-      <div className="divide-y divide-neutral-200">
+      <div className="divide-y divide-brand-mist/80">
         <DetailSection title="Empresa">
           <InfoGrid>
             <InfoItem label="Website" value={lead.website} />
@@ -221,14 +221,14 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                         })
                       }
                       disabled={approveCnpjMutation.isPending}
-                      className="inline-flex items-center justify-center rounded-md bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                      className="ea-button-primary inline-flex items-center justify-center px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {approveCnpjMutation.isPending ? "Aprovando..." : "Aprovar este CNPJ"}
                     </button>
                   </div>
                 ) : null}
                 {cnpjCandidateSummary.legal_name_note ? (
-                  <p className="mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
+                  <p className="mt-3 rounded-2xl border border-brand-olive/70 bg-brand-olive/20 px-3 py-2 text-sm text-brand-graphite">
                     {cnpjCandidateSummary.legal_name_note}
                   </p>
                 ) : null}
@@ -271,7 +271,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                                 })
                               }
                               disabled={approveCnpjMutation.isPending}
-                              className="inline-flex items-center justify-center rounded-md bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300"
+                              className="ea-button-primary inline-flex items-center justify-center px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {approveCnpjMutation.isPending ? "Aprovando..." : "Aprovar este CNPJ"}
                             </button>
@@ -410,7 +410,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
           {lead.activity_logs.length ? (
             <ol className="space-y-3">
               {lead.activity_logs.slice(0, 8).map((activity) => (
-                <li key={activity.id} className="border-l-2 border-cyan-200 pl-3">
+                <li key={activity.id} className="border-l-2 border-brand-olive pl-3">
                   <p className="text-sm font-medium text-neutral-900">{labelToken(activity.action)}</p>
                   <p className="text-sm text-neutral-600">{activity.message ?? activity.actor}</p>
                   <p className="text-xs text-neutral-500">{formatDateTime(activity.created_at)}</p>

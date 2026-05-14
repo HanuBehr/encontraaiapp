@@ -106,24 +106,24 @@ export function LeadCnpjReviewQueue({
   });
 
   return (
-    <section className="rounded-md border border-amber-200 bg-white">
-      <div className="flex flex-col gap-3 border-b border-amber-100 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+    <section className="ea-card overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-brand-mist/80 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-amber-700">CNPJ</p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">Candidatos CNPJ para revisão</h2>
-          <p className="mt-1 text-sm text-neutral-600">
+          <p className="ea-kicker">CNPJ</p>
+          <h2 className="mt-2 text-base font-semibold text-brand-graphite">Candidatos CNPJ para revisão</h2>
+          <p className="mt-1 text-sm leading-6 text-brand-muted">
             Confira os cadastros encontrados, aprove os casos seguros e mantenha sem CNPJ quando o candidato não servir.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+          <div className="ea-card-flat px-3 py-2 text-sm text-brand-muted">
             {reviewItems.length.toLocaleString()} lead(s) na fila
           </div>
           <button
             type="button"
             disabled={selectedIds.length === 0 || bulkApproveMutation.isPending}
             onClick={() => bulkApproveMutation.mutate(selectedIds)}
-            className="rounded-md border border-cyan-700 bg-cyan-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-cyan-200 disabled:bg-cyan-200"
+            className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
           >
             {bulkApproveMutation.isPending ? "Aprovando..." : "Aprovar selecionados"}
           </button>
@@ -164,7 +164,7 @@ export function LeadCnpjReviewQueue({
       {reviewItems.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-            <thead className="bg-neutral-50 text-xs font-semibold uppercase text-neutral-500">
+            <thead className="bg-brand-canvas/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
               <tr>
                 <th className="border-b border-neutral-200 px-3 py-3">Seleção</th>
                 <th className="border-b border-neutral-200 px-3 py-3">Lead</th>
@@ -181,7 +181,7 @@ export function LeadCnpjReviewQueue({
                 const checked = selectedIds.includes(lead.id);
                 const diagnostics = getLeadReviewStatusLabel(lead, candidates);
                 return (
-                  <tr key={lead.id} className={lead.id === activeLeadId ? "bg-cyan-50" : "bg-white"}>
+                  <tr key={lead.id} className={lead.id === activeLeadId ? "bg-brand-olive/25" : "bg-brand-surface"}>
                     <td className="border-b border-neutral-100 px-3 py-3 align-top">
                       <input
                         type="checkbox"
@@ -220,7 +220,7 @@ export function LeadCnpjReviewQueue({
                           return (
                             <div
                               key={`${lead.id}-${candidate.cnpj ?? candidate.legal_name ?? "candidate"}`}
-                              className="rounded-md border border-neutral-200 bg-neutral-50 p-2"
+                              className="rounded-2xl border border-brand-mist/80 bg-brand-canvas/70 p-2"
                             >
                               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                                 <div className="space-y-1">
@@ -258,7 +258,7 @@ export function LeadCnpjReviewQueue({
                                       })
                                     }
                                     disabled={approveMutation.isPending}
-                                    className="rounded-md border border-cyan-700 bg-cyan-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-cyan-200 disabled:bg-cyan-200"
+                                     className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
                                   >
                                     Aprovar este CNPJ
                                   </button>

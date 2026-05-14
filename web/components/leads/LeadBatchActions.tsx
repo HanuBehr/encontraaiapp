@@ -186,35 +186,35 @@ export function LeadBatchActions({
   const scopedActionDisabled = actionMutation.isPending || selectedDisabled || currentDisabled || latestDisabled;
 
   return (
-    <section className="rounded-md border border-neutral-200 bg-white p-4">
+    <section className="ea-card p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-cyan-700">Ações em lote</p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">Enriquecer, revisar e exportar</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="ea-kicker">Ações em lote</p>
+          <h2 className="mt-2 text-base font-semibold text-brand-graphite">Enriquecer, revisar e exportar</h2>
+          <p className="mt-1 text-sm leading-6 text-brand-muted">
             Escolha um escopo para enriquecer contatos, consultar CNPJ, atribuir ou exportar os leads sem sair da lista.
           </p>
-          <p className="mt-1 text-xs text-neutral-500">
+          <p className="mt-1 text-xs text-brand-muted">
             Busca CNPJ já informado, tenta encontrar CNPJ no site da empresa e, se configurado, usa busca cadastral paga.
           </p>
-          <p className="mt-1 text-xs text-neutral-500">
+          <p className="mt-1 text-xs text-brand-muted">
             O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
           </p>
-          <label className="mt-2 flex items-start gap-2 text-xs text-neutral-600">
+          <label className="mt-2 flex items-start gap-2 text-xs text-brand-muted">
             <input
               type="checkbox"
               checked={deliverySearchMode}
               onChange={(event) => setDeliverySearchMode(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-cyan-700"
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300"
             />
             <span>Buscar com máxima cobertura (usa mais créditos)</span>
           </label>
-          <label className="mt-1 flex items-start gap-2 text-xs text-neutral-600">
+          <label className="mt-1 flex items-start gap-2 text-xs text-brand-muted">
             <input
               type="checkbox"
               checked={forcePaidSearch}
               onChange={(event) => setForcePaidSearch(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-cyan-700"
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300"
             />
             <span>Forçar nova busca mesmo se já consultado recentemente</span>
           </label>
@@ -222,7 +222,7 @@ export function LeadBatchActions({
             <p className="mt-1 text-xs text-amber-700">Modo cobertura pode fazer mais consultas pagas por lead.</p>
           ) : null}
           {searchActive ? (
-            <p className="mt-2 text-xs text-neutral-500">
+            <p className="mt-2 text-xs text-brand-muted">
               A busca rápida atua só sobre a tabela carregada. A lista filtrada usa os filtros acima.
             </p>
           ) : null}
@@ -230,14 +230,14 @@ export function LeadBatchActions({
 
         <div className="grid gap-3 lg:grid-cols-[220px_150px_minmax(0,1fr)] xl:min-w-[780px]">
           <label className="block">
-            <span className="text-xs font-medium text-neutral-600">Escopo</span>
+            <span className="text-xs font-medium text-brand-muted">Escopo</span>
             <select
               value={scope}
               onChange={(event) => {
                 setScope(event.target.value as ActionScope);
                 setLastResult(null);
               }}
-              className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm text-neutral-950"
+              className="ea-input mt-1 w-full px-2 py-2 text-sm"
             >
               <option value="selected">Leads selecionados ({selectedLeadIds.length})</option>
               <option value="current">Lista filtrada ({currentTotal})</option>
@@ -247,9 +247,9 @@ export function LeadBatchActions({
             </select>
           </label>
 
-          <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
-            <p className="text-xs font-medium text-neutral-500">Total no escopo</p>
-            <p className="mt-1 text-xl font-semibold text-neutral-950">
+          <div className="ea-card-flat px-3 py-2">
+            <p className="text-xs font-medium text-brand-muted">Total no escopo</p>
+            <p className="mt-1 text-xl font-semibold text-brand-graphite">
               {actionCount === null ? "..." : actionCount.toLocaleString()}
             </p>
           </div>
@@ -272,13 +272,13 @@ export function LeadBatchActions({
       </div>
 
       {selectedDisabled ? (
-        <p className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+        <p className="mt-3 rounded-2xl bg-brand-canvas/80 px-3 py-2 text-sm text-brand-muted">
           Selecione um ou mais leads para agir sobre os itens marcados ou mude o escopo para a lista filtrada.
         </p>
       ) : null}
 
       {scope === "latest" ? (
-        <p className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+        <p className="mt-3 rounded-2xl bg-brand-canvas/80 px-3 py-2 text-sm text-brand-muted">
           A última importação pode ser enriquecida e exportada. A atribuição continua restrita aos leads selecionados
           ou à lista filtrada.
           {latestBatchQuery.isLoading ? " Carregando a contagem do lote." : ""}
@@ -318,7 +318,7 @@ export function LeadBatchActions({
       ) : null}
 
       {actionMutation.isPending ? (
-        <p className="mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-800">
+        <p className="mt-3 rounded-2xl border border-brand-olive/70 bg-brand-olive/20 px-3 py-2 text-sm text-brand-graphite">
           Processando sua ação. Escopos maiores podem levar alguns instantes.
         </p>
       ) : null}
@@ -363,7 +363,7 @@ function ActionButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="rounded-md border border-neutral-900 bg-neutral-950 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
+      className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
     >
       {children}
     </button>

@@ -646,12 +646,12 @@ export function DiscoveryWorkspace() {
   }
 
   return (
-    <div className="space-y-4">
-      <section className="flex flex-col gap-3 rounded-md border border-neutral-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-5">
+      <section className="ea-card flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-cyan-700">Descoberta</p>
-          <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Buscar empresas</h1>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="ea-kicker">Descoberta</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-brand-graphite">Buscar empresas</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
             Pesquise empresas públicas por nicho e cidade, revise a prévia e salve apenas os leads que fazem sentido.
           </p>
         </div>
@@ -663,12 +663,12 @@ export function DiscoveryWorkspace() {
         </div>
       </section>
 
-      <form onSubmit={runPreview} className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <div className="rounded-xl border border-neutral-200 bg-gradient-to-br from-white to-cyan-50/70 p-5">
+      <form onSubmit={runPreview} className="ea-card p-5">
+        <div className="rounded-[1.35rem] border border-brand-mist/80 bg-brand-canvas/70 p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">
-              <h2 className="text-2xl font-semibold text-neutral-950">Encontre leads por nicho e cidade</h2>
-              <p className="mt-2 text-sm text-neutral-600">
+              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-brand-graphite">Encontre leads por nicho e cidade</h2>
+              <p className="mt-2 text-sm leading-6 text-brand-muted">
                 Digite o tipo de empresa, escolha a região e gere uma prévia antes de salvar os leads.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -677,7 +677,7 @@ export function DiscoveryWorkspace() {
                     key={query}
                     type="button"
                     onClick={() => applySuggestedQuery(query)}
-                    className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:border-neutral-500"
+                    className="rounded-full border border-brand-mist bg-brand-surface/80 px-3 py-1.5 text-xs font-medium text-brand-graphite transition hover:border-brand-olive hover:bg-white"
                   >
                     {query}
                   </button>
@@ -686,7 +686,7 @@ export function DiscoveryWorkspace() {
             </div>
 
             <div className="flex flex-col items-start gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Modo de localização</span>
+              <span className="ea-kicker">Modo de localização</span>
               <div className="flex flex-wrap gap-2">
                 <ToggleButton
                   active={form.locationMode === "area"}
@@ -706,35 +706,35 @@ export function DiscoveryWorkspace() {
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
             <label className="block">
-              <span className="text-xs font-medium text-neutral-600">Nicho ou busca</span>
+              <span className="text-xs font-medium text-brand-muted">Nicho ou busca</span>
               <input
                 value={form.naturalLanguageQuery}
                 onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
                 placeholder="Ex: dentistas, reparos de celular, lojas de móveis"
-                className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-950 shadow-sm"
+                className="ea-input mt-1 w-full px-4 py-3 text-sm"
               />
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-brand-muted">
                 Você pode digitar só o nicho ou uma busca completa como &quot;dentistas em São Paulo&quot;.
               </p>
             </label>
 
             {form.locationMode === "area" ? (
               <label className="block">
-                <span className="text-xs font-medium text-neutral-600">Cidade ou região</span>
+                <span className="text-xs font-medium text-brand-muted">Cidade ou região</span>
                 <input
                   value={form.city}
                   onChange={(event) => updateAreaLocationField("city", event.target.value)}
                   placeholder="Ex: São Paulo, Campinas, Santana de Parnaíba"
-                  className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-950 shadow-sm"
+                  className="ea-input mt-1 w-full px-4 py-3 text-sm"
                 />
-                <p className="mt-1 text-xs text-neutral-500">
+                <p className="mt-1 text-xs text-brand-muted">
                   Se a cidade já estiver na busca principal, este campo pode ficar em branco.
                 </p>
               </label>
             ) : (
-              <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Coordenadas ativas</p>
-                <p className="mt-1 text-sm text-neutral-700">
+              <div className="ea-card-flat p-4">
+                <p className="ea-kicker">Coordenadas ativas</p>
+                <p className="mt-2 text-sm text-brand-muted">
                   Use latitude e longitude quando quiser montar a busca a partir de um ponto específico.
                 </p>
               </div>
@@ -742,11 +742,11 @@ export function DiscoveryWorkspace() {
           </div>
 
           {form.locationMode === "area" ? (
-            <details className="mt-4 rounded-lg border border-neutral-200 bg-white/80 p-4">
-              <summary className="cursor-pointer list-item text-sm font-medium text-neutral-800">
+            <details className="ea-card-flat mt-4 p-4">
+              <summary className="cursor-pointer list-item text-sm font-medium text-brand-graphite">
                 Refinar localização
               </summary>
-              <p className="mt-2 text-xs text-neutral-500">
+              <p className="mt-2 text-xs text-brand-muted">
                 Opcional. Use bairro ou CEP quando quiser restringir melhor a região da busca.
               </p>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -765,7 +765,7 @@ export function DiscoveryWorkspace() {
               </div>
             </details>
           ) : (
-            <div className="mt-4 rounded-lg border border-neutral-200 bg-white/80 p-4">
+            <div className="ea-card-flat mt-4 p-4">
               <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.3fr]">
                 <TextField
                   label="Latitude"
@@ -790,7 +790,7 @@ export function DiscoveryWorkspace() {
           )}
 
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
-            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+            <div className="ea-card-flat px-4 py-3">
               <NumberField
                 label="Raio"
                 min={100}
@@ -798,9 +798,9 @@ export function DiscoveryWorkspace() {
                 value={form.radiusM}
                 onChange={(value) => updateForm("radiusM", value)}
               />
-              <p className="mt-1 text-xs text-neutral-500">Aumente o raio para buscar mais longe.</p>
+              <p className="mt-1 text-xs text-brand-muted">Aumente o raio para buscar mais longe.</p>
             </div>
-            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+            <div className="ea-card-flat px-4 py-3">
               <NumberField
                 label="Máximo por termo"
                 min={1}
@@ -808,21 +808,21 @@ export function DiscoveryWorkspace() {
                 value={form.maxResultsPerTerm}
                 onChange={(value) => updateForm("maxResultsPerTerm", value)}
               />
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-brand-muted">
                 É um limite máximo; a busca pode retornar menos resultados.
               </p>
             </div>
             <button
               type="submit"
               disabled={isPreviewPending}
-              className="min-w-[180px] rounded-lg border border-neutral-900 bg-neutral-950 px-5 py-3 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="ea-button-primary min-w-[180px] px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPreviewPending ? "Buscando..." : "Gerar prévia"}
             </button>
           </div>
 
-          <div className="mt-4 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3">
-            <p className="text-sm font-medium text-cyan-950">
+          <div className="mt-4 rounded-2xl border border-brand-olive/60 bg-brand-olive/20 px-4 py-3">
+            <p className="text-sm font-medium text-brand-graphite">
               {buildDiscoverySummaryLine({
                 primaryTerm: parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
                 locationLabel: requestPreviewSummary.locationLabel,
@@ -834,7 +834,7 @@ export function DiscoveryWorkspace() {
               parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
               requestPreviewSummary.searchTerms,
             ) ? (
-              <p className="mt-1 text-xs text-cyan-900">
+              <p className="mt-1 text-xs text-brand-muted">
                 Termos relacionados:{" "}
                 {buildDiscoveryRelatedTermsSummary(
                   parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
@@ -842,25 +842,25 @@ export function DiscoveryWorkspace() {
                 )}
               </p>
             ) : null}
-            <p className="mt-1 text-xs text-cyan-900">Duplicatas serão consolidadas automaticamente.</p>
+            <p className="mt-1 text-xs text-brand-muted">Duplicatas serão consolidadas automaticamente.</p>
           </div>
 
-          <details className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
-            <summary className="cursor-pointer list-item text-sm font-medium text-neutral-900">
+          <details className="ea-card-flat mt-4 p-4">
+            <summary className="cursor-pointer list-item text-sm font-medium text-brand-graphite">
               Adicionar termos relacionados
             </summary>
-            <p className="mt-2 text-xs text-neutral-500">
+            <p className="mt-2 text-xs text-brand-muted">
               Opcional. Use para buscar variações do mesmo nicho. A prévia remove duplicatas automaticamente.
             </p>
             <div className="mt-3 space-y-4">
               {searchTermGroups.map((group) => (
                 <section key={group.category}>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-600">{group.category}</h3>
+                  <h3 className="ea-kicker">{group.category}</h3>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {group.terms.map((term) => (
                       <label
                         key={term}
-                        className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700"
+                        className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-surface/70 px-3 py-2 text-sm text-brand-graphite transition hover:border-brand-olive hover:bg-white"
                       >
                         <input
                           type="checkbox"
@@ -876,15 +876,15 @@ export function DiscoveryWorkspace() {
               ))}
             </div>
             <label className="mt-4 block">
-              <span className="text-xs font-medium text-neutral-600">Termos livres</span>
+              <span className="text-xs font-medium text-brand-muted">Termos livres</span>
               <textarea
                 value={form.customTerms}
                 onChange={(event) => updateCustomTerms(event.target.value)}
                 placeholder="Um por linha ou separados por vírgula"
-                className="mt-1 min-h-24 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
+                className="ea-input mt-1 min-h-24 w-full px-3 py-2 text-sm"
               />
             </label>
-            <p className="mt-2 text-xs text-neutral-500">
+            <p className="mt-2 text-xs text-brand-muted">
               {optionalTermsCount > 0
                 ? `${optionalTermsCount.toLocaleString()} termo(s) relacionado(s) entram na próxima prévia.`
                 : "Se você não adicionar nada aqui, a busca usa só o nicho principal."}
@@ -896,16 +896,16 @@ export function DiscoveryWorkspace() {
         {previewError ? <InlineMessage tone="danger">{errorMessage(previewError)}</InlineMessage> : null}
       </form>
 
-      <section className="rounded-md border border-neutral-200 bg-white p-4">
+      <section className="ea-card p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-neutral-950">Prévia da busca</p>
-            <p className="mt-1 text-sm text-neutral-500">
+            <p className="text-base font-semibold text-brand-graphite">Prévia da busca</p>
+            <p className="mt-1 text-sm leading-6 text-brand-muted">
               Resultados bloqueados e empresas já salvas ficam ocultos por padrão. Só os itens selecionados serão salvos em Leads.
             </p>
           </div>
           <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-end">
-            <label className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+            <label className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-canvas/70 px-3 py-2 text-sm text-brand-graphite">
               <input
                 type="checkbox"
                 checked={hideExistingLeads}
@@ -915,11 +915,11 @@ export function DiscoveryWorkspace() {
               <span>Ocultar já salvos</span>
             </label>
             <label className="block w-full lg:w-44">
-              <span className="text-xs font-medium text-neutral-600">Filtro de bloqueio</span>
+              <span className="text-xs font-medium text-brand-muted">Filtro de bloqueio</span>
               <select
                 value={blockedFilter}
                 onChange={(event) => setBlockedFilter(event.target.value as LeadBlockedFilter)}
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm text-neutral-950"
+                className="ea-input mt-1 w-full px-2 py-2 text-sm"
               >
                 {blockedOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -929,11 +929,11 @@ export function DiscoveryWorkspace() {
                 </select>
             </label>
             <label className="block w-full lg:w-44">
-              <span className="text-xs font-medium text-neutral-600">Filtro de site</span>
+              <span className="text-xs font-medium text-brand-muted">Filtro de site</span>
               <select
                 value={websiteFilter}
                 onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm text-neutral-950"
+                className="ea-input mt-1 w-full px-2 py-2 text-sm"
               >
                 {websiteOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -947,7 +947,7 @@ export function DiscoveryWorkspace() {
                 type="button"
                 disabled={!preview || selectedNoWebsiteClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
                 onClick={recoverSelected}
-                className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="ea-button-secondary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {recoverMutation.isPending ? "Recuperando..." : "Recuperar sites"}
               </button>
@@ -957,7 +957,7 @@ export function DiscoveryWorkspace() {
                   !preview || selectedEnrichableClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending
                 }
                 onClick={enrichSelected}
-                className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="ea-button-primary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {enrichMutation.isPending ? "Enriquecendo..." : "Enriquecer selecionadas"}
               </button>
@@ -965,7 +965,7 @@ export function DiscoveryWorkspace() {
                 type="button"
                 disabled={!preview || visibleEnrichableIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
                 onClick={enrichVisible}
-                className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="ea-button-secondary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Enriquecer visíveis
               </button>
@@ -1077,9 +1077,9 @@ function DiscoveryPreviewTable({
   onBlockDomain: (item: DiscoveryPreviewItem) => void;
 }) {
   return (
-    <div className="mt-4 overflow-x-auto">
+    <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-mist/80 bg-brand-surface/70">
       <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-        <thead className="bg-neutral-50 text-xs font-semibold uppercase text-neutral-500">
+        <thead className="bg-brand-canvas/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
           <tr>
             <th className="border-b border-neutral-200 px-3 py-3">
               <input
@@ -1108,7 +1108,7 @@ function DiscoveryPreviewTable({
               const hasWebsite = hasWebsiteForCandidate(item.candidate);
               const contactFormUrl = firstExtractedContactUrl(item, "contact_form");
               return (
-                <tr key={clientResultId || `${item.search_term}-${item.candidate.business_name}`} className="bg-white">
+                <tr key={clientResultId || `${item.search_term}-${item.candidate.business_name}`} className="bg-brand-surface transition hover:bg-brand-canvas/70">
                   <td className="border-b border-neutral-100 px-3 py-3 align-top">
                     <input
                       type="checkbox"
@@ -1138,7 +1138,7 @@ function DiscoveryPreviewTable({
                           href={item.candidate.website}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-medium text-cyan-700 hover:text-cyan-900"
+                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
                         >
                           Site
                         </a>
@@ -1148,7 +1148,7 @@ function DiscoveryPreviewTable({
                           href={item.candidate.google_maps_url ?? item.source_url ?? ""}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-medium text-cyan-700 hover:text-cyan-900"
+                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
                         >
                           Google Maps
                         </a>
@@ -1165,7 +1165,7 @@ function DiscoveryPreviewTable({
                     {item.candidate.email ? (
                       <a
                         href={`mailto:${item.candidate.email}`}
-                        className="mt-2 block break-all text-xs font-medium text-cyan-700 hover:text-cyan-900"
+                        className="mt-2 block break-all text-xs font-semibold text-[#667568] hover:text-brand-graphite"
                       >
                         {item.candidate.email}
                       </a>
@@ -1176,7 +1176,7 @@ function DiscoveryPreviewTable({
                           href={item.candidate.instagram}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-medium text-cyan-700 hover:text-cyan-900"
+                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
                         >
                           Instagram
                         </a>
@@ -1186,7 +1186,7 @@ function DiscoveryPreviewTable({
                           href={contactFormUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-medium text-cyan-700 hover:text-cyan-900"
+                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
                         >
                           Formulário
                         </a>
@@ -1243,7 +1243,7 @@ function DiscoveryPreviewTable({
                         type="button"
                         disabled={actionDisabled}
                         onClick={() => onBlockCompany(item)}
-                        className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-800 hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Bloquear empresa
                       </button>
@@ -1251,7 +1251,7 @@ function DiscoveryPreviewTable({
                         type="button"
                         disabled={actionDisabled || !domain}
                         onClick={() => onBlockDomain(item)}
-                        className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-800 hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Bloquear domínio
                       </button>
@@ -1287,25 +1287,25 @@ function SaveBar({
   onSave: () => void;
 }) {
   return (
-    <section className="rounded-md border border-neutral-200 bg-white p-4">
+    <section className="ea-card p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-cyan-700">Salvar em leads</p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-950">Salvar leads selecionados</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="ea-kicker">Salvar em leads</p>
+          <h2 className="mt-2 text-base font-semibold text-brand-graphite">Salvar leads selecionados</h2>
+          <p className="mt-1 text-sm leading-6 text-brand-muted">
             Linhas bloqueadas e empresas já salvas são ignoradas automaticamente. Depois de salvar, o lote abre direto em Leads.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-[140px_180px]">
-          <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-center">
-            <p className="text-xs font-medium text-neutral-500">Selecionadas</p>
-            <p className="mt-1 text-lg font-semibold text-neutral-950">{selectedCount.toLocaleString()}</p>
+          <div className="ea-card-flat px-3 py-2 text-center">
+            <p className="text-xs font-medium text-brand-muted">Selecionadas</p>
+            <p className="mt-1 text-lg font-semibold text-brand-graphite">{selectedCount.toLocaleString()}</p>
           </div>
           <button
             type="button"
             disabled={!preview || selectedCount === 0 || isSaving}
             onClick={onSave}
-            className="rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="ea-button-primary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSaving ? "Salvando..." : "Salvar selecionadas"}
           </button>
@@ -1313,16 +1313,16 @@ function SaveBar({
       </div>
 
       {lastImport ? (
-        <div className="mt-4 flex flex-col gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-brand-olive bg-brand-olive/20 p-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-emerald-950">Lote {lastImport.batch_id} salvo</p>
-            <p className="mt-1 text-sm text-emerald-800">
+            <p className="text-sm font-semibold text-brand-graphite">Lote {lastImport.batch_id} salvo</p>
+            <p className="mt-1 text-sm text-brand-muted">
               {lastImport.created_count} criado(s), {lastImport.skipped_existing_count} já existiam e {lastImport.skipped_blocked} ignorado(s) por bloqueio.
             </p>
           </div>
           <Link
             href={`/leads?import_batch_id=${lastImport.batch_id}`}
-            className="rounded-md border border-emerald-900 bg-emerald-900 px-4 py-2 text-center text-sm font-medium text-white"
+            className="ea-button-primary px-4 py-2 text-center text-sm font-semibold"
           >
             Abrir lote salvo
           </Link>
@@ -1348,13 +1348,13 @@ function BlockRuleDialog({
   const isCompany = draft.mode === "company";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/40 px-4 py-6">
-      <div className="w-full max-w-lg rounded-md border border-neutral-200 bg-white p-4 shadow-lg">
-        <p className="text-xs font-semibold uppercase text-cyan-700">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-graphite/45 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-3xl border border-brand-mist bg-brand-surface p-5 shadow-panel">
+        <p className="ea-kicker">
           {isCompany ? "Bloquear empresa" : "Bloquear domínio"}
         </p>
-        <h2 className="mt-1 text-lg font-semibold text-neutral-950">{draft.item.candidate.business_name}</h2>
-        <p className="mt-1 text-sm text-neutral-500">
+        <h2 className="mt-2 text-lg font-semibold text-brand-graphite">{draft.item.candidate.business_name}</h2>
+        <p className="mt-1 text-sm text-brand-muted">
           Salve uma regra de exclusão ativa e aplique a checagem novamente nesta prévia.
         </p>
 
@@ -1367,14 +1367,14 @@ function BlockRuleDialog({
                 onChange={(event) =>
                   onChange({ ...draft, ruleType: event.target.value as "exact_name" | "business_name_contains" })
                 }
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm text-neutral-950"
+                className="ea-input mt-1 w-full px-2 py-2 text-sm"
               >
                 <option value="exact_name">Nome exato da empresa</option>
                 <option value="business_name_contains">Nome da empresa contém</option>
               </select>
             </label>
           ) : (
-            <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+            <div className="ea-card-flat px-3 py-2 text-sm text-brand-muted">
               Regra por domínio
             </div>
           )}
@@ -1396,7 +1396,7 @@ function BlockRuleDialog({
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ea-button-secondary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -1416,9 +1416,9 @@ function BlockRuleDialog({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
-      <p className="text-xs font-medium text-neutral-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-neutral-950">{value}</p>
+    <div className="rounded-2xl border border-brand-mist/80 bg-brand-canvas/70 px-3 py-2">
+      <p className="text-xs font-medium text-brand-muted">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-brand-graphite">{value}</p>
     </div>
   );
 }
@@ -1436,12 +1436,12 @@ function TextField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-neutral-600">{label}</span>
+      <span className="text-xs font-medium text-brand-muted">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
+        className="ea-input mt-1 w-full px-3 py-2 text-sm"
       />
     </label>
   );
@@ -1462,14 +1462,14 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-neutral-600">{label}</span>
+      <span className="text-xs font-medium text-brand-muted">{label}</span>
       <input
         type="number"
         min={min}
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
+        className="ea-input mt-1 w-full px-3 py-2 text-sm"
       />
     </label>
   );
@@ -1490,8 +1490,8 @@ function ToggleButton({
       onClick={onClick}
       className={
         active
-          ? "rounded-md border border-cyan-700 bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-900"
-          : "rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700"
+          ? "rounded-xl border border-brand-sage bg-brand-olive/30 px-3 py-2 text-sm font-semibold text-brand-graphite"
+          : "rounded-xl border border-brand-mist bg-brand-surface/80 px-3 py-2 text-sm font-semibold text-brand-muted transition hover:border-brand-olive hover:text-brand-graphite"
       }
     >
       {children}
@@ -1503,7 +1503,7 @@ function InlineMessage({ tone, children }: { tone: "danger" | "info"; children: 
   const className =
     tone === "danger"
       ? "mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
-      : "mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900";
+      : "mt-3 rounded-2xl border border-brand-olive/60 bg-brand-olive/20 px-3 py-2 text-sm text-brand-graphite";
   return <p className={className}>{children}</p>;
 }
 
@@ -1528,7 +1528,7 @@ function OutcomeBadge({
       : tone === "warning"
         ? "inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900"
         : tone === "info"
-          ? "inline-flex rounded-md border border-cyan-200 bg-cyan-50 px-2 py-1 text-[11px] font-medium text-cyan-900"
+          ? "inline-flex rounded-md border border-brand-olive/70 bg-brand-olive/20 px-2 py-1 text-[11px] font-medium text-brand-graphite"
           : "inline-flex rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-700";
   return <span className={className}>{children}</span>;
 }

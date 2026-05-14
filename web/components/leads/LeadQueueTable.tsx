@@ -166,20 +166,20 @@ export function LeadQueueTable({
   });
 
   return (
-    <section className="rounded-md border border-neutral-200 bg-white">
-      <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="ea-card overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-brand-mist/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-neutral-950">Lista de leads</h2>
-          <p className="text-sm text-neutral-500">
+          <h2 className="text-base font-semibold text-brand-graphite">Lista de leads</h2>
+          <p className="text-sm text-brand-muted">
             {isLoading ? "Carregando leads..." : `${total.toLocaleString()} leads na lista atual`}
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <label className="flex items-center gap-2 text-sm text-brand-muted">
           Linhas
           <select
             value={pageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className="rounded-md border border-neutral-300 bg-white px-2 py-1"
+            className="ea-input px-2 py-1"
           >
             {[10, 25, 50, 100].map((size) => (
               <option key={size} value={size}>
@@ -192,7 +192,7 @@ export function LeadQueueTable({
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="bg-neutral-50 text-xs font-semibold uppercase text-neutral-500">
+          <thead className="bg-brand-canvas/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -211,8 +211,8 @@ export function LeadQueueTable({
                   onClick={() => onActivateLead(row.original.id)}
                   className={
                     row.original.id === activeLeadId
-                      ? "cursor-pointer bg-cyan-50"
-                      : "cursor-pointer bg-white hover:bg-neutral-50"
+                      ? "cursor-pointer bg-brand-olive/25"
+                      : "cursor-pointer bg-brand-surface hover:bg-brand-canvas/70"
                   }
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -234,7 +234,7 @@ export function LeadQueueTable({
       </div>
 
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-brand-muted">
           Página {pageIndex + 1} de {pageCount}
         </p>
         <div className="flex gap-2">
@@ -242,7 +242,7 @@ export function LeadQueueTable({
             type="button"
             disabled={pageIndex === 0}
             onClick={() => onPageChange(Math.max(0, pageIndex - 1))}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ea-button-secondary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Anterior
           </button>
@@ -250,7 +250,7 @@ export function LeadQueueTable({
             type="button"
             disabled={pageIndex + 1 >= pageCount}
             onClick={() => onPageChange(Math.min(pageCount - 1, pageIndex + 1))}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ea-button-secondary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Próxima
           </button>
@@ -277,17 +277,17 @@ function SortHeader({ column, label }: SortHeaderProps) {
       type="button"
       disabled={!column.getCanSort()}
       onClick={column.getToggleSortingHandler()}
-      className="flex items-center gap-1 font-semibold uppercase text-neutral-500 disabled:cursor-default"
+      className="flex items-center gap-1 font-semibold uppercase text-brand-muted disabled:cursor-default"
     >
       <span>{label}</span>
-      {marker ? <span className="text-[10px] text-cyan-700">{marker}</span> : null}
+      {marker ? <span className="text-[10px] text-[#667568]">{marker}</span> : null}
     </button>
   );
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
+    <span className="inline-flex rounded-md border border-brand-olive/70 bg-brand-olive/20 px-2 py-1 text-xs font-medium text-brand-graphite">
       {children}
     </span>
   );
@@ -306,7 +306,7 @@ function ContactPill({ active, children }: { active: boolean; children: React.Re
     <span
       className={
         active
-          ? "rounded-md border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-800"
+          ? "rounded-md border border-brand-olive/70 bg-brand-olive/20 px-2 py-1 text-xs font-medium text-brand-graphite"
           : "rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-400"
       }
     >

@@ -4,8 +4,20 @@
 
 :root {
   color-scheme: light;
-  background: #f7f8fa;
-  color: #171717;
+  --ea-canvas: #f7f6f2;
+  --ea-surface: #fffdf8;
+  --ea-surface-muted: #f1eee8;
+  --ea-graphite: #2f3333;
+  --ea-muted: #6f7772;
+  --ea-border: #d9ddd6;
+  --ea-border-strong: #c8cec4;
+  --ea-sage: #8faf9a;
+  --ea-sand: #e8e1d8;
+  --ea-olive: #b7c3b3;
+  --ea-focus: rgba(143, 175, 154, 0.42);
+  --ea-shadow-card: 0 1px 2px rgba(47, 51, 51, 0.04), 0 18px 44px rgba(47, 51, 51, 0.07);
+  background: var(--ea-canvas);
+  color: var(--ea-graphite);
 }
 
 * {
@@ -19,9 +31,12 @@ body {
 
 body {
   margin: 0;
-  background: #f7f8fa;
-  color: #171717;
-  font-family: Inter, Arial, Helvetica, sans-serif;
+  background: var(--ea-canvas);
+  color: var(--ea-graphite);
+  font-family: Manrope, Inter, Geist, "Segoe UI", Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button,
@@ -32,10 +47,82 @@ textarea {
   letter-spacing: 0;
 }
 
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--ea-sage);
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #0891b2;
+  outline: 3px solid var(--ea-focus);
   outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(143, 175, 154, 0.32);
+}
+
+@layer components {
+  .ea-card {
+    background: var(--ea-surface);
+    border: 1px solid rgba(217, 221, 214, 0.86);
+    border-radius: 1.25rem;
+    box-shadow: var(--ea-shadow-card);
+  }
+
+  .ea-card-flat {
+    background: rgba(255, 253, 248, 0.78);
+    border: 1px solid rgba(217, 221, 214, 0.78);
+    border-radius: 1rem;
+  }
+
+  .ea-kicker {
+    color: #667568;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .ea-button-primary {
+    background: var(--ea-graphite);
+    border: 1px solid var(--ea-graphite);
+    border-radius: 0.85rem;
+    color: #fffdf8;
+    transition: background-color 160ms ease, border-color 160ms ease, opacity 160ms ease, transform 160ms ease;
+  }
+
+  .ea-button-primary:hover:not(:disabled) {
+    background: #202424;
+    border-color: #202424;
+  }
+
+  .ea-button-secondary {
+    background: rgba(255, 253, 248, 0.86);
+    border: 1px solid var(--ea-border);
+    border-radius: 0.85rem;
+    color: var(--ea-graphite);
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+
+  .ea-button-secondary:hover:not(:disabled) {
+    background: #ffffff;
+    border-color: var(--ea-border-strong);
+  }
+
+  .ea-input {
+    background: rgba(255, 253, 248, 0.96);
+    border: 1px solid var(--ea-border);
+    border-radius: 0.9rem;
+    color: var(--ea-graphite);
+    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  }
+
+  .ea-input:focus {
+    border-color: var(--ea-sage);
+    box-shadow: 0 0 0 4px var(--ea-focus);
+    outline: none;
+  }
 }

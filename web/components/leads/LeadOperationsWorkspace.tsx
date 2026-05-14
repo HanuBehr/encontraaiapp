@@ -128,12 +128,12 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-md border border-neutral-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-5">
+      <div className="ea-card flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-cyan-700">Leads</p>
-          <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Leads</h1>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="ea-kicker">Leads</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-brand-graphite">Leads</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
             Revise, filtre, selecione e exporte os leads salvos a partir da descoberta.
           </p>
         </div>
@@ -145,16 +145,16 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
       </div>
 
       {importBatchId ? (
-        <section className="flex flex-col gap-3 rounded-md border border-cyan-200 bg-cyan-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex flex-col gap-3 rounded-3xl border border-brand-olive/70 bg-brand-olive/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-cyan-950">Visualizando o lote salvo {importBatchId}</p>
-            <p className="mt-1 text-sm text-cyan-900">
+            <p className="text-sm font-semibold text-brand-graphite">Visualizando o lote salvo {importBatchId}</p>
+            <p className="mt-1 text-sm text-brand-muted">
               Você pode enriquecer, revisar e exportar este lote sem sair da área de leads.
             </p>
           </div>
           <Link
             href="/leads"
-            className="rounded-md border border-cyan-900 bg-white px-3 py-2 text-center text-sm font-medium text-cyan-950"
+            className="ea-button-secondary px-3 py-2 text-center text-sm font-semibold"
           >
             Ver todos os leads
           </Link>
@@ -176,27 +176,27 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
       />
 
       {optionsQuery.isError ? (
-        <p className="rounded-md border border-rose-200 bg-white p-3 text-sm text-rose-800">
+        <p className="rounded-2xl border border-rose-200 bg-white/80 p-3 text-sm text-rose-800">
           {formatUserFacingError(optionsQuery.error, "Não foi possível carregar os filtros agora.")}
         </p>
       ) : null}
 
       {leadsQuery.isError ? (
-        <p className="rounded-md border border-rose-200 bg-white p-3 text-sm text-rose-800">
+        <p className="rounded-2xl border border-rose-200 bg-white/80 p-3 text-sm text-rose-800">
           {formatUserFacingError(leadsQuery.error, "Não foi possível carregar os leads agora.")}
         </p>
       ) : null}
 
       {showEmptyWorkspaceState ? (
-        <section className="rounded-md border border-dashed border-neutral-300 bg-white p-5">
-          <p className="text-sm font-semibold text-neutral-950">Nenhum lead salvo ainda</p>
-          <p className="mt-2 text-sm text-neutral-600">
+        <section className="ea-card border-dashed p-5">
+          <p className="text-sm font-semibold text-brand-graphite">Nenhum lead salvo ainda</p>
+          <p className="mt-2 text-sm text-brand-muted">
             Os leads que você salvar em <span className="font-medium">/discovery</span> aparecem aqui para revisão,
             enriquecimento e exportação.
           </p>
           <Link
             href="/discovery"
-            className="mt-4 inline-flex rounded-md border border-neutral-900 bg-neutral-950 px-4 py-2 text-sm font-medium text-white"
+            className="ea-button-primary mt-4 inline-flex px-4 py-2 text-sm font-semibold"
           >
             Ir para descoberta
           </Link>
@@ -240,9 +240,9 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
-      <p className="text-xs font-medium text-neutral-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-neutral-950">{value}</p>
+    <div className="rounded-2xl border border-brand-mist/80 bg-brand-canvas/70 px-3 py-2">
+      <p className="text-xs font-medium text-brand-muted">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-brand-graphite">{value}</p>
     </div>
   );
 }
@@ -259,24 +259,24 @@ function LeadQueueSearch({
   searchActive: boolean;
 }) {
   return (
-    <section className="rounded-md border border-cyan-200 bg-white p-4">
+    <section className="ea-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <label className="block w-full lg:max-w-2xl" htmlFor="lead-search">
-          <span className="text-sm font-semibold text-neutral-950">Busca rápida</span>
+          <span className="text-sm font-semibold text-brand-graphite">Busca rápida</span>
           <input
             id="lead-search"
             value={value}
             onChange={(event) => onChange(event.target.value)}
             placeholder="Empresa, cidade, contato, responsável, segmento ou motivo do bloqueio"
-            className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-950"
+            className="ea-input mt-2 w-full px-3 py-2 text-sm"
           />
         </label>
-        <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 lg:min-w-[180px]">
-          <p className="text-xs font-medium text-neutral-500">{searchActive ? "Resultados" : "Lista visível"}</p>
-          <p className="mt-1 text-lg font-semibold text-neutral-950">{resultCount.toLocaleString()}</p>
+        <div className="ea-card-flat px-3 py-2 lg:min-w-[180px]">
+          <p className="text-xs font-medium text-brand-muted">{searchActive ? "Resultados" : "Lista visível"}</p>
+          <p className="mt-1 text-lg font-semibold text-brand-graphite">{resultCount.toLocaleString()}</p>
         </div>
       </div>
-      <p className="mt-2 text-xs text-neutral-500">
+      <p className="mt-2 text-xs text-brand-muted">
         A busca rápida filtra os leads já carregados na lista com os filtros atuais.
       </p>
     </section>
