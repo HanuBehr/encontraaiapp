@@ -176,13 +176,13 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
       />
 
       {optionsQuery.isError ? (
-        <p className="rounded-2xl border border-rose-200 bg-white/80 p-3 text-sm text-rose-800">
+        <p className="rounded-2xl border border-rose-300/30 bg-rose-950/35 p-3 text-sm text-rose-100">
           {formatUserFacingError(optionsQuery.error, "Não foi possível carregar os filtros agora.")}
         </p>
       ) : null}
 
       {leadsQuery.isError ? (
-        <p className="rounded-2xl border border-rose-200 bg-white/80 p-3 text-sm text-rose-800">
+        <p className="rounded-2xl border border-rose-300/30 bg-rose-950/35 p-3 text-sm text-rose-100">
           {formatUserFacingError(leadsQuery.error, "Não foi possível carregar os leads agora.")}
         </p>
       ) : null}
@@ -240,7 +240,7 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-brand-mist/80 bg-brand-canvas/70 px-3 py-2">
+    <div className="rounded-2xl border border-brand-mist/80 bg-brand-sand/70 px-3 py-2">
       <p className="text-xs font-medium text-brand-muted">{label}</p>
       <p className="mt-1 text-lg font-semibold text-brand-graphite">{value}</p>
     </div>

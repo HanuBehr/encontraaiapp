@@ -645,251 +645,255 @@ export function DiscoveryWorkspace() {
     });
   }
 
+  function resetDiscoveryForm() {
+    setForm(defaultForm);
+    setSearchRequest(null);
+    setPreview(null);
+    setSelectedIds({});
+    setNewlyBlockedIds({});
+    setLastImport(null);
+    setFormError(null);
+    setPreviewError(null);
+    setActionMessage(null);
+    editSequenceRef.current += 1;
+    queryCategorySequenceRef.current = editSequenceRef.current;
+    queryLocationSequenceRef.current = editSequenceRef.current;
+    manualTermsSequenceRef.current = editSequenceRef.current;
+    manualAreaLocationSequenceRef.current = editSequenceRef.current;
+    manualCoordinateLabelSequenceRef.current = editSequenceRef.current;
+  }
+
   return (
     <div className="space-y-5">
-      <section className="ea-card flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/[0.72] p-5 shadow-card sm:p-6 lg:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-brand-orchid/16 blur-3xl" />
+        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)] xl:items-center">
         <div>
           <p className="ea-kicker">Descoberta</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-brand-graphite">Buscar empresas</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
+          <h1 className="mt-2 text-4xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-5xl">Buscar empresas</h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-brand-muted">
             Pesquise empresas públicas por nicho e cidade, revise a prévia e salve apenas os leads que fazem sentido.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-center sm:min-w-[480px] sm:grid-cols-4">
-          <Metric label="Novas" value={previewCount.toLocaleString()} />
-          <Metric label="Com site" value={websiteReadyCount.toLocaleString()} />
-          <Metric label="Já salvas" value={existingPreviewCount.toLocaleString()} />
-          <Metric label="Selecionadas" value={selectedClientResultIds.length.toLocaleString()} />
+        <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
+          <Metric icon="+" label="Novas" value={previewCount.toLocaleString()} hint="Ainda não salvas" />
+          <Metric icon="↗" label="Com site" value={websiteReadyCount.toLocaleString()} hint="Prontas para enriquecer" />
+          <Metric icon="✓" label="Já salvas" value={existingPreviewCount.toLocaleString()} hint="Ocultas por padrão" />
+          <Metric icon="•" label="Selecionadas" value={selectedClientResultIds.length.toLocaleString()} hint="Entram no lote" />
+        </div>
         </div>
       </section>
 
-      <form onSubmit={runPreview} className="ea-card p-5">
-        <div className="rounded-[1.35rem] border border-brand-mist/80 bg-brand-canvas/70 p-5">
+      <form onSubmit={runPreview} className="ea-card relative overflow-hidden p-5 sm:p-6">
+        <div className="pointer-events-none absolute -left-20 top-12 h-44 w-44 rounded-full bg-brand-info/12 blur-3xl" />
+        <div className="relative flex flex-col gap-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl">
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-brand-graphite">Encontre leads por nicho e cidade</h2>
-              <p className="mt-2 text-sm leading-6 text-brand-muted">
-                Digite o tipo de empresa, escolha a região e gere uma prévia antes de salvar os leads.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {discoveryExampleQueries.map((query) => (
-                  <button
-                    key={query}
-                    type="button"
-                    onClick={() => applySuggestedQuery(query)}
-                    className="rounded-full border border-brand-mist bg-brand-surface/80 px-3 py-1.5 text-xs font-medium text-brand-graphite transition hover:border-brand-olive hover:bg-white"
-                  >
-                    {query}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col items-start gap-2">
-              <span className="ea-kicker">Modo de localização</span>
-              <div className="flex flex-wrap gap-2">
-                <ToggleButton
-                  active={form.locationMode === "area"}
-                  onClick={() => updateForm("locationMode", "area")}
-                >
-                  Cidade / região
-                </ToggleButton>
-                <ToggleButton
-                  active={form.locationMode === "coordinates"}
-                  onClick={() => updateForm("locationMode", "coordinates")}
-                >
-                  Coordenadas
-                </ToggleButton>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-            <label className="block">
-              <span className="text-xs font-medium text-brand-muted">Nicho ou busca</span>
-              <input
-                value={form.naturalLanguageQuery}
-                onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
-                placeholder="Ex: dentistas, reparos de celular, lojas de móveis"
-                className="ea-input mt-1 w-full px-4 py-3 text-sm"
-              />
-              <p className="mt-1 text-xs text-brand-muted">
-                Você pode digitar só o nicho ou uma busca completa como &quot;dentistas em São Paulo&quot;.
-              </p>
-            </label>
-
-            {form.locationMode === "area" ? (
-              <label className="block">
-                <span className="text-xs font-medium text-brand-muted">Cidade ou região</span>
-                <input
-                  value={form.city}
-                  onChange={(event) => updateAreaLocationField("city", event.target.value)}
-                  placeholder="Ex: São Paulo, Campinas, Santana de Parnaíba"
-                  className="ea-input mt-1 w-full px-4 py-3 text-sm"
-                />
-                <p className="mt-1 text-xs text-brand-muted">
-                  Se a cidade já estiver na busca principal, este campo pode ficar em branco.
-                </p>
-              </label>
-            ) : (
-              <div className="ea-card-flat p-4">
-                <p className="ea-kicker">Coordenadas ativas</p>
-                <p className="mt-2 text-sm text-brand-muted">
-                  Use latitude e longitude quando quiser montar a busca a partir de um ponto específico.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {form.locationMode === "area" ? (
-            <details className="ea-card-flat mt-4 p-4">
-              <summary className="cursor-pointer list-item text-sm font-medium text-brand-graphite">
-                Refinar localização
-              </summary>
-              <p className="mt-2 text-xs text-brand-muted">
-                Opcional. Use bairro ou CEP quando quiser restringir melhor a região da busca.
-              </p>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <TextField
-                  label="Bairro"
-                  value={form.neighborhood}
-                  onChange={(value) => updateAreaLocationField("neighborhood", value)}
-                  placeholder="Opcional"
-                />
-                <TextField
-                  label="CEP"
-                  value={form.postalCode}
-                  onChange={(value) => updateAreaLocationField("postalCode", value)}
-                  placeholder="Opcional"
-                />
-              </div>
-            </details>
-          ) : (
-            <div className="ea-card-flat mt-4 p-4">
-              <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.3fr]">
-                <TextField
-                  label="Latitude"
-                  value={form.latitude}
-                  onChange={(value) => updateForm("latitude", value)}
-                  placeholder="-23.5505"
-                />
-                <TextField
-                  label="Longitude"
-                  value={form.longitude}
-                  onChange={(value) => updateForm("longitude", value)}
-                  placeholder="-46.6333"
-                />
-                <TextField
-                  label="Rótulo do local"
-                  value={form.locationLabel}
-                  onChange={(value) => updateCoordinateLabel(value)}
-                  placeholder="Opcional"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
-            <div className="ea-card-flat px-4 py-3">
-              <NumberField
-                label="Raio"
-                min={100}
-                max={50000}
-                value={form.radiusM}
-                onChange={(value) => updateForm("radiusM", value)}
-              />
-              <p className="mt-1 text-xs text-brand-muted">Aumente o raio para buscar mais longe.</p>
-            </div>
-            <div className="ea-card-flat px-4 py-3">
-              <NumberField
-                label="Máximo por termo"
-                min={1}
-                max={20}
-                value={form.maxResultsPerTerm}
-                onChange={(value) => updateForm("maxResultsPerTerm", value)}
-              />
-              <p className="mt-1 text-xs text-brand-muted">
-                É um limite máximo; a busca pode retornar menos resultados.
+            <div>
+              <p className="ea-kicker">Central de descoberta</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-brand-graphite sm:text-3xl">
+                Configure a busca, revise a prévia, salve só o que importa.
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
+                Digite o nicho, defina a região e use termos relacionados para ampliar a cobertura sem perder controle.
               </p>
             </div>
             <button
-              type="submit"
-              disabled={isPreviewPending}
-              className="ea-button-primary min-w-[180px] px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              onClick={resetDiscoveryForm}
+              className="ea-button-secondary w-full px-4 py-2.5 text-sm font-semibold lg:w-auto"
             >
-              {isPreviewPending ? "Buscando..." : "Gerar prévia"}
+              Limpar filtros
             </button>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-brand-olive/60 bg-brand-olive/20 px-4 py-3">
-            <p className="text-sm font-medium text-brand-graphite">
-              {buildDiscoverySummaryLine({
-                primaryTerm: parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
-                locationLabel: requestPreviewSummary.locationLabel,
-                radiusM: requestPreviewSummary.radiusM,
-                maxResultsPerTerm: requestPreviewSummary.maxResultsPerTerm,
-              })}
-            </p>
-            {buildDiscoveryRelatedTermsSummary(
-              parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
-              requestPreviewSummary.searchTerms,
-            ) ? (
-              <p className="mt-1 text-xs text-brand-muted">
-                Termos relacionados:{" "}
-                {buildDiscoveryRelatedTermsSummary(
-                  parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
-                  requestPreviewSummary.searchTerms,
-                )}
-              </p>
-            ) : null}
-            <p className="mt-1 text-xs text-brand-muted">Duplicatas serão consolidadas automaticamente.</p>
-          </div>
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Nicho ou busca</span>
+                  <div className="relative mt-2">
+                    <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌕</span>
+                    <input
+                      value={form.naturalLanguageQuery}
+                      onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
+                      placeholder="Ex: dentistas, reparos de celular, lojas de móveis"
+                      className="ea-input h-[52px] w-full px-10 py-3 text-sm shadow-sm"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-brand-muted">
+                    Você pode digitar só o nicho ou uma busca completa como &quot;dentistas em São Paulo&quot;.
+                  </p>
+                </label>
 
-          <details className="ea-card-flat mt-4 p-4">
-            <summary className="cursor-pointer list-item text-sm font-medium text-brand-graphite">
-              Adicionar termos relacionados
-            </summary>
-            <p className="mt-2 text-xs text-brand-muted">
-              Opcional. Use para buscar variações do mesmo nicho. A prévia remove duplicatas automaticamente.
-            </p>
-            <div className="mt-3 space-y-4">
-              {searchTermGroups.map((group) => (
-                <section key={group.category}>
-                  <h3 className="ea-kicker">{group.category}</h3>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {group.terms.map((term) => (
-                      <label
-                        key={term}
-                        className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-surface/70 px-3 py-2 text-sm text-brand-graphite transition hover:border-brand-olive hover:bg-white"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.selectedTerms.includes(term)}
-                          onChange={() => toggleSearchTerm(term)}
-                          className="h-4 w-4 rounded border-neutral-300"
-                        />
-                        <span>{term}</span>
-                      </label>
+                {form.locationMode === "area" ? (
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Cidade ou região</span>
+                    <div className="relative mt-2">
+                      <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌖</span>
+                      <input
+                        value={form.city}
+                        onChange={(event) => updateAreaLocationField("city", event.target.value)}
+                        placeholder="Ex: São Paulo, Campinas"
+                        className="ea-input h-[52px] w-full px-10 py-3 text-sm shadow-sm"
+                      />
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-brand-muted">
+                      Se a cidade já estiver na busca principal, este campo pode ficar em branco.
+                    </p>
+                  </label>
+                ) : (
+                  <div className="ea-card-flat p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Coordenadas ativas</p>
+                    <p className="mt-2 text-sm leading-6 text-brand-muted">
+                      Use latitude e longitude quando quiser montar a busca a partir de um ponto específico.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Sugestões rápidas</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {discoveryExampleQueries.map((query) => (
+                    <button
+                      key={query}
+                      type="button"
+                      onClick={() => applySuggestedQuery(query)}
+                      className="ea-chip px-3 py-2 text-xs font-semibold"
+                    >
+                      <span aria-hidden="true" className="mr-1 text-brand-signal">+</span>
+                      {query}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {form.locationMode === "area" ? (
+                <details className="group ea-card-flat overflow-hidden p-0">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-semibold text-brand-graphite">
+                    <span>
+                      Refinar localização
+                      <span className="ml-2 font-normal text-brand-muted">Bairro e CEP opcionais</span>
+                    </span>
+                    <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
+                  </summary>
+                  <div className="border-t border-brand-mist/70 px-4 pb-4 pt-3">
+                    <p className="text-xs leading-5 text-brand-muted">
+                      Use bairro ou CEP quando quiser restringir melhor a região da busca.
+                    </p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <TextField
+                        label="Bairro"
+                        value={form.neighborhood}
+                        onChange={(value) => updateAreaLocationField("neighborhood", value)}
+                        placeholder="Opcional"
+                      />
+                      <TextField
+                        label="CEP"
+                        value={form.postalCode}
+                        onChange={(value) => updateAreaLocationField("postalCode", value)}
+                        placeholder="Opcional"
+                      />
+                    </div>
+                  </div>
+                </details>
+              ) : (
+                <div className="ea-card-flat p-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.3fr]">
+                    <TextField label="Latitude" value={form.latitude} onChange={(value) => updateForm("latitude", value)} placeholder="-23.5505" />
+                    <TextField label="Longitude" value={form.longitude} onChange={(value) => updateForm("longitude", value)} placeholder="-46.6333" />
+                    <TextField label="Rótulo do local" value={form.locationLabel} onChange={(value) => updateCoordinateLabel(value)} placeholder="Opcional" />
+                  </div>
+                </div>
+              )}
+
+              <details className="group ea-card-flat overflow-hidden p-0">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-semibold text-brand-graphite">
+                  <span>
+                    Adicionar termos relacionados
+                    <span className="ml-2 font-normal text-brand-muted">
+                      {optionalTermsCount > 0 ? `${optionalTermsCount.toLocaleString()} ativo(s)` : "Opcional"}
+                    </span>
+                  </span>
+                  <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
+                </summary>
+                <div className="border-t border-brand-mist/70 px-4 pb-4 pt-3">
+                  <p className="text-xs leading-5 text-brand-muted">
+                    Use para buscar variações do mesmo nicho. A prévia remove duplicatas automaticamente.
+                  </p>
+                  <div className="mt-4 space-y-4">
+                    {searchTermGroups.map((group) => (
+                      <section key={group.category}>
+                        <h3 className="ea-kicker">{group.category}</h3>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                          {group.terms.map((term) => (
+                            <label key={term} className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-white/70 px-3 py-2 text-sm text-brand-graphite transition hover:border-brand-orchid hover:bg-white">
+                              <input type="checkbox" checked={form.selectedTerms.includes(term)} onChange={() => toggleSearchTerm(term)} className="h-4 w-4 rounded border-neutral-300" />
+                              <span>{term}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </section>
                     ))}
                   </div>
-                </section>
-              ))}
+                  <label className="mt-4 block">
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Termos livres</span>
+                    <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder="Um por linha ou separados por vírgula" className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
+                  </label>
+                </div>
+              </details>
             </div>
-            <label className="mt-4 block">
-              <span className="text-xs font-medium text-brand-muted">Termos livres</span>
-              <textarea
-                value={form.customTerms}
-                onChange={(event) => updateCustomTerms(event.target.value)}
-                placeholder="Um por linha ou separados por vírgula"
-                className="ea-input mt-1 min-h-24 w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <p className="mt-2 text-xs text-brand-muted">
-              {optionalTermsCount > 0
-                ? `${optionalTermsCount.toLocaleString()} termo(s) relacionado(s) entram na próxima prévia.`
-                : "Se você não adicionar nada aqui, a busca usa só o nicho principal."}
-            </p>
-          </details>
+
+            <aside className="rounded-[22px] border border-brand-mist/80 bg-white/[0.68] p-4 shadow-[0_16px_36px_rgba(29,22,48,0.08)]">
+              <div>
+                <p className="ea-kicker">Modo de localização</p>
+                <div className="mt-3 grid grid-cols-2 rounded-2xl border border-brand-mist bg-brand-sand p-1">
+                  <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>Cidade / região</ToggleButton>
+                  <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>Coordenadas</ToggleButton>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-brand-muted">
+                  {form.locationMode === "area"
+                    ? "Ideal para buscas comerciais por cidade, bairro ou região operacional."
+                    : "Use quando quiser controlar o raio a partir de um ponto exato."}
+                </p>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="ea-card-flat px-4 py-3">
+                  <NumberField label="Raio" min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
+                  <p className="mt-1 text-xs text-brand-muted">Aumente o raio para buscar mais longe.</p>
+                </div>
+                <div className="ea-card-flat px-4 py-3">
+                  <NumberField label="Máximo por termo" min={1} max={20} value={form.maxResultsPerTerm} onChange={(value) => updateForm("maxResultsPerTerm", value)} />
+                  <p className="mt-1 text-xs text-brand-muted">É um limite máximo; a busca pode retornar menos resultados.</p>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-4 py-3">
+                <p className="text-sm font-semibold text-brand-graphite">Resumo da próxima prévia</p>
+                <p className="mt-2 text-sm leading-6 text-brand-muted">
+                  {buildDiscoverySummaryLine({
+                    primaryTerm: parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
+                    locationLabel: requestPreviewSummary.locationLabel,
+                    radiusM: requestPreviewSummary.radiusM,
+                    maxResultsPerTerm: requestPreviewSummary.maxResultsPerTerm,
+                  })}
+                </p>
+                <p className="mt-2 text-xs text-brand-muted">
+                  Cap esperado: até {requestPreviewSummary.maxPotentialResults.toLocaleString()} resultado(s). Duplicatas serão consolidadas automaticamente.
+                </p>
+                {buildDiscoveryRelatedTermsSummary(parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null, requestPreviewSummary.searchTerms) ? (
+                  <p className="mt-1 text-xs text-brand-muted">
+                    Termos relacionados: {buildDiscoveryRelatedTermsSummary(parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null, requestPreviewSummary.searchTerms)}
+                  </p>
+                ) : null}
+              </div>
+
+              <button type="submit" disabled={isPreviewPending} className="ea-button-primary mt-5 flex min-h-[52px] w-full items-center justify-center px-5 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50">
+                {isPreviewPending ? "Buscando..." : "Gerar prévia"}
+              </button>
+            </aside>
+          </div>
         </div>
 
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
@@ -905,7 +909,7 @@ export function DiscoveryWorkspace() {
             </p>
           </div>
           <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-end">
-            <label className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-canvas/70 px-3 py-2 text-sm text-brand-graphite">
+            <label className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-sand/70 px-3 py-2 text-sm text-brand-graphite">
               <input
                 type="checkbox"
                 checked={hideExistingLeads}
@@ -979,7 +983,7 @@ export function DiscoveryWorkspace() {
         {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error)}</InlineMessage> : null}
         {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error)}</InlineMessage> : null}
         {preview ? (
-          <p className="mt-3 text-xs text-neutral-500">
+          <p className="mt-3 rounded-2xl border border-brand-mist/70 bg-brand-sand/70 px-3 py-2 text-xs leading-5 text-brand-muted">
             O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas:{" "}
             {selectedEnrichableClientResultIds.length.toLocaleString()}. Visíveis prontas:{" "}
             {visibleEnrichableIds.length.toLocaleString()}. A recuperação de sites verifica até{" "}
@@ -989,7 +993,9 @@ export function DiscoveryWorkspace() {
           </p>
         ) : null}
 
-        {preview ? (
+        {isPreviewPending ? (
+          <PreviewSkeleton />
+        ) : preview ? (
           <DiscoveryPreviewTable
             items={visibleItems}
             emptyMessage={buildPreviewEmptyMessage({
@@ -1009,10 +1015,13 @@ export function DiscoveryWorkspace() {
             actionDisabled={blockMutation.isPending || enrichMutation.isPending || recoverMutation.isPending}
           />
         ) : (
-          <div className="mt-4 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center text-sm text-neutral-500">
-            <p className="font-medium text-neutral-800">Busque por nicho + cidade para montar sua prévia.</p>
-            <p className="mt-2">
-              Exemplos: dentistas em São Paulo, restaurantes em Campinas ou clínicas de estética no Rio de Janeiro.
+          <div className="mt-4 overflow-hidden rounded-[24px] border border-dashed border-brand-mist bg-white/[0.58] px-5 py-10 text-center shadow-[0_12px_34px_rgba(29,22,48,0.06)]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-mist bg-brand-sand text-xl font-bold text-brand-signal">
+              ⌕
+            </div>
+            <p className="mt-4 text-base font-bold text-brand-graphite">Busque por nicho + cidade para montar sua prévia.</p>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-brand-muted">
+              A prévia aparece aqui com empresas encontradas, status de site, bloqueios, seleção e ações para salvar o lote.
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {discoveryExampleQueries.map((query) => (
@@ -1020,7 +1029,7 @@ export function DiscoveryWorkspace() {
                   key={query}
                   type="button"
                   onClick={() => applySuggestedQuery(query)}
-                  className="rounded-full border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-800 hover:border-neutral-500"
+                  className="ea-chip px-3 py-2 text-xs font-semibold"
                 >
                   {query}
                 </button>
@@ -1047,6 +1056,33 @@ export function DiscoveryWorkspace() {
           onConfirm={confirmBlockRule}
         />
       ) : null}
+    </div>
+  );
+}
+
+function PreviewSkeleton() {
+  return (
+    <div className="mt-4 rounded-[24px] border border-brand-mist/80 bg-white/[0.64] p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-brand-graphite">Gerando prévia</p>
+          <p className="mt-1 text-sm text-brand-muted">Consultando provedores e consolidando duplicatas.</p>
+        </div>
+        <div className="h-9 w-9 rounded-full border border-brand-mist bg-brand-sand" />
+      </div>
+      <div className="mt-5 space-y-3">
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="grid gap-3 rounded-2xl border border-brand-mist/70 bg-white/70 p-3 md:grid-cols-[1.4fr_0.9fr_0.9fr_120px]">
+            <div className="space-y-2">
+              <div className="ea-skeleton h-4 w-44 rounded-full" />
+              <div className="ea-skeleton h-3 w-28 rounded-full" />
+            </div>
+            <div className="ea-skeleton h-4 rounded-full" />
+            <div className="ea-skeleton h-4 rounded-full" />
+            <div className="ea-skeleton h-9 rounded-xl" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1079,7 +1115,7 @@ function DiscoveryPreviewTable({
   return (
     <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-mist/80 bg-brand-surface/70">
       <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-        <thead className="bg-brand-canvas/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
+        <thead className="bg-brand-sand/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
           <tr>
             <th className="border-b border-neutral-200 px-3 py-3">
               <input
@@ -1108,7 +1144,7 @@ function DiscoveryPreviewTable({
               const hasWebsite = hasWebsiteForCandidate(item.candidate);
               const contactFormUrl = firstExtractedContactUrl(item, "contact_form");
               return (
-                <tr key={clientResultId || `${item.search_term}-${item.candidate.business_name}`} className="bg-brand-surface transition hover:bg-brand-canvas/70">
+                <tr key={clientResultId || `${item.search_term}-${item.candidate.business_name}`} className="bg-brand-surface transition hover:bg-brand-sand/70">
                   <td className="border-b border-neutral-100 px-3 py-3 align-top">
                     <input
                       type="checkbox"
@@ -1138,7 +1174,7 @@ function DiscoveryPreviewTable({
                           href={item.candidate.website}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
+                          className="text-xs font-semibold text-brand-signal hover:text-brand-core"
                         >
                           Site
                         </a>
@@ -1148,7 +1184,7 @@ function DiscoveryPreviewTable({
                           href={item.candidate.google_maps_url ?? item.source_url ?? ""}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
+                          className="text-xs font-semibold text-brand-signal hover:text-brand-core"
                         >
                           Google Maps
                         </a>
@@ -1165,7 +1201,7 @@ function DiscoveryPreviewTable({
                     {item.candidate.email ? (
                       <a
                         href={`mailto:${item.candidate.email}`}
-                        className="mt-2 block break-all text-xs font-semibold text-[#667568] hover:text-brand-graphite"
+                        className="mt-2 block break-all text-xs font-semibold text-brand-signal hover:text-brand-core"
                       >
                         {item.candidate.email}
                       </a>
@@ -1176,7 +1212,7 @@ function DiscoveryPreviewTable({
                           href={item.candidate.instagram}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
+                          className="text-xs font-semibold text-brand-signal hover:text-brand-core"
                         >
                           Instagram
                         </a>
@@ -1186,7 +1222,7 @@ function DiscoveryPreviewTable({
                           href={contactFormUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-semibold text-[#667568] hover:text-brand-graphite"
+                          className="text-xs font-semibold text-brand-signal hover:text-brand-core"
                         >
                           Formulário
                         </a>
@@ -1414,11 +1450,17 @@ function BlockRuleDialog({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ icon, label, value, hint }: { icon: string; label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-2xl border border-brand-mist/80 bg-brand-canvas/70 px-3 py-2">
-      <p className="text-xs font-medium text-brand-muted">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-brand-graphite">{value}</p>
+    <div className="ea-stat-card p-3">
+      <div className="flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-brand-signal/10 text-xs font-bold text-brand-signal">
+          {icon}
+        </span>
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{label}</p>
+      </div>
+      <p className="mt-3 text-2xl font-bold tracking-[-0.03em] text-brand-graphite">{value}</p>
+      <p className="mt-1 text-[11px] leading-4 text-brand-muted">{hint}</p>
     </div>
   );
 }
@@ -1436,12 +1478,12 @@ function TextField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-brand-muted">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="ea-input mt-1 w-full px-3 py-2 text-sm"
+        className="ea-input mt-2 h-12 w-full px-3 py-2 text-sm"
       />
     </label>
   );
@@ -1462,14 +1504,14 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-brand-muted">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{label}</span>
       <input
         type="number"
         min={min}
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="ea-input mt-1 w-full px-3 py-2 text-sm"
+        className="ea-input mt-2 h-12 w-full px-3 py-2 text-sm"
       />
     </label>
   );
@@ -1490,8 +1532,8 @@ function ToggleButton({
       onClick={onClick}
       className={
         active
-          ? "rounded-xl border border-brand-sage bg-brand-olive/30 px-3 py-2 text-sm font-semibold text-brand-graphite"
-          : "rounded-xl border border-brand-mist bg-brand-surface/80 px-3 py-2 text-sm font-semibold text-brand-muted transition hover:border-brand-olive hover:text-brand-graphite"
+          ? "rounded-[14px] border border-brand-signal bg-white px-3 py-2 text-sm font-bold text-brand-graphite shadow-[0_8px_20px_rgba(124,58,237,0.16)]"
+          : "rounded-[14px] border border-transparent px-3 py-2 text-sm font-semibold text-brand-muted transition hover:bg-white/70 hover:text-brand-graphite"
       }
     >
       {children}
@@ -1503,7 +1545,7 @@ function InlineMessage({ tone, children }: { tone: "danger" | "info"; children: 
   const className =
     tone === "danger"
       ? "mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
-      : "mt-3 rounded-2xl border border-brand-olive/60 bg-brand-olive/20 px-3 py-2 text-sm text-brand-graphite";
+      : "mt-3 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-3 py-2 text-sm text-brand-graphite";
   return <p className={className}>{children}</p>;
 }
 

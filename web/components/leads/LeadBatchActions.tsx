@@ -272,13 +272,13 @@ export function LeadBatchActions({
       </div>
 
       {selectedDisabled ? (
-        <p className="mt-3 rounded-2xl bg-brand-canvas/80 px-3 py-2 text-sm text-brand-muted">
+        <p className="mt-3 rounded-2xl bg-brand-sand/80 px-3 py-2 text-sm text-brand-muted">
           Selecione um ou mais leads para agir sobre os itens marcados ou mude o escopo para a lista filtrada.
         </p>
       ) : null}
 
       {scope === "latest" ? (
-        <p className="mt-3 rounded-2xl bg-brand-canvas/80 px-3 py-2 text-sm text-brand-muted">
+        <p className="mt-3 rounded-2xl bg-brand-sand/80 px-3 py-2 text-sm text-brand-muted">
           A última importação pode ser enriquecida e exportada. A atribuição continua restrita aos leads selecionados
           ou à lista filtrada.
           {latestBatchQuery.isLoading ? " Carregando a contagem do lote." : ""}

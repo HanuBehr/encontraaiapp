@@ -192,7 +192,7 @@ export function LeadQueueTable({
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="bg-brand-canvas/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
+          <thead className="bg-brand-sand/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -211,8 +211,8 @@ export function LeadQueueTable({
                   onClick={() => onActivateLead(row.original.id)}
                   className={
                     row.original.id === activeLeadId
-                      ? "cursor-pointer bg-brand-olive/25"
-                      : "cursor-pointer bg-brand-surface hover:bg-brand-canvas/70"
+                      ? "cursor-pointer bg-brand-olive/10"
+                      : "cursor-pointer bg-brand-surface hover:bg-brand-sand/70"
                   }
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -280,7 +280,7 @@ function SortHeader({ column, label }: SortHeaderProps) {
       className="flex items-center gap-1 font-semibold uppercase text-brand-muted disabled:cursor-default"
     >
       <span>{label}</span>
-      {marker ? <span className="text-[10px] text-[#667568]">{marker}</span> : null}
+      {marker ? <span className="text-[10px] text-brand-signal">{marker}</span> : null}
     </button>
   );
 }
