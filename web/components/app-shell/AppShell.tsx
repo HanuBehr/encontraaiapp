@@ -42,8 +42,8 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
         href={item.href}
         aria-current={active ? "page" : undefined}
         aria-label={item.label}
-        className={`relative flex items-center rounded-[16px] border px-[10px] transition-all duration-160 motion-reduce:transition-none ${
-          expanded ? "w-full justify-start gap-3 min-h-[56px]" : "w-[48px] h-[48px] justify-center"
+        className={`relative flex items-center rounded-[15px] border px-2 transition-all duration-160 motion-reduce:transition-none ${
+          expanded ? "w-full justify-start gap-3 min-h-[52px]" : "h-11 w-11 justify-center"
         } ${
           active
             ? "border-white/[0.34] bg-[linear-gradient(135deg,rgba(255,255,255,0.24),rgba(139,92,246,0.24))] text-white/98 shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_14px_32px_rgba(76,29,149,0.16)]"
@@ -55,18 +55,18 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
         )}
 
         <span
-          className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[14px] border ${
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] border ${
             active ? "border-white/[0.26] bg-white/[0.18]" : "border-white/[0.16] bg-white/[0.11]"
           }`}
         >
-          <item.Icon className={`h-[20px] w-[20px] ${active ? "text-white/98" : "text-white/78"}`} />
+          <item.Icon className={`h-[18px] w-[18px] ${active ? "text-white/98" : "text-white/78"}`} />
         </span>
 
         <div
           className={`flex flex-col whitespace-nowrap transition-all duration-140 motion-reduce:transition-none ${
             expanded ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-[-4px] pointer-events-none absolute"
           }`}
-          style={expanded ? {} : { left: "calc(42px + 12px + 10px)", top: "50%", transform: "translateY(-50%) translateX(-4px)" }}
+          style={expanded ? {} : { left: "calc(36px + 12px + 8px)", top: "50%", transform: "translateY(-50%) translateX(-4px)" }}
         >
           <span className="text-sm font-bold leading-tight text-white/96">{item.label}</span>
           <span className="mt-0.5 text-xs font-medium leading-tight text-white/66">{item.description}</span>
@@ -112,29 +112,29 @@ export function AppShell({ children }: AppShellProps) {
         onMouseLeave={handleMouseLeave}
         onFocusCapture={handleFocusCapture}
         onBlurCapture={handleBlurCapture}
-        className="fixed inset-y-0 left-0 z-40 hidden flex-col px-3 py-[18px] lg:flex"
+        className="fixed inset-y-0 left-0 z-40 hidden flex-col px-2 py-[16px] lg:flex"
         style={{
-          width: expanded ? "244px" : "78px",
+          width: expanded ? "224px" : "70px",
           transition: "width 180ms ease, box-shadow 180ms ease",
-          background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.30), transparent 34%),radial-gradient(circle at 50% 100%, rgba(167,139,250,0.08), transparent 44%),linear-gradient(180deg, rgba(160,151,174,0.64) 0%, rgba(128,118,145,0.58) 48%, rgba(96,86,116,0.62) 100%)",
+          background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.24), transparent 34%),radial-gradient(circle at 50% 100%, rgba(167,139,250,0.06), transparent 44%),linear-gradient(180deg, rgba(146,137,162,0.58) 0%, rgba(118,108,137,0.52) 48%, rgba(91,82,110,0.56) 100%)",
           backdropFilter: "blur(30px) saturate(145%)",
           WebkitBackdropFilter: "blur(30px) saturate(145%)",
           boxShadow: expanded
-            ? "inset -1px 0 0 rgba(255,255,255,0.10), 18px 0 48px rgba(45,36,62,0.10)"
-            : "inset -1px 0 0 rgba(255,255,255,0.10), 12px 0 34px rgba(45,36,62,0.08)",
+            ? "inset -1px 0 0 rgba(255,255,255,0.10), 14px 0 36px rgba(45,36,62,0.08)"
+            : "inset -1px 0 0 rgba(255,255,255,0.10), 8px 0 24px rgba(45,36,62,0.06)",
         }}
       >
         {/* Soft edge fade */}
-        <div className="pointer-events-none absolute top-0 right-[-76px] h-full w-[76px] bg-[linear-gradient(90deg,rgba(244,241,251,0.55),rgba(244,241,251,0.18),rgba(244,241,251,0))] blur-[18px]" />
+        <div className="pointer-events-none absolute top-0 right-[-52px] h-full w-[52px] bg-[linear-gradient(90deg,rgba(244,241,251,0.42),rgba(244,241,251,0.12),rgba(244,241,251,0))] blur-[16px]" />
 
         {/* Ambient glow */}
         <div className="pointer-events-none absolute -top-16 left-1/2 h-36 w-36 -translate-x-1/2 rounded-full bg-brand-orchid/4 blur-3xl" />
 
         <div className="relative flex h-full flex-col">
           {/* Logo */}
-          <div className="relative flex items-center px-1" style={{ minHeight: "44px" }}>
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-white/[0.28] bg-[linear-gradient(180deg,rgba(255,255,255,0.24),rgba(255,255,255,0.12))] shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_12px_28px_rgba(76,29,149,0.12)]">
-              <svg aria-hidden="true" viewBox="0 0 40 40" className="h-6 w-6">
+          <div className="relative flex items-center px-1" style={{ minHeight: "40px" }}>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] border border-white/[0.24] bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0.11))] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_22px_rgba(76,29,149,0.10)]">
+              <svg aria-hidden="true" viewBox="0 0 40 40" className="h-[22px] w-[22px]">
                 <path d="M22.2 3.7C31.1 8 36.1 16.2 36.4 27.9c-4.5-5.2-11.7-6.7-19.3-2.8 4.2-7.2 4.5-14.4 5.1-21.4Z" fill="#FFFFFF" />
                 <path d="M18.3 15.3c1.8 4.7 1.1 10.3-2.2 17.2 2.9-1.8 5.9-2.7 9.1-3.1-2.5-3.3-3.8-8.1-6.9-14.1Z" fill="#6D28D9" />
               </svg>
@@ -229,8 +229,8 @@ export function AppShell({ children }: AppShellProps) {
       </nav>
 
       {/* Main */}
-      <main className="relative z-10 w-full px-4 py-5 pb-16 sm:px-6 lg:pl-[108px] lg:pr-8 lg:py-8 lg:pb-8">
-        <div className="mx-auto w-full max-w-[1560px]">{children}</div>
+      <main className="relative z-10 w-full px-4 py-5 pb-16 sm:px-6 lg:pl-[92px] lg:pr-7 lg:py-7 lg:pb-7">
+        <div className="w-full max-w-[1540px]">{children}</div>
       </main>
     </div>
   );

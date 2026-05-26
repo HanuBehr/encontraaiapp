@@ -663,125 +663,134 @@ export function DiscoveryWorkspace() {
     manualCoordinateLabelSequenceRef.current = editSequenceRef.current;
   }
 
-  return (
-    <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/[0.72] p-5 shadow-card sm:p-6 lg:p-7">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-brand-orchid/16 blur-3xl" />
-        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)] xl:items-center">
-        <div>
-          <p className="ea-kicker">Descoberta</p>
-          <h1 className="mt-2 text-4xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-5xl">Buscar empresas</h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-brand-muted">
-            Pesquise empresas públicas por nicho e cidade, revise a prévia e salve apenas os leads que fazem sentido.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
-          <Metric icon="+" label="Novas" value={previewCount.toLocaleString()} hint="Ainda não salvas" />
-          <Metric icon="↗" label="Com site" value={websiteReadyCount.toLocaleString()} hint="Prontas para enriquecer" />
-          <Metric icon="✓" label="Já salvas" value={existingPreviewCount.toLocaleString()} hint="Ocultas por padrão" />
-          <Metric icon="•" label="Selecionadas" value={selectedClientResultIds.length.toLocaleString()} hint="Entram no lote" />
-        </div>
-        </div>
-      </section>
+  const hasFormChanges =
+    form.naturalLanguageQuery.trim() !== "" ||
+    form.city.trim() !== "" ||
+    form.neighborhood.trim() !== "" ||
+    form.postalCode.trim() !== "" ||
+    form.locationLabel.trim() !== "" ||
+    form.latitude.trim() !== "" ||
+    form.longitude.trim() !== "" ||
+    form.locationMode !== defaultForm.locationMode ||
+    form.radiusM !== defaultForm.radiusM ||
+    form.maxResultsPerTerm !== defaultForm.maxResultsPerTerm ||
+    form.selectedTerms.length > 0 ||
+    form.customTerms.trim() !== "";
+  const hasSearchActivity = Boolean(searchRequest || preview || isPreviewPending || previewError || actionMessage);
 
-      <form onSubmit={runPreview} className="ea-card relative overflow-hidden p-5 sm:p-6">
-        <div className="pointer-events-none absolute -left-20 top-12 h-44 w-44 rounded-full bg-brand-info/12 blur-3xl" />
-        <div className="relative flex flex-col gap-6">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+  return (
+    <div className="space-y-3 lg:max-w-[1480px]">
+      <form onSubmit={runPreview} className="space-y-3">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="ea-kicker">Central de descoberta</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-brand-graphite sm:text-3xl">
-                Configure a busca, revise a prévia, salve só o que importa.
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
-                Digite o nicho, defina a região e use termos relacionados para ampliar a cobertura sem perder controle.
+              <p className="ea-kicker">Descoberta</p>
+              <h1 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-[2.35rem]">Buscar empresas</h1>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-brand-muted">
+                Pesquise empresas públicas por nicho e cidade, revise a prévia e salve apenas os leads que fazem sentido.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={resetDiscoveryForm}
-              className="ea-button-secondary w-full px-4 py-2.5 text-sm font-semibold lg:w-auto"
-            >
-              Limpar filtros
-            </button>
+            {hasFormChanges ? (
+              <button
+                type="button"
+                onClick={resetDiscoveryForm}
+                className="self-start rounded-full border border-brand-mist bg-white/50 px-3 py-1.5 text-xs font-semibold text-brand-muted transition hover:border-brand-orchid hover:text-brand-graphite lg:self-auto"
+              >
+                Limpar filtros
+              </button>
+            ) : null}
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="space-y-4">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="rounded-[20px] border border-white/70 bg-white/[0.62] p-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset] lg:p-3.5">
+            <div className="space-y-2.5">
+              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.2fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Nicho ou busca</span>
-                  <div className="relative mt-2">
+                  <div className="relative mt-1.5">
                     <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌕</span>
                     <input
                       value={form.naturalLanguageQuery}
                       onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
                       placeholder="Ex: dentistas, reparos de celular, lojas de móveis"
-                      className="ea-input h-[52px] w-full px-10 py-3 text-sm shadow-sm"
+                      className="ea-input h-[50px] w-full px-10 py-3 text-sm"
                     />
                   </div>
-                  <p className="mt-2 text-xs leading-5 text-brand-muted">
-                    Você pode digitar só o nicho ou uma busca completa como &quot;dentistas em São Paulo&quot;.
-                  </p>
                 </label>
 
                 {form.locationMode === "area" ? (
                   <label className="block">
                     <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Cidade ou região</span>
-                    <div className="relative mt-2">
+                    <div className="relative mt-1.5">
                       <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌖</span>
                       <input
                         value={form.city}
                         onChange={(event) => updateAreaLocationField("city", event.target.value)}
                         placeholder="Ex: São Paulo, Campinas"
-                        className="ea-input h-[52px] w-full px-10 py-3 text-sm shadow-sm"
+                        className="ea-input h-[50px] w-full px-10 py-3 text-sm"
                       />
                     </div>
-                    <p className="mt-2 text-xs leading-5 text-brand-muted">
-                      Se a cidade já estiver na busca principal, este campo pode ficar em branco.
-                    </p>
                   </label>
                 ) : (
-                  <div className="ea-card-flat p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Coordenadas ativas</p>
-                    <p className="mt-2 text-sm leading-6 text-brand-muted">
-                      Use latitude e longitude quando quiser montar a busca a partir de um ponto específico.
-                    </p>
-                  </div>
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Ponto de busca</span>
+                    <input
+                      value={form.locationLabel}
+                      onChange={(event) => updateCoordinateLabel(event.target.value)}
+                      placeholder="Rótulo opcional"
+                      className="ea-input mt-1.5 h-[50px] w-full px-4 py-3 text-sm"
+                    />
+                  </label>
                 )}
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Por termo</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={form.maxResultsPerTerm}
+                    onChange={(event) => updateForm("maxResultsPerTerm", Number(event.target.value))}
+                    className="ea-input mt-1.5 h-[50px] w-full px-3 py-3 text-sm"
+                    aria-label="Máximo de resultados por termo"
+                  />
+                </label>
+                <button type="submit" disabled={isPreviewPending} className="ea-button-primary flex h-[50px] w-full items-center justify-center px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50">
+                  {isPreviewPending ? "Buscando..." : "Buscar empresas"}
+                </button>
               </div>
 
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Sugestões rápidas</p>
-                <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-brand-muted">
+                <span className="font-semibold uppercase tracking-[0.08em]">Sugestões</span>
                   {discoveryExampleQueries.map((query) => (
                     <button
                       key={query}
                       type="button"
                       onClick={() => applySuggestedQuery(query)}
-                      className="ea-chip px-3 py-2 text-xs font-semibold"
+                      className="ea-chip px-3 py-1.5 text-xs font-semibold"
                     >
                       <span aria-hidden="true" className="mr-1 text-brand-signal">+</span>
                       {query}
                     </button>
                   ))}
-                </div>
               </div>
 
-              {form.locationMode === "area" ? (
-                <details className="group ea-card-flat overflow-hidden p-0">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-semibold text-brand-graphite">
-                    <span>
-                      Refinar localização
-                      <span className="ml-2 font-normal text-brand-muted">Bairro e CEP opcionais</span>
-                    </span>
-                    <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
-                  </summary>
-                  <div className="border-t border-brand-mist/70 px-4 pb-4 pt-3">
-                    <p className="text-xs leading-5 text-brand-muted">
-                      Use bairro ou CEP quando quiser restringir melhor a região da busca.
-                    </p>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="flex flex-col gap-2 border-t border-brand-mist/60 pt-2.5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Modo</span>
+                  <div className="grid grid-cols-2 rounded-[14px] border border-brand-mist bg-brand-sand/50 p-0.5">
+                    <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>Cidade/região</ToggleButton>
+                    <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>Coordenadas</ToggleButton>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[520px]">
+                  {form.locationMode === "area" ? (
+                    <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
+                        <span>+ Localização</span>
+                        <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
+                      </summary>
+                      <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
+                        <div className="grid gap-3 md:grid-cols-2">
                       <TextField
                         label="Bairro"
                         value={form.neighborhood}
@@ -794,34 +803,36 @@ export function DiscoveryWorkspace() {
                         onChange={(value) => updateAreaLocationField("postalCode", value)}
                         placeholder="Opcional"
                       />
-                    </div>
-                  </div>
-                </details>
-              ) : (
-                <div className="ea-card-flat p-4">
-                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.3fr]">
+                      <NumberField label="Raio" min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
+                        </div>
+                      </div>
+                    </details>
+                  ) : (
+                    <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
+                        <span>+ Coordenadas</span>
+                        <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
+                      </summary>
+                      <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
+                        <div className="grid gap-3 md:grid-cols-2">
                     <TextField label="Latitude" value={form.latitude} onChange={(value) => updateForm("latitude", value)} placeholder="-23.5505" />
                     <TextField label="Longitude" value={form.longitude} onChange={(value) => updateForm("longitude", value)} placeholder="-46.6333" />
                     <TextField label="Rótulo do local" value={form.locationLabel} onChange={(value) => updateCoordinateLabel(value)} placeholder="Opcional" />
-                  </div>
-                </div>
-              )}
+                    <NumberField label="Raio" min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
+                        </div>
+                      </div>
+                    </details>
+                  )}
 
-              <details className="group ea-card-flat overflow-hidden p-0">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-semibold text-brand-graphite">
-                  <span>
-                    Adicionar termos relacionados
-                    <span className="ml-2 font-normal text-brand-muted">
-                      {optionalTermsCount > 0 ? `${optionalTermsCount.toLocaleString()} ativo(s)` : "Opcional"}
-                    </span>
-                  </span>
-                  <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
-                </summary>
-                <div className="border-t border-brand-mist/70 px-4 pb-4 pt-3">
-                  <p className="text-xs leading-5 text-brand-muted">
-                    Use para buscar variações do mesmo nicho. A prévia remove duplicatas automaticamente.
-                  </p>
-                  <div className="mt-4 space-y-4">
+                  <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
+                      <span>+ Termos relacionados</span>
+                      <span className="font-medium text-brand-muted">
+                        {optionalTermsCount > 0 ? `${optionalTermsCount.toLocaleString()}` : ""}
+                      </span>
+                    </summary>
+                    <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
+                      <div className="space-y-3">
                     {searchTermGroups.map((group) => (
                       <section key={group.category}>
                         <h3 className="ea-kicker">{group.category}</h3>
@@ -835,217 +846,179 @@ export function DiscoveryWorkspace() {
                         </div>
                       </section>
                     ))}
-                  </div>
-                  <label className="mt-4 block">
+                      </div>
+                      <label className="mt-3 block">
                     <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Termos livres</span>
                     <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder="Um por linha ou separados por vírgula" className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
-                  </label>
+                      </label>
+                    </div>
+                  </details>
                 </div>
-              </details>
+              </div>
             </div>
-
-            <aside className="rounded-[22px] border border-brand-mist/80 bg-white/[0.68] p-4 shadow-[0_16px_36px_rgba(29,22,48,0.08)]">
-              <div>
-                <p className="ea-kicker">Modo de localização</p>
-                <div className="mt-3 grid grid-cols-2 rounded-2xl border border-brand-mist bg-brand-sand p-1">
-                  <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>Cidade / região</ToggleButton>
-                  <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>Coordenadas</ToggleButton>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-brand-muted">
-                  {form.locationMode === "area"
-                    ? "Ideal para buscas comerciais por cidade, bairro ou região operacional."
-                    : "Use quando quiser controlar o raio a partir de um ponto exato."}
-                </p>
-              </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <div className="ea-card-flat px-4 py-3">
-                  <NumberField label="Raio" min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
-                  <p className="mt-1 text-xs text-brand-muted">Aumente o raio para buscar mais longe.</p>
-                </div>
-                <div className="ea-card-flat px-4 py-3">
-                  <NumberField label="Máximo por termo" min={1} max={20} value={form.maxResultsPerTerm} onChange={(value) => updateForm("maxResultsPerTerm", value)} />
-                  <p className="mt-1 text-xs text-brand-muted">É um limite máximo; a busca pode retornar menos resultados.</p>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-4 py-3">
-                <p className="text-sm font-semibold text-brand-graphite">Resumo da próxima prévia</p>
-                <p className="mt-2 text-sm leading-6 text-brand-muted">
-                  {buildDiscoverySummaryLine({
-                    primaryTerm: parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null,
-                    locationLabel: requestPreviewSummary.locationLabel,
-                    radiusM: requestPreviewSummary.radiusM,
-                    maxResultsPerTerm: requestPreviewSummary.maxResultsPerTerm,
-                  })}
-                </p>
-                <p className="mt-2 text-xs text-brand-muted">
-                  Cap esperado: até {requestPreviewSummary.maxPotentialResults.toLocaleString()} resultado(s). Duplicatas serão consolidadas automaticamente.
-                </p>
-                {buildDiscoveryRelatedTermsSummary(parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null, requestPreviewSummary.searchTerms) ? (
-                  <p className="mt-1 text-xs text-brand-muted">
-                    Termos relacionados: {buildDiscoveryRelatedTermsSummary(parsedNaturalLanguageQuery?.category ?? requestPreviewSummary.searchTerms[0] ?? null, requestPreviewSummary.searchTerms)}
-                  </p>
-                ) : null}
-              </div>
-
-              <button type="submit" disabled={isPreviewPending} className="ea-button-primary mt-5 flex min-h-[52px] w-full items-center justify-center px-5 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50">
-                {isPreviewPending ? "Buscando..." : "Gerar prévia"}
-              </button>
-            </aside>
           </div>
         </div>
 
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
         {previewError ? <InlineMessage tone="danger">{errorMessage(previewError)}</InlineMessage> : null}
-      </form>
 
-      <section className="ea-card p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-base font-semibold text-brand-graphite">Prévia da busca</p>
-            <p className="mt-1 text-sm leading-6 text-brand-muted">
-              Resultados bloqueados e empresas já salvas ficam ocultos por padrão. Só os itens selecionados serão salvos em Leads.
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-end">
-            <label className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-sand/70 px-3 py-2 text-sm text-brand-graphite">
-              <input
-                type="checkbox"
-                checked={hideExistingLeads}
-                onChange={(event) => setHideExistingLeads(event.target.checked)}
-                className="h-4 w-4 rounded border-neutral-300"
-              />
-              <span>Ocultar já salvos</span>
-            </label>
-            <label className="block w-full lg:w-44">
-              <span className="text-xs font-medium text-brand-muted">Filtro de bloqueio</span>
-              <select
-                value={blockedFilter}
-                onChange={(event) => setBlockedFilter(event.target.value as LeadBlockedFilter)}
-                className="ea-input mt-1 w-full px-2 py-2 text-sm"
-              >
-                {blockedOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-                </select>
-            </label>
-            <label className="block w-full lg:w-44">
-              <span className="text-xs font-medium text-brand-muted">Filtro de site</span>
-              <select
-                value={websiteFilter}
-                onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
-                className="ea-input mt-1 w-full px-2 py-2 text-sm"
-              >
-                {websiteOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <button
-                type="button"
-                disabled={!preview || selectedNoWebsiteClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
-                onClick={recoverSelected}
-                className="ea-button-secondary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {recoverMutation.isPending ? "Recuperando..." : "Recuperar sites"}
-              </button>
-              <button
-                type="button"
-                disabled={
-                  !preview || selectedEnrichableClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending
-                }
-                onClick={enrichSelected}
-                className="ea-button-primary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {enrichMutation.isPending ? "Enriquecendo..." : "Enriquecer selecionadas"}
-              </button>
-              <button
-                type="button"
-                disabled={!preview || visibleEnrichableIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
-                onClick={enrichVisible}
-                className="ea-button-secondary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Enriquecer visíveis
-              </button>
-            </div>
-          </div>
-        </div>
+        <div className="rounded-[20px] border border-brand-mist/75 bg-white/[0.62] p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset] lg:p-4">
+          {hasSearchActivity ? (
+            <div>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-base font-semibold text-brand-graphite">Prévia da busca</p>
+                  {preview ? (
+                    <p className="mt-1 text-sm leading-6 text-brand-muted">
+                      {previewCount.toLocaleString()} encontradas • {websiteReadyCount.toLocaleString()} com site • {existingPreviewCount.toLocaleString()} já salvas • {selectedClientResultIds.length.toLocaleString()} selecionadas
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm leading-6 text-brand-muted">A prévia aparece aqui assim que a busca terminar.</p>
+                  )}
+                </div>
+                <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-end">
+                  {preview && selectedClientResultIds.length > 0 ? (
+                    <div className="flex items-center gap-2 rounded-full border border-brand-olive/20 bg-brand-olive/10 px-3 py-2">
+                      <span className="text-sm font-semibold text-brand-graphite">{selectedClientResultIds.length.toLocaleString()} selecionada(s)</span>
+                      <button
+                        type="button"
+                        disabled={importMutation.isPending}
+                        onClick={saveSelected}
+                        className="ea-button-primary px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {importMutation.isPending ? "Salvando..." : "Salvar selecionadas"}
+                      </button>
+                    </div>
+                  ) : null}
+                  <label className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-sand/70 px-3 py-2 text-sm text-brand-graphite">
+                    <input
+                      type="checkbox"
+                      checked={hideExistingLeads}
+                      onChange={(event) => setHideExistingLeads(event.target.checked)}
+                      className="h-4 w-4 rounded border-neutral-300"
+                    />
+                    <span>Ocultar já salvos</span>
+                  </label>
+                  <label className="block w-full lg:w-40">
+                    <span className="text-xs font-medium text-brand-muted">Bloqueio</span>
+                    <select
+                      value={blockedFilter}
+                      onChange={(event) => setBlockedFilter(event.target.value as LeadBlockedFilter)}
+                      className="ea-input mt-1 w-full px-2 py-2 text-sm"
+                    >
+                      {blockedOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block w-full lg:w-36">
+                    <span className="text-xs font-medium text-brand-muted">Site</span>
+                    <select
+                      value={websiteFilter}
+                      onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
+                      className="ea-input mt-1 w-full px-2 py-2 text-sm"
+                    >
+                      {websiteOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
 
-        {actionMessage ? <InlineMessage tone="info">{actionMessage}</InlineMessage> : null}
-        {recoverMutation.isError ? <InlineMessage tone="danger">{errorMessage(recoverMutation.error)}</InlineMessage> : null}
-        {enrichMutation.isError ? <InlineMessage tone="danger">{errorMessage(enrichMutation.error)}</InlineMessage> : null}
-        {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error)}</InlineMessage> : null}
-        {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error)}</InlineMessage> : null}
-        {preview ? (
-          <p className="mt-3 rounded-2xl border border-brand-mist/70 bg-brand-sand/70 px-3 py-2 text-xs leading-5 text-brand-muted">
-            O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas:{" "}
-            {selectedEnrichableClientResultIds.length.toLocaleString()}. Visíveis prontas:{" "}
-            {visibleEnrichableIds.length.toLocaleString()}. A recuperação de sites verifica até{" "}
-            {WEBSITE_RECOVERY_MAX_ROWS.toLocaleString()} empresas sem site por vez. Recuperáveis agora:{" "}
-            {selectedRecoverableClientResultIds.length.toLocaleString()}. Bloqueadas na prévia:{" "}
-            {blockedCount.toLocaleString()}.
-          </p>
-        ) : null}
-
-        {isPreviewPending ? (
-          <PreviewSkeleton />
-        ) : preview ? (
-          <DiscoveryPreviewTable
-            items={visibleItems}
-            emptyMessage={buildPreviewEmptyMessage({
-              preview,
-              hideExistingLeads,
-              blockedFilter,
-              websiteFilter,
-            })}
-            selectedIds={selectedIds}
-            newlyBlockedIds={newlyBlockedIds}
-            allVisibleSelected={allVisibleSelected}
-            visibleSelectableCount={visibleSelectableIds.length}
-            onToggleSelection={toggleSelection}
-            onToggleVisibleSelection={toggleVisibleSelection}
-            onBlockCompany={openCompanyBlock}
-            onBlockDomain={openDomainBlock}
-            actionDisabled={blockMutation.isPending || enrichMutation.isPending || recoverMutation.isPending}
-          />
-        ) : (
-          <div className="mt-4 overflow-hidden rounded-[24px] border border-dashed border-brand-mist bg-white/[0.58] px-5 py-10 text-center shadow-[0_12px_34px_rgba(29,22,48,0.06)]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-mist bg-brand-sand text-xl font-bold text-brand-signal">
-              ⌕
-            </div>
-            <p className="mt-4 text-base font-bold text-brand-graphite">Busque por nicho + cidade para montar sua prévia.</p>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-brand-muted">
-              A prévia aparece aqui com empresas encontradas, status de site, bloqueios, seleção e ações para salvar o lote.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {discoveryExampleQueries.map((query) => (
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
-                  key={query}
                   type="button"
-                  onClick={() => applySuggestedQuery(query)}
-                  className="ea-chip px-3 py-2 text-xs font-semibold"
+                  disabled={!preview || selectedNoWebsiteClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
+                  onClick={recoverSelected}
+                  className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {query}
+                  {recoverMutation.isPending ? "Recuperando..." : "Recuperar sites"}
                 </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
+                <button
+                  type="button"
+                  disabled={!preview || selectedEnrichableClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
+                  onClick={enrichSelected}
+                  className="ea-button-primary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {enrichMutation.isPending ? "Enriquecendo..." : "Enriquecer selecionadas"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!preview || visibleEnrichableIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
+                  onClick={enrichVisible}
+                  className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Enriquecer visíveis
+                </button>
+              </div>
 
-      <SaveBar
-        preview={preview}
-        lastImport={lastImport}
-        selectedCount={selectedClientResultIds.length}
-        isSaving={importMutation.isPending}
-        onSave={saveSelected}
-      />
+              {lastImport ? (
+                <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-3 py-2 text-sm lg:flex-row lg:items-center lg:justify-between">
+                  <p className="text-brand-muted">
+                    <span className="font-semibold text-brand-graphite">Lote {lastImport.batch_id} salvo.</span>{" "}
+                    {lastImport.created_count} criado(s), {lastImport.skipped_existing_count} já existiam e {lastImport.skipped_blocked} ignorado(s).
+                  </p>
+                  <Link href={`/leads?import_batch_id=${lastImport.batch_id}`} className="text-sm font-bold text-brand-signal hover:text-brand-core">
+                    Abrir lote salvo
+                  </Link>
+                </div>
+              ) : null}
+
+              {actionMessage ? <InlineMessage tone="info">{actionMessage}</InlineMessage> : null}
+              {recoverMutation.isError ? <InlineMessage tone="danger">{errorMessage(recoverMutation.error)}</InlineMessage> : null}
+              {enrichMutation.isError ? <InlineMessage tone="danger">{errorMessage(enrichMutation.error)}</InlineMessage> : null}
+              {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error)}</InlineMessage> : null}
+              {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error)}</InlineMessage> : null}
+              {preview ? (
+                <p className="mt-3 rounded-2xl border border-brand-mist/70 bg-brand-sand/70 px-3 py-2 text-xs leading-5 text-brand-muted">
+                  O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas: {selectedEnrichableClientResultIds.length.toLocaleString()}. Visíveis prontas: {visibleEnrichableIds.length.toLocaleString()}. Recuperáveis agora: {selectedRecoverableClientResultIds.length.toLocaleString()}. Bloqueadas na prévia: {blockedCount.toLocaleString()}.
+                </p>
+              ) : null}
+
+              {isPreviewPending ? (
+                <PreviewSkeleton />
+              ) : preview ? (
+                <DiscoveryPreviewTable
+                  items={visibleItems}
+                  emptyMessage={buildPreviewEmptyMessage({
+                    preview,
+                    hideExistingLeads,
+                    blockedFilter,
+                    websiteFilter,
+                  })}
+                  selectedIds={selectedIds}
+                  newlyBlockedIds={newlyBlockedIds}
+                  allVisibleSelected={allVisibleSelected}
+                  visibleSelectableCount={visibleSelectableIds.length}
+                  onToggleSelection={toggleSelection}
+                  onToggleVisibleSelection={toggleVisibleSelection}
+                  onBlockCompany={openCompanyBlock}
+                  onBlockDomain={openDomainBlock}
+                  actionDisabled={blockMutation.isPending || enrichMutation.isPending || recoverMutation.isPending}
+                />
+              ) : (
+                <EmptyResultsScaffold
+                  title="Nenhuma empresa encontrada"
+                  description="Teste outro nicho, cidade ou termos relacionados."
+                />
+              )}
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold text-brand-graphite">Prévia dos resultados</p>
+              <EmptyResultsScaffold
+                title="Faça uma busca para visualizar empresas públicas por nicho e cidade."
+                description="As empresas encontradas aparecerão aqui para revisão e seleção."
+              />
+            </div>
+          )}
+        </div>
+      </form>
 
       {blockDraft ? (
         <BlockRuleDialog
@@ -1062,7 +1035,7 @@ export function DiscoveryWorkspace() {
 
 function PreviewSkeleton() {
   return (
-    <div className="mt-4 rounded-[24px] border border-brand-mist/80 bg-white/[0.64] p-4">
+    <div className="mt-4 rounded-[20px] border border-brand-mist/80 bg-white/[0.64] p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-brand-graphite">Gerando prévia</p>
@@ -1082,6 +1055,39 @@ function PreviewSkeleton() {
             <div className="ea-skeleton h-9 rounded-xl" />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyResultsScaffold({ title, description }: { title: string; description: string }) {
+  const rows = ["Empresa", "Cidade", "Contato", "Status"];
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-[18px] border border-dashed border-brand-mist bg-white/[0.48]">
+      <div className="px-4 py-4 text-center">
+        <p className="text-sm font-bold text-brand-graphite">{title}</p>
+        <p className="mx-auto mt-1 max-w-xl text-sm leading-6 text-brand-muted">{description}</p>
+      </div>
+      <div className="overflow-x-auto border-t border-brand-mist/60 bg-white/[0.34] px-3 pb-3 pt-2">
+        <div className="min-w-[620px]">
+          <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr_96px] gap-3 rounded-t-xl border-b border-brand-mist/70 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-muted">
+            {rows.map((row) => (
+              <span key={row}>{row}</span>
+            ))}
+          </div>
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="grid grid-cols-[1.2fr_0.8fr_0.8fr_96px] gap-3 border-b border-brand-mist/50 px-3 py-3 last:border-b-0">
+              <div className="space-y-2">
+                <div className="h-3 w-36 rounded-full bg-brand-mist/70" />
+                <div className="h-2.5 w-24 rounded-full bg-brand-mist/45" />
+              </div>
+              <div className="h-3 w-24 rounded-full bg-brand-mist/55" />
+              <div className="h-3 w-28 rounded-full bg-brand-mist/55" />
+              <div className="h-6 rounded-full border border-brand-mist/70 bg-white/[0.54]" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1309,65 +1315,6 @@ function DiscoveryPreviewTable({
   );
 }
 
-function SaveBar({
-  preview,
-  lastImport,
-  selectedCount,
-  isSaving,
-  onSave,
-}: {
-  preview: DiscoveryPreviewResponse | null;
-  lastImport: DiscoveryImportResponse | null;
-  selectedCount: number;
-  isSaving: boolean;
-  onSave: () => void;
-}) {
-  return (
-    <section className="ea-card p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="ea-kicker">Salvar em leads</p>
-          <h2 className="mt-2 text-base font-semibold text-brand-graphite">Salvar leads selecionados</h2>
-          <p className="mt-1 text-sm leading-6 text-brand-muted">
-            Linhas bloqueadas e empresas já salvas são ignoradas automaticamente. Depois de salvar, o lote abre direto em Leads.
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-[140px_180px]">
-          <div className="ea-card-flat px-3 py-2 text-center">
-            <p className="text-xs font-medium text-brand-muted">Selecionadas</p>
-            <p className="mt-1 text-lg font-semibold text-brand-graphite">{selectedCount.toLocaleString()}</p>
-          </div>
-          <button
-            type="button"
-            disabled={!preview || selectedCount === 0 || isSaving}
-            onClick={onSave}
-            className="ea-button-primary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSaving ? "Salvando..." : "Salvar selecionadas"}
-          </button>
-        </div>
-      </div>
-
-      {lastImport ? (
-        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-brand-olive bg-brand-olive/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-brand-graphite">Lote {lastImport.batch_id} salvo</p>
-            <p className="mt-1 text-sm text-brand-muted">
-              {lastImport.created_count} criado(s), {lastImport.skipped_existing_count} já existiam e {lastImport.skipped_blocked} ignorado(s) por bloqueio.
-            </p>
-          </div>
-          <Link
-            href={`/leads?import_batch_id=${lastImport.batch_id}`}
-            className="ea-button-primary px-4 py-2 text-center text-sm font-semibold"
-          >
-            Abrir lote salvo
-          </Link>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 function BlockRuleDialog({
   draft,
   isSaving,
@@ -1483,7 +1430,7 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="ea-input mt-2 h-12 w-full px-3 py-2 text-sm"
+        className="ea-input mt-1.5 h-10 w-full px-3 py-2 text-sm"
       />
     </label>
   );
@@ -1511,7 +1458,7 @@ function NumberField({
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="ea-input mt-2 h-12 w-full px-3 py-2 text-sm"
+        className="ea-input mt-1.5 h-10 w-full px-3 py-2 text-sm"
       />
     </label>
   );
@@ -1532,8 +1479,8 @@ function ToggleButton({
       onClick={onClick}
       className={
         active
-          ? "rounded-[14px] border border-brand-signal bg-white px-3 py-2 text-sm font-bold text-brand-graphite shadow-[0_8px_20px_rgba(124,58,237,0.16)]"
-          : "rounded-[14px] border border-transparent px-3 py-2 text-sm font-semibold text-brand-muted transition hover:bg-white/70 hover:text-brand-graphite"
+          ? "rounded-[12px] border border-brand-signal bg-white px-2.5 py-1.5 text-xs font-bold text-brand-graphite shadow-[0_8px_20px_rgba(124,58,237,0.14)]"
+          : "rounded-[12px] border border-transparent px-2.5 py-1.5 text-xs font-semibold text-brand-muted transition hover:bg-white/70 hover:text-brand-graphite"
       }
     >
       {children}
