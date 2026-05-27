@@ -38,20 +38,24 @@ Set provider secrets only on the backend host:
 
 ```env
 APP_ENV=production
-GOOGLE_API_KEY=your-google-key
+GOOGLE_API_KEY=
 CNPJ_COMPANY_SEARCH_ENABLED=false
 DATABASE_URL=sqlite:////app/data/app.db
 EXPORT_DIR=/app/exports
 SQLITE_JOURNAL_MODE=TRUNCATE
 ```
 
+Fill `GOOGLE_API_KEY` in the backend host secret manager, not in Git.
+
 CNPJ enrichment is optional. Enable it only after adding a provider key:
 
 ```env
 CNPJ_COMPANY_SEARCH_ENABLED=true
 CNPJ_COMPANY_SEARCH_PROVIDER=cnpja_commercial
-CNPJA_API_KEY=your-cnpja-key
+CNPJA_API_KEY=
 ```
+
+Fill `CNPJA_API_KEY` only in the backend host secret manager.
 
 ## Secret Safety Rules
 
