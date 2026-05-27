@@ -82,3 +82,5 @@ Then verify backend deployment:
 - `/docs` is reachable only if you intend to expose it
 - Discovery works with a small Google Places search
 - Leads can be saved and exported
+
+For the first production launch, follow the step-by-step checklist in [`PRODUCTION_LAUNCH_CHECKLIST.md`](PRODUCTION_LAUNCH_CHECKLIST.md).

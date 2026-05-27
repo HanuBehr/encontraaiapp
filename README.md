@@ -179,6 +179,7 @@ Core templates:
 Deployment notes:
 
 - [`docs/deployment/VERCEL_BACKEND.md`](docs/deployment/VERCEL_BACKEND.md)
+- [`docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md`](docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md)
 
 Important runtime values include:
 
