@@ -25,7 +25,7 @@ Nothing in this guide requires the client to install Python, Node.js, npm, or a 
 - Windows 10 or Windows 11
 - Docker Desktop installed and running
 - A Google API key
-- A CNPJA API key
+- A CNPJA API key only if CNPJ enrichment/search will be used
 - Git is optional if the project is delivered as a zip package
 
 ## Recommended Installation Path
@@ -47,9 +47,7 @@ Do not install the project inside OneDrive. A normal local folder such as `C:\En
 ```
 
 5. Open the generated `.env` file.
-6. Fill at least:
-   - `GOOGLE_API_KEY`
-   - `CNPJA_API_KEY`
+6. Fill `GOOGLE_API_KEY`. `CNPJA_API_KEY` is optional and only needed for CNPJ enrichment/search.
 7. Start the application:
 
 ```powershell
@@ -98,7 +96,6 @@ Always back up before updating.
 ## Build Validation Note
 
 - Validate `docker compose build` and the first container startup on the client or deployment machine.
-- In the local Codex/Windows workspace used during development, `npm run build` may hang because of local Next.js and filesystem behavior. For that reason, final Docker validation should be confirmed outside the Codex workspace.
 
 ## Useful URLs
 
@@ -121,7 +118,7 @@ Always back up before updating.
   Run `.\scripts\client_install.ps1` first.
 
 - **Invalid API key**  
-  Recheck `GOOGLE_API_KEY` and `CNPJA_API_KEY` in `.env`.
+  Recheck `GOOGLE_API_KEY` in `.env`. If CNPJ enrichment is enabled, also recheck `CNPJA_API_KEY`.
 
 - **CNPJA rate limit**  
   Wait about one minute and retry the operation.

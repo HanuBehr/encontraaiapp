@@ -6,7 +6,7 @@
 - Docker Desktop installer ready
 - Git installer ready
 - Google API key available
-- CNPJA API key available
+- CNPJA API key available only if CNPJ enrichment will be used
 - Client machine has internet access
 - Client machine allows admin actions if Docker Desktop requires them
 
@@ -21,7 +21,7 @@
 7. Open [http://localhost:3000](http://localhost:3000)
 8. Test [http://localhost:8000/health](http://localhost:8000/health)
 9. Run one small lead search
-10. Run one CNPJ enrichment
+10. If CNPJA is configured, run one CNPJ enrichment
 11. Run one Excel export
 12. Run `.\scripts\client_backup.ps1`
 

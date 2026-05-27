@@ -525,6 +525,27 @@ export type LeadOptionsResponse = {
   trade_type_values: TradeType[];
 };
 
+export type ProviderStatus = {
+  google_places_configured: boolean;
+  cnpj_company_search_configured: boolean;
+  smtp_configured: boolean;
+  resend_configured: boolean;
+  whatsapp_cloud_configured: boolean;
+};
+
+export type SettingsSummary = {
+  app_env: string;
+  database_url_redacted: string;
+  export_dir: string;
+  sending_enabled: boolean;
+  email_sending_enabled: boolean;
+  whatsapp_sending_enabled: boolean;
+  daily_email_limit: number;
+  daily_whatsapp_limit: number;
+  duplicate_send_window_hours: number;
+  providers: ProviderStatus;
+};
+
 export type ResolvedLocation = {
   label: string;
   latitude: number;

@@ -30,6 +30,7 @@ def settings_summary(settings: Settings = Depends(get_app_settings)) -> Settings
         duplicate_send_window_hours=settings.duplicate_send_window_hours,
         providers=ProviderStatus(
             google_places_configured=settings.google_places_enabled,
+            cnpj_company_search_configured=settings.cnpj_company_search_configured,
             smtp_configured=settings.smtp_configured,
             resend_configured=settings.resend_configured,
             whatsapp_cloud_configured=settings.whatsapp_cloud_configured,

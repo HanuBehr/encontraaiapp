@@ -16,5 +16,6 @@ exports
 backups
 dist
 .env
+.env.*
+!.env.example
 *.log
-

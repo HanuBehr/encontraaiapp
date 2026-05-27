@@ -39,6 +39,7 @@ type LeadBatchActionsProps = {
   currentFilters: LeadListParams;
   currentTotal: number;
   searchActive: boolean;
+  cnpjEnabled: boolean;
 };
 
 type ActionResult =
@@ -74,6 +75,7 @@ export function LeadBatchActions({
   currentFilters,
   currentTotal,
   searchActive,
+  cnpjEnabled,
 }: LeadBatchActionsProps) {
   const queryClient = useQueryClient();
   const [scope, setScope] = useState<ActionScope>("selected");
@@ -119,6 +121,9 @@ export function LeadBatchActions({
       }
 
       if (kind === "cnpj") {
+        if (!cnpjEnabled) {
+          throw new Error("Enriquecimento CNPJ está desativado. Configure um provedor CNPJ antes de usar esta ação.");
+        }
         if (resolvedScope.leadIds.length === 0) {
           throw new Error("Nenhum lead encontrado nesse escopo.");
         }
@@ -192,34 +197,40 @@ export function LeadBatchActions({
           <p className="ea-kicker">Ações em lote</p>
           <h2 className="mt-2 text-base font-semibold text-brand-graphite">Enriquecer, revisar e exportar</h2>
           <p className="mt-1 text-sm leading-6 text-brand-muted">
-            Escolha um escopo para enriquecer contatos, consultar CNPJ, atribuir ou exportar os leads sem sair da lista.
+            Escolha um escopo para enriquecer contatos, atribuir ou exportar os leads sem sair da lista.
           </p>
-          <p className="mt-1 text-xs text-brand-muted">
-            Busca CNPJ já informado, tenta encontrar CNPJ no site da empresa e, se configurado, usa busca cadastral paga.
-          </p>
+          {cnpjEnabled ? (
+            <p className="mt-1 text-xs text-brand-muted">
+              CNPJ está configurado para buscar cadastro já informado, tentar encontrar CNPJ no site da empresa e usar busca cadastral paga.
+            </p>
+          ) : null}
           <p className="mt-1 text-xs text-brand-muted">
             O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
           </p>
-          <label className="mt-2 flex items-start gap-2 text-xs text-brand-muted">
-            <input
-              type="checkbox"
-              checked={deliverySearchMode}
-              onChange={(event) => setDeliverySearchMode(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-neutral-300"
-            />
-            <span>Buscar com máxima cobertura (usa mais créditos)</span>
-          </label>
-          <label className="mt-1 flex items-start gap-2 text-xs text-brand-muted">
-            <input
-              type="checkbox"
-              checked={forcePaidSearch}
-              onChange={(event) => setForcePaidSearch(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-neutral-300"
-            />
-            <span>Forçar nova busca mesmo se já consultado recentemente</span>
-          </label>
-          {deliverySearchMode ? (
-            <p className="mt-1 text-xs text-amber-700">Modo cobertura pode fazer mais consultas pagas por lead.</p>
+          {cnpjEnabled ? (
+            <>
+              <label className="mt-2 flex items-start gap-2 text-xs text-brand-muted">
+                <input
+                  type="checkbox"
+                  checked={deliverySearchMode}
+                  onChange={(event) => setDeliverySearchMode(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+                />
+                <span>Buscar com máxima cobertura (usa mais créditos)</span>
+              </label>
+              <label className="mt-1 flex items-start gap-2 text-xs text-brand-muted">
+                <input
+                  type="checkbox"
+                  checked={forcePaidSearch}
+                  onChange={(event) => setForcePaidSearch(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+                />
+                <span>Forçar nova busca mesmo se já consultado recentemente</span>
+              </label>
+              {deliverySearchMode ? (
+                <p className="mt-1 text-xs text-amber-700">Modo cobertura pode fazer mais consultas pagas por lead.</p>
+              ) : null}
+            </>
           ) : null}
           {searchActive ? (
             <p className="mt-2 text-xs text-brand-muted">
@@ -254,13 +265,15 @@ export function LeadBatchActions({
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={`grid gap-2 sm:grid-cols-2 ${cnpjEnabled ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
             <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
               Enriquecer
             </ActionButton>
-            <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
-              Enriquecer CNPJ
-            </ActionButton>
+            {cnpjEnabled ? (
+              <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
+                Enriquecer CNPJ
+              </ActionButton>
+            ) : null}
             <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
               Atribuir
             </ActionButton>

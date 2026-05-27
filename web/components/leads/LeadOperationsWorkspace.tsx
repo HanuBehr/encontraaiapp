@@ -2,15 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, SortingState } from "@tanstack/react-table";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
-import { LeadBatchActions } from "@/components/leads/LeadBatchActions";
-import { LeadCnpjReviewQueue } from "@/components/leads/LeadCnpjReviewQueue";
-import { LeadDetailPanel } from "@/components/leads/LeadDetailPanel";
 import { LeadQueueFilters } from "@/components/leads/LeadQueueFilters";
 import { LeadQueueTable } from "@/components/leads/LeadQueueTable";
 import { getLeadOptions, listLeads } from "@/lib/api/leads";
+import { getSettingsSummary } from "@/lib/api/settings";
 import type { LeadListParams, LeadSortBy, LeadSummary } from "@/lib/api/types";
 import {
   booleanFilterValue,
@@ -21,6 +20,19 @@ import {
 import { formatUserFacingError } from "@/lib/ui/messages";
 
 const SEARCH_FETCH_LIMIT = 500;
+
+const LeadBatchActions = dynamic(
+  () => import("@/components/leads/LeadBatchActions").then((module) => module.LeadBatchActions),
+  { loading: () => <DeferredPanel label="Carregando ações..." /> },
+);
+const LeadCnpjReviewQueue = dynamic(
+  () => import("@/components/leads/LeadCnpjReviewQueue").then((module) => module.LeadCnpjReviewQueue),
+  { loading: () => <DeferredPanel label="Carregando revisão CNPJ..." /> },
+);
+const LeadDetailPanel = dynamic(
+  () => import("@/components/leads/LeadDetailPanel").then((module) => module.LeadDetailPanel),
+  { loading: () => <DeferredPanel label="Carregando painel de detalhes..." /> },
+);
 
 type LeadOperationsWorkspaceProps = {
   initialImportBatchId?: number | null;
@@ -35,17 +47,22 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
   const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [activeLeadId, setActiveLeadId] = useState<number | null>(null);
+  const deferredSearch = useDeferredValue(search);
 
   const optionsQuery = useQuery({
     queryKey: ["lead-options"],
     queryFn: getLeadOptions,
+  });
+  const settingsQuery = useQuery({
+    queryKey: ["settings-summary"],
+    queryFn: getSettingsSummary,
   });
 
   const queryParams = useMemo<LeadListParams>(() => {
     const sort = sorting[0];
     const sortBy = (sort?.id as LeadSortBy | undefined) ?? "updated_at";
     const sortDir = sort ? (sort.desc ? "desc" : "asc") : "desc";
-    const searchMode = search.trim().length > 0;
+    const searchMode = deferredSearch.trim().length > 0;
 
     return {
       city: filters.city || undefined,
@@ -68,14 +85,15 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
       limit: searchMode ? SEARCH_FETCH_LIMIT : pageSize,
       offset: searchMode ? 0 : pageIndex * pageSize,
     };
-  }, [filters, importBatchId, pageIndex, pageSize, search, sorting]);
+  }, [deferredSearch, filters, importBatchId, pageIndex, pageSize, sorting]);
 
   const leadsQuery = useQuery({
     queryKey: ["leads", queryParams],
     queryFn: () => listLeads(queryParams),
+    placeholderData: (previousData) => previousData,
   });
 
-  const searchTerm = search.trim().toLowerCase();
+  const searchTerm = deferredSearch.trim().toLowerCase();
   const searchedItems = useMemo(() => {
     const items = leadsQuery.data?.items ?? [];
     if (!searchTerm) {
@@ -100,6 +118,7 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
     !leadsQuery.isError &&
     currentFilteredTotal === 0 &&
     !hasActiveQueueFilters(filters);
+  const cnpjEnabled = Boolean(settingsQuery.data?.providers.cnpj_company_search_configured);
 
   function updateFilters(nextFilters: QueueFilters) {
     setFilters(nextFilters);
@@ -208,13 +227,16 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         currentFilters={queryParams}
         currentTotal={currentFilteredTotal}
         searchActive={Boolean(searchTerm)}
+        cnpjEnabled={cnpjEnabled}
       />
 
-      <LeadCnpjReviewQueue
-        currentFilters={queryParams}
-        onActivateLead={setActiveLeadId}
-        activeLeadId={detailLeadId}
-      />
+      {cnpjEnabled ? (
+        <LeadCnpjReviewQueue
+          currentFilters={queryParams}
+          onActivateLead={setActiveLeadId}
+          activeLeadId={detailLeadId}
+        />
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
         <LeadQueueTable
@@ -235,6 +257,14 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         <LeadDetailPanel leadId={detailLeadId} />
       </div>
     </div>
+  );
+}
+
+function DeferredPanel({ label }: { label: string }) {
+  return (
+    <section className="ea-card p-5">
+      <p className="text-sm text-brand-muted">{label}</p>
+    </section>
   );
 }
 

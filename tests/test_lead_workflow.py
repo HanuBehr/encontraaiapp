@@ -196,7 +196,7 @@ def test_apply_operator_quick_filters_preserves_checkbox_semantics() -> None:
     assert [lead.id for lead in filtered] == [1]
 
 
-def test_matches_search_uses_current_streamlit_haystack_fields() -> None:
+def test_matches_search_uses_current_workspace_haystack_fields() -> None:
     lead = _lead(
         business_name="Auto Eletrica Vale",
         category="auto eletrica",

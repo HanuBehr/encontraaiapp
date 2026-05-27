@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     api_title: str = Field(default="Encontra.ai Lead Discovery API", alias="API_TITLE")
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
-    streamlit_server_port: int = Field(default=8501, alias="STREAMLIT_SERVER_PORT")
     timezone: str = Field(default="America/Sao_Paulo", alias="TIMEZONE")
     database_url: str = Field(default="sqlite:///./data/app.db", alias="DATABASE_URL")
     export_dir: str = Field(default="./data/exports", alias="EXPORT_DIR")

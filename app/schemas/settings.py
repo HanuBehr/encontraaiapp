@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class ProviderStatus(BaseModel):
     google_places_configured: bool
+    cnpj_company_search_configured: bool
     smtp_configured: bool
     resend_configured: bool
     whatsapp_cloud_configured: bool

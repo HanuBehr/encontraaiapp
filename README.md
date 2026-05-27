@@ -75,7 +75,7 @@ The system is designed to reduce wrong CNPJ assignments, not pretend that every 
 ### Integrations
 
 - Google Places
-- CNPJA
+- CNPJA when configured
 - Optional fallback CNPJ provider adapters where configured
 
 ### Data and Export
@@ -100,7 +100,7 @@ FastAPI Backend
         ->
 SQLite + Enrichment Services + Export Service
         ->
-Google Places / CNPJA / CNPJ Provider Integrations
+Google Places / Optional CNPJ Provider Integrations
 ```
 
 - The frontend talks to the backend through an API proxy layer.
@@ -147,7 +147,7 @@ cd encontraaiapp
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 $env:PYTHONPATH = (Get-Location).Path
 python .\scripts\init_local_db.py
@@ -176,6 +176,10 @@ Core templates:
 - [`deploy/client/.env.client.example`](deploy/client/.env.client.example)
 - [`web/.env.example`](web/.env.example)
 
+Deployment notes:
+
+- [`docs/deployment/VERCEL_BACKEND.md`](docs/deployment/VERCEL_BACKEND.md)
+
 Important runtime values include:
 
 - `GOOGLE_API_KEY`
@@ -183,7 +187,7 @@ Important runtime values include:
 - `CNPJ_LOOKUP_PROVIDER`
 - `CNPJ_COMPANY_SEARCH_ENABLED`
 - `CNPJ_COMPANY_SEARCH_PROVIDER`
-- `CNPJA_API_KEY`
+- `CNPJA_API_KEY` when CNPJ enrichment/search is enabled
 - `BACKEND_URL`
 
 ## Repository Structure

@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
-COPY scripts ./scripts
+COPY scripts/init_local_db.py scripts/docker_backend_entrypoint.sh ./scripts/
 COPY .env.example ./.env.example
 
 RUN chmod +x /app/scripts/docker_backend_entrypoint.sh
@@ -20,4 +20,3 @@ RUN chmod +x /app/scripts/docker_backend_entrypoint.sh
 EXPOSE 8000
 
 CMD ["sh", "/app/scripts/docker_backend_entrypoint.sh"]
-

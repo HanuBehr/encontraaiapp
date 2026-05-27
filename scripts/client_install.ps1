@@ -23,7 +23,7 @@ if (-not (Test-Path -LiteralPath $clientExamplePath)) {
 
 if (-not (Test-Path -LiteralPath $envPath)) {
     Copy-Item -LiteralPath $clientExamplePath -Destination $envPath
-    Write-Warning "Edit .env and fill GOOGLE_API_KEY and CNPJA_API_KEY before starting."
+    Write-Warning "Edit .env and fill GOOGLE_API_KEY before starting. CNPJA is optional and disabled by default."
 }
 
 Write-Host ""
