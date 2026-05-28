@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: encontraai-backend
+    runtime: docker
+    plan: starter
+    dockerContext: .
+    dockerfilePath: ./Dockerfile.backend
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: encontraai-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: CNPJ_COMPANY_SEARCH_ENABLED
+        value: false
+      - key: DATABASE_URL
+        value: sqlite:////app/data/app.db
+      - key: EXPORT_DIR
+        value: /app/data/exports
+      - key: SQLITE_JOURNAL_MODE
+        value: TRUNCATE

@@ -17,6 +17,8 @@ Do this in Google Cloud before deploying with the current key.
 
 Use Render, Fly.io, Railway, or a VPS/Docker host. The backend must have persistent storage for SQLite and exports.
 
+For Render, use the repository `render.yaml` blueprint and set `GOOGLE_API_KEY` in the Render dashboard when prompted.
+
 Required runtime settings:
 
 ```env
@@ -24,14 +26,14 @@ APP_ENV=production
 GOOGLE_API_KEY=replace-in-secret-manager
 CNPJ_COMPANY_SEARCH_ENABLED=false
 DATABASE_URL=sqlite:////app/data/app.db
-EXPORT_DIR=/app/exports
+EXPORT_DIR=/app/data/exports
 SQLITE_JOURNAL_MODE=TRUNCATE
 ```
 
 Required persistent paths:
 
 - `/app/data`
-- `/app/exports`
+- `/app/data/exports`
 
 Container settings:
 
