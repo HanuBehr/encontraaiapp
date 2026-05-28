@@ -267,6 +267,7 @@ export type LeadDetail = LeadSummary & {
 };
 
 export type LeadListParams = {
+  search?: string;
   city?: string;
   state?: string;
   status?: LeadStatus;

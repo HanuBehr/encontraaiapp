@@ -105,6 +105,39 @@ export function LeadBatchActions({
 
   const actionMutation = useMutation({
     mutationFn: async ({ kind, scope: scopeAtClick }: ActionMutationInput) => {
+      if (kind === "export") {
+        const exportScope = await buildDirectActionScope(
+          scopeAtClick,
+          selectedLeadIds,
+          currentFilters,
+          currentTotal,
+        );
+        if (exportScope.requested === 0) {
+          throw new Error("Nenhum lead encontrado nesse escopo.");
+        }
+        const exported = await exportExcelForScope(exportScope.request);
+        downloadBlob(exported.blob, exported.filename);
+        return {
+          kind,
+          scopeLabel: exportScope.scopeLabel,
+          requested: exportScope.requested,
+          filename: exported.filename,
+        } satisfies ActionResult;
+      }
+
+      if (kind === "assign") {
+        if (scopeAtClick === "latest") {
+          throw new Error("A atribuição está disponível apenas para leads selecionados ou para a lista filtrada.");
+        }
+        const response = await assignLeadBatch(buildScopeRequest(scopeAtClick, selectedLeadIds, currentFilters));
+        return {
+          kind,
+          scopeLabel: response.summary.scope_label,
+          requested: response.summary.requested,
+          summary: response.summary,
+        } satisfies ActionResult;
+      }
+
       const resolvedScope = await resolveActionScope(scopeAtClick, selectedLeadIds, currentFilters);
 
       if (kind === "enrich") {
@@ -139,30 +172,7 @@ export function LeadBatchActions({
         } satisfies ActionResult;
       }
 
-      if (kind === "assign") {
-        if (scopeAtClick === "latest") {
-          throw new Error("A atribuição está disponível apenas para leads selecionados ou para a lista filtrada.");
-        }
-        const response = await assignLeadBatch(resolvedScope.request);
-        return {
-          kind,
-          scopeLabel: response.summary.scope_label,
-          requested: response.summary.requested,
-          summary: response.summary,
-        } satisfies ActionResult;
-      }
-
-      if (resolvedScope.leadIds.length === 0) {
-        throw new Error("Nenhum lead encontrado nesse escopo.");
-      }
-      const exported = await exportExcelForScope(resolvedScope.request);
-      downloadBlob(exported.blob, exported.filename);
-      return {
-        kind,
-        scopeLabel: resolvedScope.scopeLabel,
-        requested: resolvedScope.requested,
-        filename: exported.filename,
-      } satisfies ActionResult;
+      throw new Error("Ação em lote desconhecida.");
     },
     onSuccess: (result) => {
       setLastResult(result);
@@ -512,6 +522,23 @@ function FailedLeadSummary({ summary }: { summary: LeadBatchEnrichmentResponse["
       ) : null}
     </div>
   );
+}
+
+async function buildDirectActionScope(
+  scope: ActionScope,
+  selectedLeadIds: number[],
+  currentFilters: LeadListParams,
+  currentTotal: number,
+): Promise<{ request: LeadScopeRequest; requested: number; scopeLabel: string }> {
+  const request = buildScopeRequest(scope, selectedLeadIds, currentFilters);
+  if (scope === "selected") {
+    return { request, requested: selectedLeadIds.length, scopeLabel: "Leads selecionados" };
+  }
+  if (scope === "latest") {
+    const latestBatch = await getLatestImportBatch();
+    return { request, requested: latestBatch.lead_count, scopeLabel: `Última importação #${latestBatch.id}` };
+  }
+  return { request, requested: currentTotal, scopeLabel: "Lista filtrada atual" };
 }
 
 function buildScopeRequest(scope: ActionScope, selectedLeadIds: number[], currentFilters: LeadListParams): LeadScopeRequest {

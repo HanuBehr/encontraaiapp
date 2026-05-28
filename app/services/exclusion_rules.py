@@ -41,6 +41,7 @@ class ExclusionRuleService:
     def __init__(self, db: Session, organization_id: int | None = None) -> None:
         self.db = db
         self._organization_id = organization_id
+        self._active_rule_cache: list[LeadExclusionRule] | None = None
 
     @property
     def organization_id(self) -> int:
@@ -73,6 +74,7 @@ class ExclusionRuleService:
             existing.reason = reason
             existing.is_active = is_active
             self.db.flush()
+            self._active_rule_cache = None
             return existing
 
         rule = LeadExclusionRule(
@@ -85,6 +87,7 @@ class ExclusionRuleService:
         )
         self.db.add(rule)
         self.db.flush()
+        self._active_rule_cache = None
         return rule
 
     def evaluate_lead(self, lead: Lead) -> ExclusionMatch | None:
@@ -128,6 +131,7 @@ class ExclusionRuleService:
         return match
 
     def reapply_all(self) -> ExclusionApplySummary:
+        self._active_rule_cache = None
         leads = self.db.execute(
             select(Lead)
             .where(or_(Lead.organization_id == self.organization_id, Lead.organization_id.is_(None)))
@@ -157,7 +161,7 @@ class ExclusionRuleService:
         )
 
     def _evaluate(self, payload: "_LeadExclusionPayload") -> ExclusionMatch | None:
-        rules = self._active_rules()
+        rules = self.active_rules()
         for rule in rules:
             if self._rule_matches(rule, payload):
                 reason = rule.reason or f"Matched exclusion rule: {rule.rule_type}={rule.pattern}"
@@ -169,7 +173,12 @@ class ExclusionRuleService:
                 )
         return None
 
-    def _active_rules(self) -> list[LeadExclusionRule]:
+    def active_rules(self) -> list[LeadExclusionRule]:
+        if self._active_rule_cache is None:
+            self._active_rule_cache = self._load_active_rules()
+        return self._active_rule_cache
+
+    def _load_active_rules(self) -> list[LeadExclusionRule]:
         return list(
             self.db.execute(
                 select(LeadExclusionRule)

@@ -71,6 +71,29 @@ def test_list_leads_with_filters(client, db_session) -> None:
     assert payload["items"][0]["business_name"] == "Oficina A"
 
 
+def test_list_leads_searches_server_side_with_pagination(client, db_session) -> None:
+    _seed_lead(db_session, business_name="Oficina Alfa", city="Sao Paulo", email="contato@alfa.example")
+    _seed_lead(db_session, business_name="Beta Auto", city="Campinas", legal_name="Alfa Comercio LTDA")
+    _seed_lead(db_session, business_name="Gamma Auto", city="Campinas", email="gamma@example.com")
+
+    response = client.get(
+        "/leads",
+        params={
+            "search": "alfa",
+            "limit": 1,
+            "offset": 0,
+            "sort_by": "business_name",
+            "sort_dir": "asc",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 2
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["business_name"] == "Beta Auto"
+
+
 def test_list_leads_with_quality_filters(client, db_session) -> None:
     _seed_lead(
         db_session,

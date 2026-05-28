@@ -10,7 +10,7 @@ import { LeadQueueFilters } from "@/components/leads/LeadQueueFilters";
 import { LeadQueueTable } from "@/components/leads/LeadQueueTable";
 import { getLeadOptions, listLeads } from "@/lib/api/leads";
 import { getSettingsSummary } from "@/lib/api/settings";
-import type { LeadListParams, LeadSortBy, LeadSummary } from "@/lib/api/types";
+import type { LeadListParams, LeadSortBy } from "@/lib/api/types";
 import {
   booleanFilterValue,
   defaultQueueFilters,
@@ -18,8 +18,6 @@ import {
   type QueueFilters,
 } from "@/lib/state/lead-workspace";
 import { formatUserFacingError } from "@/lib/ui/messages";
-
-const SEARCH_FETCH_LIMIT = 500;
 
 const LeadBatchActions = dynamic(
   () => import("@/components/leads/LeadBatchActions").then((module) => module.LeadBatchActions),
@@ -62,9 +60,10 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
     const sort = sorting[0];
     const sortBy = (sort?.id as LeadSortBy | undefined) ?? "updated_at";
     const sortDir = sort ? (sort.desc ? "desc" : "asc") : "desc";
-    const searchMode = deferredSearch.trim().length > 0;
+    const searchTerm = deferredSearch.trim();
 
     return {
+      search: searchTerm || undefined,
       city: filters.city || undefined,
       state: filters.state || undefined,
       status: filters.status || undefined,
@@ -82,8 +81,8 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
       blocked: filters.blocked,
       sort_by: sortBy,
       sort_dir: sortDir,
-      limit: searchMode ? SEARCH_FETCH_LIMIT : pageSize,
-      offset: searchMode ? 0 : pageIndex * pageSize,
+      limit: pageSize,
+      offset: pageIndex * pageSize,
     };
   }, [deferredSearch, filters, importBatchId, pageIndex, pageSize, sorting]);
 
@@ -93,20 +92,10 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
     placeholderData: (previousData) => previousData,
   });
 
-  const searchTerm = deferredSearch.trim().toLowerCase();
-  const searchedItems = useMemo(() => {
-    const items = leadsQuery.data?.items ?? [];
-    if (!searchTerm) {
-      return items;
-    }
-    return items.filter((lead) => leadMatchesSearch(lead, searchTerm));
-  }, [leadsQuery.data?.items, searchTerm]);
-
-  const pageItems = searchTerm
-    ? searchedItems.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize)
-    : searchedItems;
+  const searchTerm = deferredSearch.trim();
+  const pageItems = leadsQuery.data?.items ?? [];
   const currentFilteredTotal = leadsQuery.data?.total ?? 0;
-  const total = searchTerm ? searchedItems.length : currentFilteredTotal;
+  const total = currentFilteredTotal;
   const selectedCount = Object.values(rowSelection).filter(Boolean).length;
   const selectedLeadIds = selectedLeadIdsFromSelection(rowSelection);
   const selectedLeadId = firstSelectedLeadId(rowSelection);
@@ -307,7 +296,7 @@ function LeadQueueSearch({
         </div>
       </div>
       <p className="mt-2 text-xs text-brand-muted">
-        A busca rápida filtra os leads já carregados na lista com os filtros atuais.
+        A busca rápida consulta todos os leads salvos dentro dos filtros atuais.
       </p>
     </section>
   );
@@ -345,32 +334,4 @@ function selectedLeadIdsFromSelection(rowSelection: RowSelectionState) {
     .filter(([, selected]) => selected)
     .map(([leadId]) => Number(leadId))
     .filter((leadId) => Number.isFinite(leadId));
-}
-
-function leadMatchesSearch(lead: LeadSummary, searchTerm: string) {
-  const haystack = [
-    lead.business_name,
-    lead.normalized_business_name,
-    lead.category,
-    lead.city,
-    lead.state,
-    lead.email,
-    lead.phone,
-    lead.whatsapp,
-    lead.instagram,
-    lead.website,
-    lead.assigned_sales_rep?.name,
-    lead.sales_region?.name,
-    lead.market_segment?.name,
-    lead.market_subsegment?.name,
-    lead.company_size_fit,
-    lead.trade_type,
-    lead.is_blocked ? "blocked" : "unblocked",
-    lead.blocked_reason,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return haystack.includes(searchTerm);
 }

@@ -1202,6 +1202,127 @@ def test_discovery_import_preview_is_idempotent_for_existing_saved_leads(db_sess
     assert db_session.scalar(select(func.count(RawDiscoveryRecord.id))) == 1
 
 
+def test_discovery_preview_loads_exclusion_rules_once_per_batch(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    ExclusionRuleService(db_session, organization_id=service.lead_repository.organization_id).create_rule(
+        rule_type="exact_name",
+        pattern="Empresa Bloqueada",
+        reason="Blocked test company",
+    )
+    preview = DiscoveryPreviewResponse(
+        provider="google_places",
+        resolved_location=ResolvedLocation(label="Campinas, SP", latitude=-22.9056, longitude=-47.0608),
+        total_provider_results=3,
+        items=[
+            DiscoveryPreviewItem(
+                client_result_id=f"preview-{index}",
+                search_term="loja de tintas",
+                provider_record_id=f"place-{index}",
+                source_url=f"https://maps.google.com/?q=Empresa+{index}",
+                raw_payload={"id": f"place-{index}"},
+                candidate=_candidate(
+                    name,
+                    category="loja de tintas",
+                    phone=f"+551199999111{index}",
+                    city="Campinas",
+                ),
+            )
+            for index, name in enumerate(["Empresa Boa", "Empresa Bloqueada", "Empresa Neutra"], start=1)
+        ],
+    )
+    original_load_active_rules = ExclusionRuleService._load_active_rules
+    load_calls = 0
+
+    def load_active_rules_once(self):
+        nonlocal load_calls
+        load_calls += 1
+        return original_load_active_rules(self)
+
+    monkeypatch.setattr(ExclusionRuleService, "_load_active_rules", load_active_rules_once)
+
+    reevaluated = service.evaluate_preview_exclusions(preview)
+
+    assert load_calls == 1
+    assert [item.exclusion.is_blocked for item in reevaluated.items] == [False, True, False]
+
+
+def test_discovery_import_reuses_existing_matcher_for_batch(db_session, monkeypatch) -> None:
+    settings = Settings(APP_ENV="test", DATABASE_URL="sqlite://", GOOGLE_API_KEY="test-key")
+    service = DiscoveryService(db_session, settings)
+    request = DiscoverySearchRequest(
+        raw_query="loja de tintas em Campinas",
+        search_terms=["loja de tintas"],
+        location_query="Campinas, SP",
+        radius_m=2500,
+        max_results_per_term=10,
+    )
+    duplicate_candidate = _candidate(
+        "Casa das Tintas Centro",
+        category="loja de tintas",
+        phone="+5511999991111",
+        city="Campinas",
+    ).model_copy(update={"google_place_id": "place-casa-das-tintas"})
+    preview = DiscoveryPreviewResponse(
+        provider="google_places",
+        resolved_location=ResolvedLocation(label="Campinas, SP", latitude=-22.9056, longitude=-47.0608),
+        total_provider_results=3,
+        items=[
+            DiscoveryPreviewItem(
+                client_result_id="preview-1",
+                search_term="loja de tintas",
+                provider_record_id="place-casa-das-tintas",
+                source_url="https://maps.google.com/?q=Casa+das+Tintas",
+                raw_payload={"id": "place-casa-das-tintas"},
+                candidate=duplicate_candidate,
+            ),
+            DiscoveryPreviewItem(
+                client_result_id="preview-2",
+                search_term="loja de tintas",
+                provider_record_id="place-casa-das-tintas-duplicate",
+                source_url="https://maps.google.com/?q=Casa+das+Tintas+Centro",
+                raw_payload={"id": "place-casa-das-tintas-duplicate"},
+                candidate=duplicate_candidate.model_copy(update={"business_name": "Casa das Tintas Centro II"}),
+            ),
+            DiscoveryPreviewItem(
+                client_result_id="preview-3",
+                search_term="loja de tintas",
+                provider_record_id="place-tintas-norte",
+                source_url="https://maps.google.com/?q=Tintas+Norte",
+                raw_payload={"id": "place-tintas-norte"},
+                candidate=_candidate(
+                    "Tintas Norte",
+                    category="loja de tintas",
+                    phone="+5511999992222",
+                    city="Campinas",
+                ),
+            ),
+        ],
+    )
+    original_build_matcher = LeadRepository.build_existing_lead_matcher
+    build_calls = 0
+
+    def build_existing_lead_matcher_once(self):
+        nonlocal build_calls
+        build_calls += 1
+        return original_build_matcher(self)
+
+    monkeypatch.setattr(LeadRepository, "build_existing_lead_matcher", build_existing_lead_matcher_once)
+
+    response = service.import_preview(
+        request=request,
+        preview=preview,
+        selected_client_result_ids=["preview-1", "preview-2", "preview-3"],
+    )
+
+    assert build_calls == 2
+    assert response.selected_items == 3
+    assert response.saved_items == 2
+    assert response.skipped_existing_count == 1
+    assert db_session.scalar(select(func.count(Lead.id))) == 2
+    assert db_session.scalar(select(func.count(RawDiscoveryRecord.id))) == 2
+
+
 def test_lead_repository_matches_existing_saved_leads_by_domain_phone_and_name_address(db_session) -> None:
     repository = LeadRepository(db_session)
 

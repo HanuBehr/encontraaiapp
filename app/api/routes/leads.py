@@ -46,6 +46,7 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 
 @router.get("", response_model=LeadListResponse)
 def list_leads(
+    search: str | None = Query(default=None),
     city: str | None = Query(default=None),
     state: str | None = Query(default=None),
     status: LeadStatus | None = Query(default=None),
@@ -74,6 +75,7 @@ def list_leads(
     db: Session = Depends(get_db_session),
 ) -> LeadListResponse:
     filters = LeadListFilters(
+        search=search,
         city=city,
         state=state,
         status=status,

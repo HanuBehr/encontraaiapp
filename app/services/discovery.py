@@ -1117,15 +1117,17 @@ class DiscoveryService:
         updated_ids: set[int] = set()
         saved_lead_ids: list[int] = []
         response_leads: dict[int, LeadSummary] = {}
+        matcher = self.lead_repository.build_existing_lead_matcher()
 
         try:
             for item in import_items:
                 lead, created = self.lead_repository.upsert_from_discovery(
                     item.candidate,
+                    matcher=matcher,
                     merge_existing=False,
                 )
                 if not created:
-                    existing_match = self.lead_repository.find_existing_match(item.candidate)
+                    existing_match = self.lead_repository.find_existing_match(item.candidate, matcher=matcher)
                     skipped_existing_count += 1
                     skipped_items.append(
                         DiscoveryImportSkippedItem(
@@ -1205,6 +1207,7 @@ class DiscoveryService:
                 else:
                     updated_ids.add(lead.id)
 
+                matcher.add_lead(lead)
                 saved_lead_ids.append(lead.id)
                 response_leads[lead.id] = LeadSummary.model_validate(lead)
 

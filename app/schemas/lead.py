@@ -201,6 +201,7 @@ class LeadDetail(LeadSummary):
 
 
 class LeadListFilters(BaseModel):
+    search: str | None = None
     city: str | None = None
     state: str | None = None
     status: LeadStatus | None = None

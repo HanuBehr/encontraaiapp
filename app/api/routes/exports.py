@@ -15,6 +15,7 @@ router = APIRouter(prefix="/exports", tags=["exports"])
 
 @router.get("/excel")
 def export_excel(
+    search: str | None = Query(default=None),
     city: str | None = Query(default=None),
     state: str | None = Query(default=None),
     status: LeadStatus | None = Query(default=None),
@@ -40,6 +41,7 @@ def export_excel(
     db: Session = Depends(get_db_session),
 ) -> Response:
     filters = LeadListFilters(
+        search=search,
         city=city,
         state=state,
         status=status,

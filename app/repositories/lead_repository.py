@@ -76,38 +76,37 @@ class _ExistingLeadMatcher:
         self._by_name_city: dict[str, list[_LeadMatchFingerprint]] = {}
 
         for lead in ordered_leads:
-            fingerprint = self._fingerprint_for_lead(lead)
-            self._index(self._by_place_id, fingerprint.place_id, fingerprint)
-            self._index(self._by_maps_url, fingerprint.maps_url, fingerprint)
-            self._index(self._by_domain, fingerprint.domain, fingerprint)
-            for phone_value in fingerprint.phone_values:
-                self._index(self._by_phone, phone_value, fingerprint)
-            if fingerprint.normalized_name and fingerprint.normalized_address:
-                self._index(
-                    self._by_name_address,
-                    f"{fingerprint.normalized_name}|{fingerprint.normalized_address}",
-                    fingerprint,
-                )
-            if (
-                fingerprint.normalized_name
-                and fingerprint.normalized_neighborhood
-                and fingerprint.normalized_city
-            ):
-                self._index(
-                    self._by_name_neighborhood_city,
-                    (
-                        f"{fingerprint.normalized_name}|"
-                        f"{fingerprint.normalized_neighborhood}|"
-                        f"{fingerprint.normalized_city}"
-                    ),
-                    fingerprint,
-                )
-            if fingerprint.normalized_name and fingerprint.normalized_city:
-                self._index(
-                    self._by_name_city,
-                    f"{fingerprint.normalized_name}|{fingerprint.normalized_city}",
-                    fingerprint,
-                )
+            self.add_lead(lead)
+
+    def add_lead(self, lead: Lead) -> None:
+        fingerprint = self._fingerprint_for_lead(lead)
+        self._index(self._by_place_id, fingerprint.place_id, fingerprint)
+        self._index(self._by_maps_url, fingerprint.maps_url, fingerprint)
+        self._index(self._by_domain, fingerprint.domain, fingerprint)
+        for phone_value in fingerprint.phone_values:
+            self._index(self._by_phone, phone_value, fingerprint)
+        if fingerprint.normalized_name and fingerprint.normalized_address:
+            self._index(
+                self._by_name_address,
+                f"{fingerprint.normalized_name}|{fingerprint.normalized_address}",
+                fingerprint,
+            )
+        if fingerprint.normalized_name and fingerprint.normalized_neighborhood and fingerprint.normalized_city:
+            self._index(
+                self._by_name_neighborhood_city,
+                (
+                    f"{fingerprint.normalized_name}|"
+                    f"{fingerprint.normalized_neighborhood}|"
+                    f"{fingerprint.normalized_city}"
+                ),
+                fingerprint,
+            )
+        if fingerprint.normalized_name and fingerprint.normalized_city:
+            self._index(
+                self._by_name_city,
+                f"{fingerprint.normalized_name}|{fingerprint.normalized_city}",
+                fingerprint,
+            )
 
     def match(self, candidate: DiscoveryLeadCandidate) -> ExistingLeadMatch | None:
         place_id = _non_empty_text(candidate.google_place_id)
@@ -259,6 +258,7 @@ class LeadRepository:
         self.db = db
         self._organization_id = organization_id
         self._include_unassigned_leads = organization_id is None
+        self._exclusion_rule_service = None
 
     @property
     def organization_id(self) -> int:
@@ -785,6 +785,33 @@ class LeadRepository:
             conditions.append(Lead.cnpj_match_status == filters.cnpj_match_status)
         if filters.category:
             conditions.append(Lead.category.ilike(f"%{filters.category}%"))
+        search_text = filters.search.strip() if filters.search else ""
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            conditions.append(
+                or_(
+                    Lead.business_name.ilike(search_pattern),
+                    Lead.normalized_business_name.ilike(search_pattern),
+                    Lead.category.ilike(search_pattern),
+                    Lead.city.ilike(search_pattern),
+                    Lead.state.ilike(search_pattern),
+                    Lead.email.ilike(search_pattern),
+                    Lead.phone.ilike(search_pattern),
+                    Lead.whatsapp.ilike(search_pattern),
+                    Lead.instagram.ilike(search_pattern),
+                    Lead.website.ilike(search_pattern),
+                    Lead.domain.ilike(search_pattern),
+                    Lead.cnpj.ilike(search_pattern),
+                    Lead.legal_name.ilike(search_pattern),
+                    Lead.blocked_reason.ilike(search_pattern),
+                    Lead.company_size_fit.ilike(search_pattern),
+                    Lead.trade_type.ilike(search_pattern),
+                    Lead.sales_region.has(SalesRegion.name.ilike(search_pattern)),
+                    Lead.market_segment.has(MarketSegment.name.ilike(search_pattern)),
+                    Lead.market_subsegment.has(MarketSubsegment.name.ilike(search_pattern)),
+                    Lead.assigned_sales_rep.has(SalesRep.name.ilike(search_pattern)),
+                )
+            )
         if filters.lead_source_type:
             conditions.append(Lead.lead_source_type == filters.lead_source_type)
         if filters.do_not_contact is not None:
@@ -929,7 +956,10 @@ class LeadRepository:
     def _apply_exclusion_rules(self, lead: Lead) -> None:
         from app.services.exclusion_rules import ExclusionRuleService
 
-        ExclusionRuleService(self.db, organization_id=lead.organization_id or self.organization_id).apply_to_lead(lead)
+        organization_id = lead.organization_id or self.organization_id
+        if self._exclusion_rule_service is None or self._exclusion_rule_service.organization_id != organization_id:
+            self._exclusion_rule_service = ExclusionRuleService(self.db, organization_id=organization_id)
+        self._exclusion_rule_service.apply_to_lead(lead)
 
 
 def _all_same_normalized_address(matches: list[_LeadMatchFingerprint]) -> bool:
