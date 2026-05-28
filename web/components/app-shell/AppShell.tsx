@@ -74,7 +74,7 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
       </Link>
 
       {!expanded && (
-        <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/[0.12] bg-[#554A64]/[0.94] px-3 py-1.5 text-xs font-medium text-white/88 opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-opacity duration-120 motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
+        <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/[0.12] bg-[#554A64]/[0.94] px-3 py-1.5 text-xs font-medium text-white/88 opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-opacity duration-120 motion-reduce:transition-none group-hover:opacity-100">
           {item.label}
         </span>
       )}
@@ -88,11 +88,7 @@ export function AppShell({ children }: AppShellProps) {
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   const handleMouseEnter = useCallback(() => setExpanded(true), []);
-  const handleMouseLeave = useCallback(() => {
-    if (sidebarRef.current && !sidebarRef.current.contains(document.activeElement)) {
-      setExpanded(false);
-    }
-  }, []);
+  const handleMouseLeave = useCallback(() => setExpanded(false), []);
   const handleFocusCapture = useCallback(() => setExpanded(true), []);
   const handleBlurCapture = useCallback((e: React.FocusEvent) => {
     if (sidebarRef.current && !sidebarRef.current.contains(e.relatedTarget as Node)) {
@@ -115,7 +111,7 @@ export function AppShell({ children }: AppShellProps) {
         className="fixed inset-y-0 left-0 z-40 hidden flex-col px-2 py-[16px] lg:flex"
         style={{
           width: expanded ? "224px" : "70px",
-          transition: "width 180ms ease, box-shadow 180ms ease",
+          transition: "width 120ms ease-out, box-shadow 120ms ease-out",
           background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.24), transparent 34%),radial-gradient(circle at 50% 100%, rgba(167,139,250,0.06), transparent 44%),linear-gradient(180deg, rgba(146,137,162,0.58) 0%, rgba(118,108,137,0.52) 48%, rgba(91,82,110,0.56) 100%)",
           backdropFilter: "blur(30px) saturate(145%)",
           WebkitBackdropFilter: "blur(30px) saturate(145%)",
@@ -181,28 +177,6 @@ export function AppShell({ children }: AppShellProps) {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Bottom status */}
-          {expanded ? (
-            <div className="flex min-h-[44px] items-center gap-[10px] rounded-[16px] border border-white/[0.16] bg-white/[0.11] px-[10px] transition-all duration-140 motion-reduce:transition-none">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="absolute inset-0 animate-ping rounded-full bg-brand-success/40 motion-reduce:animate-none" />
-                <span className="relative h-2.5 w-2.5 rounded-full bg-[#10B981] shadow-[0_0_12px_rgba(16,185,129,0.48)]" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-white/92">Sistema ativo</p>
-                <p className="text-xs text-white/66">Pronto para descoberta</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-center">
-              <div className="flex h-[42px] w-[42px] items-center justify-center rounded-[14px] border border-white/[0.16] bg-white/[0.11]">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-brand-success/40 motion-reduce:animate-none" />
-                  <span className="relative h-2.5 w-2.5 rounded-full bg-[#10B981] shadow-[0_0_12px_rgba(16,185,129,0.48)]" />
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       </aside>
 
