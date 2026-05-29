@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, SortingState } from "@tanstack/react-table";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { LeadQueueFilters } from "@/components/leads/LeadQueueFilters";
@@ -17,19 +18,22 @@ import {
   numericFilterValue,
   type QueueFilters,
 } from "@/lib/state/lead-workspace";
+import { useI18n } from "@/lib/i18n/client";
+import { formatNumber } from "@/lib/i18n/format";
 import { formatUserFacingError } from "@/lib/ui/messages";
+import type { Locale, TranslationKey } from "@/lib/i18n/translations";
 
 const LeadBatchActions = dynamic(
   () => import("@/components/leads/LeadBatchActions").then((module) => module.LeadBatchActions),
-  { loading: () => <DeferredPanel label="Carregando ações..." /> },
+  { loading: () => <DeferredPanel labelKey="common.loadingActions" /> },
 );
 const LeadCnpjReviewQueue = dynamic(
   () => import("@/components/leads/LeadCnpjReviewQueue").then((module) => module.LeadCnpjReviewQueue),
-  { loading: () => <DeferredPanel label="Carregando revisão CNPJ..." /> },
+  { loading: () => <DeferredPanel labelKey="common.loadingCnpjReview" /> },
 );
 const LeadDetailPanel = dynamic(
   () => import("@/components/leads/LeadDetailPanel").then((module) => module.LeadDetailPanel),
-  { loading: () => <DeferredPanel label="Carregando painel de detalhes..." /> },
+  { loading: () => <DeferredPanel labelKey="common.loadingDetailsPanel" /> },
 );
 
 type LeadOperationsWorkspaceProps = {
@@ -37,7 +41,9 @@ type LeadOperationsWorkspaceProps = {
 };
 
 export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOperationsWorkspaceProps) {
-  const importBatchId = initialImportBatchId;
+  const { locale, t } = useI18n();
+  const searchParams = useSearchParams();
+  const importBatchId = initialImportBatchId ?? parsePositiveInteger(searchParams.get("import_batch_id"));
   const [filters, setFilters] = useState<QueueFilters>(defaultQueueFilters);
   const [search, setSearch] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
@@ -139,32 +145,30 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
     <div className="space-y-5">
       <div className="ea-card flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="ea-kicker">Leads</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-brand-graphite">Leads</h1>
+          <p className="ea-kicker">{t("leads.kicker")}</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-brand-graphite">{t("leads.title")}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
-            Revise, filtre, selecione e exporte os leads salvos a partir da descoberta.
+            {t("leads.description")}
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[360px]">
-          <Metric label="Lista atual" value={total.toLocaleString()} />
-          <Metric label="Selecionados" value={selectedCount.toLocaleString()} />
-          <Metric label="Linhas por página" value={String(pageSize)} />
+          <Metric label={t("common.currentList")} value={formatNumber(total, locale)} />
+          <Metric label={t("common.selected")} value={formatNumber(selectedCount, locale)} />
+          <Metric label={t("common.rowsPerPage")} value={String(pageSize)} />
         </div>
       </div>
 
       {importBatchId ? (
         <section className="flex flex-col gap-3 rounded-3xl border border-brand-olive/70 bg-brand-olive/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-brand-graphite">Visualizando o lote salvo {importBatchId}</p>
-            <p className="mt-1 text-sm text-brand-muted">
-              Você pode enriquecer, revisar e exportar este lote sem sair da área de leads.
-            </p>
+            <p className="text-sm font-semibold text-brand-graphite">{t("leads.viewingBatch", { id: importBatchId })}</p>
+            <p className="mt-1 text-sm text-brand-muted">{t("leads.batchDescription")}</p>
           </div>
           <Link
             href="/leads"
             className="ea-button-secondary px-3 py-2 text-center text-sm font-semibold"
           >
-            Ver todos os leads
+            {t("leads.viewAll")}
           </Link>
         </section>
       ) : null}
@@ -174,6 +178,7 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         onChange={updateSearch}
         resultCount={total}
         searchActive={Boolean(searchTerm)}
+        locale={locale}
       />
 
       <LeadQueueFilters
@@ -185,28 +190,25 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
 
       {optionsQuery.isError ? (
         <p className="rounded-2xl border border-rose-300/30 bg-rose-950/35 p-3 text-sm text-rose-100">
-          {formatUserFacingError(optionsQuery.error, "Não foi possível carregar os filtros agora.")}
+          {formatUserFacingError(optionsQuery.error, "Não foi possível carregar os filtros agora.", locale)}
         </p>
       ) : null}
 
       {leadsQuery.isError ? (
         <p className="rounded-2xl border border-rose-300/30 bg-rose-950/35 p-3 text-sm text-rose-100">
-          {formatUserFacingError(leadsQuery.error, "Não foi possível carregar os leads agora.")}
+          {formatUserFacingError(leadsQuery.error, "Não foi possível carregar os leads agora.", locale)}
         </p>
       ) : null}
 
       {showEmptyWorkspaceState ? (
         <section className="ea-card border-dashed p-5">
-          <p className="text-sm font-semibold text-brand-graphite">Nenhum lead salvo ainda</p>
-          <p className="mt-2 text-sm text-brand-muted">
-            Os leads que você salvar em <span className="font-medium">/discovery</span> aparecem aqui para revisão,
-            enriquecimento e exportação.
-          </p>
+          <p className="text-sm font-semibold text-brand-graphite">{t("leads.noSavedTitle")}</p>
+          <p className="mt-2 text-sm text-brand-muted">{t("leads.noSavedDescription")}</p>
           <Link
             href="/discovery"
             className="ea-button-primary mt-4 inline-flex px-4 py-2 text-sm font-semibold"
           >
-            Ir para descoberta
+            {t("leads.goDiscovery")}
           </Link>
         </section>
       ) : null}
@@ -249,10 +251,11 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
   );
 }
 
-function DeferredPanel({ label }: { label: string }) {
+function DeferredPanel({ labelKey }: { labelKey: TranslationKey }) {
+  const { t } = useI18n();
   return (
     <section className="ea-card p-5">
-      <p className="text-sm text-brand-muted">{label}</p>
+      <p className="text-sm text-brand-muted">{t(labelKey)}</p>
     </section>
   );
 }
@@ -271,32 +274,35 @@ function LeadQueueSearch({
   onChange,
   resultCount,
   searchActive,
+  locale,
 }: {
   value: string;
   onChange: (value: string) => void;
   resultCount: number;
   searchActive: boolean;
+  locale: Locale;
 }) {
+  const { t } = useI18n();
   return (
     <section className="ea-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <label className="block w-full lg:max-w-2xl" htmlFor="lead-search">
-          <span className="text-sm font-semibold text-brand-graphite">Busca rápida</span>
+          <span className="text-sm font-semibold text-brand-graphite">{t("leads.quickSearch")}</span>
           <input
             id="lead-search"
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            placeholder="Empresa, cidade, contato, responsável, segmento ou motivo do bloqueio"
+            placeholder={t("leads.searchPlaceholder")}
             className="ea-input mt-2 w-full px-3 py-2 text-sm"
           />
         </label>
         <div className="ea-card-flat px-3 py-2 lg:min-w-[180px]">
-          <p className="text-xs font-medium text-brand-muted">{searchActive ? "Resultados" : "Lista visível"}</p>
-          <p className="mt-1 text-lg font-semibold text-brand-graphite">{resultCount.toLocaleString()}</p>
+          <p className="text-xs font-medium text-brand-muted">{searchActive ? t("common.results") : t("common.visibleList")}</p>
+          <p className="mt-1 text-lg font-semibold text-brand-graphite">{formatNumber(resultCount, locale)}</p>
         </div>
       </div>
       <p className="mt-2 text-xs text-brand-muted">
-        A busca rápida consulta todos os leads salvos dentro dos filtros atuais.
+        {t("leads.searchHelp")}
       </p>
     </section>
   );
@@ -334,4 +340,12 @@ function selectedLeadIdsFromSelection(rowSelection: RowSelectionState) {
     .filter(([, selected]) => selected)
     .map(([leadId]) => Number(leadId))
     .filter((leadId) => Number.isFinite(leadId));
+}
+
+function parsePositiveInteger(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }

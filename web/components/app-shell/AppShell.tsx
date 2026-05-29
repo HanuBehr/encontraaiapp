@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, useCallback, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useCallback, useEffect, useRef } from "react";
+
+import { useI18n } from "@/lib/i18n/client";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -28,27 +31,59 @@ function GridIcon({ className }: { className?: string }) {
   );
 }
 
-const navItems = [
-  { href: "/discovery", label: "Descoberta", description: "Buscar empresas", Icon: SearchIcon },
-  { href: "/leads", label: "Leads", description: "Listas salvas", Icon: GridIcon },
+function CogIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.03 3.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.12.36.34.69.6 1a1.7 1.7 0 0 0 1.1.4H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+    </svg>
+  );
+}
+
+type NavItemConfigEntry = {
+  href: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
+  Icon: (props: { className?: string }) => React.ReactNode;
+};
+
+const navItemConfigs: NavItemConfigEntry[] = [
+  { href: "/discovery", labelKey: "nav.discovery", descriptionKey: "nav.discoveryDescription", Icon: SearchIcon },
+  { href: "/leads", labelKey: "nav.leads", descriptionKey: "nav.leadsDescription", Icon: GridIcon },
+  { href: "/settings", labelKey: "nav.settings", descriptionKey: "nav.settingsDescription", Icon: CogIcon },
 ];
 
-type NavItemConfig = (typeof navItems)[number];
+type NavItemConfig = {
+  href: string;
+  label: string;
+  description: string;
+  Icon: (props: { className?: string }) => React.ReactNode;
+};
 
 function NavItem({ item, active, expanded }: { item: NavItemConfig; active: boolean; expanded: boolean }) {
+  const router = useRouter();
+
   return (
     <div className="group relative flex items-center justify-center">
       <Link
         href={item.href}
+        prefetch
+        onMouseEnter={() => router.prefetch(item.href)}
+        onFocus={() => router.prefetch(item.href)}
         aria-current={active ? "page" : undefined}
         aria-label={item.label}
-        className={`relative flex items-center rounded-[15px] border px-2 transition-all duration-160 motion-reduce:transition-none ${
-          expanded ? "w-full justify-start gap-3 min-h-[52px]" : "h-11 w-11 justify-center"
+        className={`relative flex items-center overflow-hidden rounded-[15px] border px-2 motion-reduce:transition-none ${
+          expanded ? "w-full justify-start min-h-[52px]" : "h-11 w-11 justify-center"
         } ${
           active
             ? "border-white/[0.34] bg-[linear-gradient(135deg,rgba(255,255,255,0.24),rgba(139,92,246,0.24))] text-white/98 shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_14px_32px_rgba(76,29,149,0.16)]"
-            : "border-transparent text-white/76 hover:border-white/[0.18] hover:bg-white/[0.10] hover:text-white/96 hover:translate-x-[2px]"
+            : "border-transparent text-white/76 hover:border-white/[0.18] hover:bg-white/[0.10] hover:text-white/96 hover:translate-x-px"
         }`}
+        style={{
+          gap: expanded ? "12px" : "0px",
+          transition: "width 210ms cubic-bezier(0.22, 1, 0.36, 1), min-height 210ms cubic-bezier(0.22, 1, 0.36, 1), gap 190ms cubic-bezier(0.22, 1, 0.36, 1), transform 170ms cubic-bezier(0.22, 1, 0.36, 1), border-color 170ms ease, background-color 170ms ease, color 170ms ease, box-shadow 210ms cubic-bezier(0.22, 1, 0.36, 1)",
+          willChange: "width, transform",
+        }}
       >
         {active && (
           <span className="absolute left-[-7px] top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-white/92 shadow-[0_0_14px_rgba(221,214,254,0.64)]" />
@@ -63,10 +98,15 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
         </span>
 
         <div
-          className={`flex flex-col whitespace-nowrap transition-all duration-140 motion-reduce:transition-none ${
-            expanded ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-[-4px] pointer-events-none absolute"
-          }`}
-          style={expanded ? {} : { left: "calc(36px + 12px + 8px)", top: "50%", transform: "translateY(-50%) translateX(-4px)" }}
+          className="flex min-w-0 flex-col overflow-hidden whitespace-nowrap motion-reduce:transition-none"
+          style={{
+            maxWidth: expanded ? "138px" : "0px",
+            opacity: expanded ? 1 : 0,
+            transform: expanded ? "translateX(0)" : "translateX(-6px)",
+            pointerEvents: expanded ? "auto" : "none",
+            transition: "max-width 210ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease-out, transform 190ms cubic-bezier(0.22, 1, 0.36, 1)",
+            willChange: "max-width, opacity, transform",
+          }}
         >
           <span className="text-sm font-bold leading-tight text-white/96">{item.label}</span>
           <span className="mt-0.5 text-xs font-medium leading-tight text-white/66">{item.description}</span>
@@ -84,8 +124,16 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const navItems = navItemConfigs.map((item) => ({
+    href: item.href,
+    label: t(item.labelKey),
+    description: t(item.descriptionKey),
+    Icon: item.Icon,
+  }));
 
   const handleMouseEnter = useCallback(() => setExpanded(true), []);
   const handleMouseLeave = useCallback(() => setExpanded(false), []);
@@ -95,6 +143,16 @@ export function AppShell({ children }: AppShellProps) {
       setExpanded(false);
     }
   }, []);
+
+  useEffect(() => {
+    const prefetchRoutes = () => navItemConfigs.forEach((item) => router.prefetch(item.href));
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(prefetchRoutes, { timeout: 1200 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timeoutId = setTimeout(prefetchRoutes, 300);
+    return () => clearTimeout(timeoutId);
+  }, [router]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-brand-canvas text-brand-graphite">
@@ -111,7 +169,8 @@ export function AppShell({ children }: AppShellProps) {
         className="fixed inset-y-0 left-0 z-40 hidden flex-col px-2 py-[16px] lg:flex"
         style={{
           width: expanded ? "224px" : "70px",
-          transition: "width 120ms ease-out, box-shadow 120ms ease-out",
+          transition: "width 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+          willChange: "width, box-shadow",
           background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.24), transparent 34%),radial-gradient(circle at 50% 100%, rgba(167,139,250,0.06), transparent 44%),linear-gradient(180deg, rgba(146,137,162,0.58) 0%, rgba(118,108,137,0.52) 48%, rgba(91,82,110,0.56) 100%)",
           backdropFilter: "blur(30px) saturate(145%)",
           WebkitBackdropFilter: "blur(30px) saturate(145%)",
@@ -137,32 +196,18 @@ export function AppShell({ children }: AppShellProps) {
             </div>
 
             <div
-              className="whitespace-nowrap transition-all duration-140 motion-reduce:transition-none"
+              className="whitespace-nowrap motion-reduce:transition-none"
               style={{
                 opacity: expanded ? 1 : 0,
                 transform: expanded ? "translateX(0)" : "translateX(-4px)",
                 pointerEvents: expanded ? "auto" : "none",
                 marginLeft: expanded ? "12px" : "0",
+                transition: "opacity 160ms ease-out, transform 190ms cubic-bezier(0.22, 1, 0.36, 1), margin-left 210ms cubic-bezier(0.22, 1, 0.36, 1)",
+                willChange: "opacity, transform",
               }}
             >
               <p className="text-[14px] font-bold tracking-tight text-white/96">Encontra.ai</p>
-              <p className="text-xs font-medium text-white/68">Lead operations</p>
-            </div>
-          </div>
-
-          {/* Workspace row (expanded only) */}
-          <div
-            className="overflow-hidden transition-all duration-140 motion-reduce:transition-none"
-            style={{
-              opacity: expanded ? 1 : 0,
-              pointerEvents: expanded ? "auto" : "none",
-              height: expanded ? "42px" : "0px",
-              marginTop: expanded ? "20px" : "0px",
-            }}
-          >
-            <div className="flex min-h-[42px] items-center gap-[10px] rounded-[16px] border border-white/[0.14] bg-white/[0.10] px-[10px]">
-              <span className="text-xs font-semibold text-white/82">Lead operations</span>
-              <span className="ml-auto text-[10px] font-medium text-white/58">Ativo</span>
+              <p className="text-xs font-medium text-white/68">{t("app.leadOperations")}</p>
             </div>
           </div>
 

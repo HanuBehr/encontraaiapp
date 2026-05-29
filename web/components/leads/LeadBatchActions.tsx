@@ -19,6 +19,10 @@ import type {
   LeadScopeRequest,
 } from "@/lib/api/types";
 import { formatUserFacingError, sanitizeUserFacingMessage } from "@/lib/ui/messages";
+import { useI18n } from "@/lib/i18n/client";
+import { formatNumber } from "@/lib/i18n/format";
+import { translateLooseText } from "@/lib/i18n/loose";
+import type { Locale } from "@/lib/i18n/translations";
 
 type ActionScope = "selected" | "current" | "latest";
 type ActionKind = "enrich" | "cnpj" | "assign" | "export";
@@ -77,6 +81,7 @@ export function LeadBatchActions({
   searchActive,
   cnpjEnabled,
 }: LeadBatchActionsProps) {
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [scope, setScope] = useState<ActionScope>("selected");
   const [lastResult, setLastResult] = useState<ActionResult | null>(null);
@@ -204,10 +209,10 @@ export function LeadBatchActions({
     <section className="ea-card p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <p className="ea-kicker">Ações em lote</p>
-          <h2 className="mt-2 text-base font-semibold text-brand-graphite">Enriquecer, revisar e exportar</h2>
+          <p className="ea-kicker">{t("batch.kicker")}</p>
+          <h2 className="mt-2 text-base font-semibold text-brand-graphite">{t("batch.title")}</h2>
           <p className="mt-1 text-sm leading-6 text-brand-muted">
-            Escolha um escopo para enriquecer contatos, atribuir ou exportar os leads sem sair da lista.
+            {t("batch.description")}
           </p>
           {cnpjEnabled ? (
             <p className="mt-1 text-xs text-brand-muted">
@@ -215,7 +220,7 @@ export function LeadBatchActions({
             </p>
           ) : null}
           <p className="mt-1 text-xs text-brand-muted">
-            O Excel é o formato principal para baixar uma planilha limpa e pronta para prospecção.
+            {t("batch.excelDescription")}
           </p>
           {cnpjEnabled ? (
             <>
@@ -244,14 +249,14 @@ export function LeadBatchActions({
           ) : null}
           {searchActive ? (
             <p className="mt-2 text-xs text-brand-muted">
-              A busca rápida atua só sobre a tabela carregada. A lista filtrada usa os filtros acima.
+              {locale === "en" ? "Quick search applies to the loaded table. The filtered list uses the filters above." : "A busca rápida atua só sobre a tabela carregada. A lista filtrada usa os filtros acima."}
             </p>
           ) : null}
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[220px_150px_minmax(0,1fr)] xl:min-w-[780px]">
           <label className="block">
-            <span className="text-xs font-medium text-brand-muted">Escopo</span>
+            <span className="text-xs font-medium text-brand-muted">{t("batch.scope")}</span>
             <select
               value={scope}
               onChange={(event) => {
@@ -260,35 +265,35 @@ export function LeadBatchActions({
               }}
               className="ea-input mt-1 w-full px-2 py-2 text-sm"
             >
-              <option value="selected">Leads selecionados ({selectedLeadIds.length})</option>
-              <option value="current">Lista filtrada ({currentTotal})</option>
+              <option value="selected">{t("batch.selectedScope", { count: formatNumber(selectedLeadIds.length, locale) })}</option>
+              <option value="current">{t("batch.currentScope", { count: formatNumber(currentTotal, locale) })}</option>
               <option value="latest">
-                Última importação{latestBatchQuery.data ? ` (${latestBatchQuery.data.lead_count})` : ""}
+                {t("batch.latestScope", { count: latestBatchQuery.data ? ` (${formatNumber(latestBatchQuery.data.lead_count, locale)})` : "" })}
               </option>
             </select>
           </label>
 
           <div className="ea-card-flat px-3 py-2">
-            <p className="text-xs font-medium text-brand-muted">Total no escopo</p>
+            <p className="text-xs font-medium text-brand-muted">{t("batch.count")}</p>
             <p className="mt-1 text-xl font-semibold text-brand-graphite">
-              {actionCount === null ? "..." : actionCount.toLocaleString()}
+              {actionCount === null ? "..." : formatNumber(actionCount, locale)}
             </p>
           </div>
 
           <div className={`grid gap-2 sm:grid-cols-2 ${cnpjEnabled ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
             <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
-              Enriquecer
+              {t("batch.enrich")}
             </ActionButton>
             {cnpjEnabled ? (
               <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
-                Enriquecer CNPJ
+                {t("batch.cnpj")}
               </ActionButton>
             ) : null}
             <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
-              Atribuir
+              {t("batch.assign")}
             </ActionButton>
             <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("export")}>
-              Exportar Excel
+              {t("batch.export")}
             </ActionButton>
           </div>
         </div>
@@ -312,10 +317,12 @@ export function LeadBatchActions({
       {confirmation ? (
         <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
           <p className="text-sm font-semibold text-amber-950">
-            Você está prestes a {confirmation.label.toLowerCase()} {confirmation.count.toLocaleString()} leads.
+            {locale === "en"
+              ? `You are about to ${confirmation.label.toLowerCase()} ${formatNumber(confirmation.count, locale)} leads.`
+              : `Você está prestes a ${confirmation.label.toLowerCase()} ${formatNumber(confirmation.count, locale)} leads.`}
           </p>
           <p className="mt-1 text-sm text-amber-900">
-            Confirme esta ação em massa antes de continuar.
+            {locale === "en" ? "Confirm this bulk action before continuing." : "Confirme esta ação em massa antes de continuar."}
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button
@@ -327,14 +334,14 @@ export function LeadBatchActions({
               }}
               className="rounded-md border border-amber-900 bg-amber-900 px-3 py-2 text-sm font-medium text-white"
             >
-              Confirmar {confirmation.label.toLowerCase()}
+              {t("common.confirm")} {confirmation.label.toLowerCase()}
             </button>
             <button
               type="button"
               onClick={() => setConfirmation(null)}
               className="rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-950"
             >
-              Cancelar
+              {t("common.cancel")}
             </button>
           </div>
         </div>
@@ -342,13 +349,13 @@ export function LeadBatchActions({
 
       {actionMutation.isPending ? (
         <p className="mt-3 rounded-2xl border border-brand-olive/70 bg-brand-olive/20 px-3 py-2 text-sm text-brand-graphite">
-          Processando sua ação. Escopos maiores podem levar alguns instantes.
+          {t("batch.processing")}
         </p>
       ) : null}
 
       {actionMutation.isError ? (
         <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-          {formatError(actionMutation.error)}
+          {formatError(actionMutation.error, locale)}
         </p>
       ) : null}
 
@@ -363,7 +370,7 @@ export function LeadBatchActions({
         kind,
         scope,
         count,
-        label: actionLabel(kind),
+        label: actionLabel(kind, locale),
       });
       return;
     }
@@ -479,27 +486,30 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
 }
 
 function ResultBox({ title, children }: { title: string; children: React.ReactNode }) {
+  const { locale } = useI18n();
   return (
     <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
-      <p className="text-sm font-semibold text-emerald-900">{title}</p>
+      <p className="text-sm font-semibold text-emerald-900">{translateLooseText(title, locale)}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
     </div>
   );
 }
 
 function ResultNarrative({ text }: { text: string }) {
+  const { locale } = useI18n();
   return (
     <div className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm text-neutral-800 sm:col-span-2 lg:col-span-4">
-      {text}
+      {translateLooseText(text, locale)}
     </div>
   );
 }
 
 function ResultMetric({ label, value }: { label: string; value: number }) {
+  const { locale } = useI18n();
   return (
     <div className="rounded-md border border-emerald-100 bg-white px-3 py-2">
-      <p className="text-xs font-medium text-neutral-500">{label}</p>
-      <p className="mt-1 text-base font-semibold text-neutral-950">{value.toLocaleString()}</p>
+      <p className="text-xs font-medium text-neutral-500">{translateLooseText(label, locale)}</p>
+      <p className="mt-1 text-base font-semibold text-neutral-950">{formatNumber(value, locale)}</p>
     </div>
   );
 }
@@ -560,17 +570,17 @@ function requiresConfirmation(scope: ActionScope, count: number) {
   return scope !== "selected" && count >= BROAD_SCOPE_CONFIRMATION_THRESHOLD;
 }
 
-function actionLabel(kind: ActionKind) {
+function actionLabel(kind: ActionKind, locale: Locale) {
   if (kind === "enrich") {
-    return "Enriquecer";
+    return locale === "en" ? "Enrich" : "Enriquecer";
   }
   if (kind === "cnpj") {
     return "Enriquecer CNPJ";
   }
   if (kind === "assign") {
-    return "Atribuir";
+    return locale === "en" ? "Assign" : "Atribuir";
   }
-  return "Exportar";
+  return locale === "en" ? "Export" : "Exportar";
 }
 
 async function resolveActionScope(
@@ -621,8 +631,8 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function formatError(error: unknown) {
-  return formatUserFacingError(error, "Não foi possível concluir a ação em lote.");
+function formatError(error: unknown, locale: Locale) {
+  return formatUserFacingError(error, "Não foi possível concluir a ação em lote.", locale);
 }
 
 function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"]) {

@@ -1,6 +1,8 @@
 "use client";
 
 import type { DiscoveryLeadCandidate, DiscoveryPreviewItem } from "@/lib/api/types";
+import { useI18n } from "@/lib/i18n/client";
+import { formatNumber } from "@/lib/i18n/format";
 import { sanitizeUserFacingMessage } from "@/lib/ui/messages";
 
 type DiscoveryPreviewTableProps = {
@@ -30,6 +32,7 @@ export function DiscoveryPreviewTable({
   onBlockCompany,
   onBlockDomain,
 }: DiscoveryPreviewTableProps) {
+  const { locale, t } = useI18n();
   return (
     <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-mist/80 bg-brand-surface/70">
       <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
@@ -38,18 +41,18 @@ export function DiscoveryPreviewTable({
             <th className="border-b border-neutral-200 px-3 py-3">
               <input
                 type="checkbox"
-                aria-label="Selecionar empresas visíveis"
+                aria-label={t("common.selected")}
                 checked={allVisibleSelected}
                 disabled={visibleSelectableCount === 0}
                 onChange={(event) => onToggleVisibleSelection(event.target.checked)}
                 className="h-4 w-4 rounded border-neutral-300 disabled:cursor-not-allowed"
               />
             </th>
-            <th className="border-b border-neutral-200 px-3 py-3">Empresa</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Localização</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Contato</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Exclusão</th>
-            <th className="border-b border-neutral-200 px-3 py-3">Ações</th>
+            <th className="border-b border-neutral-200 px-3 py-3">{t("common.company")}</th>
+            <th className="border-b border-neutral-200 px-3 py-3">{t("common.location")}</th>
+            <th className="border-b border-neutral-200 px-3 py-3">{t("common.contact")}</th>
+            <th className="border-b border-neutral-200 px-3 py-3">{t("common.exclusion")}</th>
+            <th className="border-b border-neutral-200 px-3 py-3">{t("common.actions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -77,15 +80,15 @@ export function DiscoveryPreviewTable({
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-neutral-950">{item.candidate.business_name}</p>
                       {blocked ? <BlockedBadge /> : null}
-                      {existing ? <OutcomeBadge tone="warning">Já salvo</OutcomeBadge> : null}
-                      {hasWebsite ? <OutcomeBadge tone="info">Com site</OutcomeBadge> : <OutcomeBadge tone="muted">Sem site</OutcomeBadge>}
+                      {existing ? <OutcomeBadge tone="warning">{t("common.saved")}</OutcomeBadge> : null}
+                      {hasWebsite ? <OutcomeBadge tone="info">{t("common.withWebsite")}</OutcomeBadge> : <OutcomeBadge tone="muted">{t("common.withoutWebsite")}</OutcomeBadge>}
                     </div>
-                    <p className="mt-1 text-xs text-neutral-500">{item.candidate.category ?? "Sem categoria"}</p>
-                    <p className="mt-1 text-xs text-neutral-500">{previewSearchTermsLabel(item)}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{item.candidate.category ?? t("common.noCategory")}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{previewSearchTermsLabel(item, locale)}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {item.candidate.website ? (
                         <a href={item.candidate.website} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-signal hover:text-brand-core">
-                          Site
+                          {t("common.website")}
                         </a>
                       ) : null}
                       {item.candidate.google_maps_url || item.source_url ? (
@@ -96,12 +99,12 @@ export function DiscoveryPreviewTable({
                     </div>
                   </td>
                   <td className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-800">
-                    <p>{[item.candidate.city, item.candidate.state].filter(Boolean).join(", ") || "Não informado"}</p>
+                    <p>{[item.candidate.city, item.candidate.state].filter(Boolean).join(", ") || t("common.notInformed")}</p>
                     <p className="mt-1 text-xs text-neutral-500">{item.candidate.neighborhood ?? item.candidate.address ?? ""}</p>
                   </td>
                   <td className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-800">
-                    <p>{item.candidate.whatsapp ?? item.candidate.phone ?? "Sem telefone"}</p>
-                    <p className="mt-1 text-xs text-neutral-500">{domain ?? "Sem domínio"}</p>
+                    <p>{item.candidate.whatsapp ?? item.candidate.phone ?? t("common.noPhone")}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{domain ?? t("common.noDomain")}</p>
                     {item.candidate.email ? (
                       <a href={`mailto:${item.candidate.email}`} className="mt-2 block break-all text-xs font-semibold text-brand-signal hover:text-brand-core">
                         {item.candidate.email}
@@ -115,7 +118,7 @@ export function DiscoveryPreviewTable({
                       ) : null}
                       {contactFormUrl ? (
                         <a href={contactFormUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-signal hover:text-brand-core">
-                          Formulário
+                          {t("common.contactForm")}
                         </a>
                       ) : null}
                     </div>
@@ -136,27 +139,27 @@ export function DiscoveryPreviewTable({
                   <td className="border-b border-neutral-100 px-3 py-3 align-top">
                     {blocked ? (
                       <div>
-                        <p className="font-medium text-rose-800">Bloqueada</p>
+                        <p className="font-medium text-rose-800">{t("common.blocked")}</p>
                         <p className="mt-1 max-w-xs text-xs text-rose-700">{item.exclusion.reason ?? "Corresponde a uma regra de exclusão ativa."}</p>
                       </div>
                     ) : existing ? (
                       <div>
-                        <p className="font-medium text-amber-900">Já salvo</p>
+                        <p className="font-medium text-amber-900">{t("common.saved")}</p>
                         <p className="mt-1 max-w-xs text-xs text-amber-800">Encontrado antes e mantido fora do save. Match por {existingLeadMatchLabel(item.matched_existing_by)}.</p>
                       </div>
                     ) : (
                       <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
-                        Pronta para salvar
+                        {t("common.readyToSave")}
                       </span>
                     )}
                   </td>
                   <td className="border-b border-neutral-100 px-3 py-3 align-top">
                     <div className="flex min-w-36 flex-col gap-2">
                       <button type="button" disabled={actionDisabled} onClick={() => onBlockCompany(item)} className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-                        Bloquear empresa
+                        {t("common.blockCompany")}
                       </button>
                       <button type="button" disabled={actionDisabled || !domain} onClick={() => onBlockDomain(item)} className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-                        Bloquear domínio
+                        {t("common.blockDomain")}
                       </button>
                     </div>
                   </td>
@@ -177,7 +180,8 @@ export function DiscoveryPreviewTable({
 }
 
 function BlockedBadge() {
-  return <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">Bloqueada</span>;
+  const { t } = useI18n();
+  return <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">{t("common.blocked")}</span>;
 }
 
 function OutcomeBadge({ tone, children }: { tone: "danger" | "info" | "muted" | "warning"; children: string }) {
@@ -200,12 +204,14 @@ function isSavablePreviewItem(item: DiscoveryPreviewItem) {
   return !item.exclusion.is_blocked && !item.is_existing_lead;
 }
 
-function previewSearchTermsLabel(item: DiscoveryPreviewItem) {
+function previewSearchTermsLabel(item: DiscoveryPreviewItem, locale: "pt-BR" | "en") {
   const terms = Array.from(new Set([...(item.matched_search_terms ?? []), item.search_term].filter(Boolean)));
   if (terms.length <= 1) {
-    return `Busca: ${terms[0] ?? item.search_term}`;
+    return locale === "en" ? `Search: ${terms[0] ?? item.search_term}` : `Busca: ${terms[0] ?? item.search_term}`;
   }
-  return `Encontrada por ${terms.length.toLocaleString()} termos: ${terms.join(", ")}`;
+  return locale === "en"
+    ? `Found by ${formatNumber(terms.length, locale)} terms: ${terms.join(", ")}`
+    : `Encontrada por ${formatNumber(terms.length, locale)} termos: ${terms.join(", ")}`;
 }
 
 function domainForCandidate(candidate: DiscoveryLeadCandidate) {

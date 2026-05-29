@@ -1,4 +1,4 @@
-const LOCATION_CONNECTORS = [" em ", " no ", " na ", " nos ", " nas "] as const;
+const LOCATION_CONNECTORS = [" em ", " no ", " na ", " nos ", " nas ", " in "] as const;
 
 const BRAZIL_STATE_CODES = new Set([
   "AC",

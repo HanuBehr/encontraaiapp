@@ -30,8 +30,10 @@ import {
 } from "@/lib/discovery/query-parser";
 import {
   formatUserFacingError,
-  NO_DISCOVERY_RESULTS_UI_MESSAGE,
 } from "@/lib/ui/messages";
+import { useI18n } from "@/lib/i18n/client";
+import { formatNumber } from "@/lib/i18n/format";
+import type { Locale } from "@/lib/i18n/translations";
 
 type LocationMode = "area" | "coordinates";
 type WebsiteFilter = "all" | "has_website" | "no_website";
@@ -175,6 +177,7 @@ const DiscoveryPreviewTable = dynamic(
 );
 
 export function DiscoveryWorkspace() {
+  const { locale, t } = useI18n();
   const [form, setForm] = useState<DiscoveryFormState>(defaultForm);
   const [searchRequest, setSearchRequest] = useState<DiscoverySearchRequest | null>(null);
   const [preview, setPreview] = useState<DiscoveryPreviewResponse | null>(null);
@@ -215,7 +218,7 @@ export function DiscoveryWorkspace() {
     setPreviewError(null);
     setActionMessage(
       totalCount === 0 && data.existing_leads_hidden_count === 0
-        ? NO_DISCOVERY_RESULTS_UI_MESSAGE
+        ? t("error.noDiscoveryResults")
         : buildPreviewReadyMessage({
             newCount: totalCount,
             websiteReadyCount,
@@ -691,6 +694,16 @@ export function DiscoveryWorkspace() {
     form.selectedTerms.length > 0 ||
     form.customTerms.trim() !== "";
   const hasSearchActivity = Boolean(searchRequest || preview || isPreviewPending || previewError || actionMessage);
+  const localizedBlockedOptions: Array<{ value: LeadBlockedFilter; label: string }> = [
+    { value: "exclude", label: t("discovery.blockedHidden") },
+    { value: "include", label: t("discovery.blockedInclude") },
+    { value: "only", label: t("discovery.blockedOnly") },
+  ];
+  const localizedWebsiteOptions: Array<{ value: WebsiteFilter; label: string }> = [
+    { value: "all", label: t("discovery.websiteAll") },
+    { value: "has_website", label: t("discovery.websiteHas") },
+    { value: "no_website", label: t("discovery.websiteMissing") },
+  ];
 
   return (
     <div className="space-y-3 lg:max-w-[1480px]">
@@ -698,10 +711,10 @@ export function DiscoveryWorkspace() {
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="ea-kicker">Descoberta</p>
-              <h1 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-[2.35rem]">Buscar empresas</h1>
+              <p className="ea-kicker">{t("discovery.kicker")}</p>
+              <h1 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-[2.35rem]">{t("discovery.title")}</h1>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-brand-muted">
-                Pesquise empresas públicas por nicho e cidade, revise a prévia e salve apenas os leads que fazem sentido.
+                {t("discovery.description")}
               </p>
             </div>
             {hasFormChanges ? (
@@ -710,7 +723,7 @@ export function DiscoveryWorkspace() {
                 onClick={resetDiscoveryForm}
                 className="self-start rounded-full border border-brand-mist bg-white/50 px-3 py-1.5 text-xs font-semibold text-brand-muted transition hover:border-brand-orchid hover:text-brand-graphite lg:self-auto"
               >
-                Limpar filtros
+                {t("leads.clearFilters")}
               </button>
             ) : null}
           </div>
@@ -719,13 +732,13 @@ export function DiscoveryWorkspace() {
             <div className="space-y-2.5">
               <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.2fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Nicho ou busca</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.queryLabel")}</span>
                   <div className="relative mt-1.5">
                     <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌕</span>
                     <input
                       value={form.naturalLanguageQuery}
                       onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
-                      placeholder="Ex: dentistas, reparos de celular, lojas de móveis"
+                      placeholder={t("discovery.queryPlaceholder")}
                       className="ea-input h-[50px] w-full px-10 py-3 text-sm"
                     />
                   </div>
@@ -733,30 +746,30 @@ export function DiscoveryWorkspace() {
 
                 {form.locationMode === "area" ? (
                   <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Cidade ou região</span>
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.cityLabel")}</span>
                     <div className="relative mt-1.5">
                       <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌖</span>
                       <input
                         value={form.city}
                         onChange={(event) => updateAreaLocationField("city", event.target.value)}
-                        placeholder="Ex: São Paulo, Campinas"
+                        placeholder={t("discovery.cityPlaceholder")}
                         className="ea-input h-[50px] w-full px-10 py-3 text-sm"
                       />
                     </div>
                   </label>
                 ) : (
                   <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Ponto de busca</span>
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.locationLabel")}</span>
                     <input
                       value={form.locationLabel}
                       onChange={(event) => updateCoordinateLabel(event.target.value)}
-                      placeholder="Rótulo opcional"
+                      placeholder={t("discovery.locationLabelPlaceholder")}
                       className="ea-input mt-1.5 h-[50px] w-full px-4 py-3 text-sm"
                     />
                   </label>
                 )}
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Por termo</span>
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.perTerm")}</span>
                   <input
                     type="number"
                     min={1}
@@ -764,16 +777,16 @@ export function DiscoveryWorkspace() {
                     value={form.maxResultsPerTerm}
                     onChange={(event) => updateForm("maxResultsPerTerm", Number(event.target.value))}
                     className="ea-input mt-1.5 h-[50px] w-full px-3 py-3 text-sm"
-                    aria-label="Máximo de resultados por termo"
+                    aria-label={t("discovery.maxResultsAria")}
                   />
                 </label>
                 <button type="submit" disabled={isPreviewPending} className="ea-button-primary flex h-[50px] w-full items-center justify-center px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50">
-                  {isPreviewPending ? "Buscando..." : "Buscar empresas"}
+                  {isPreviewPending ? `${t("common.search")}...` : t("discovery.title")}
                 </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 text-xs text-brand-muted">
-                <span className="font-semibold uppercase tracking-[0.08em]">Sugestões</span>
+                <span className="font-semibold uppercase tracking-[0.08em]">{t("discovery.suggestions")}</span>
                   {discoveryExampleQueries.map((query) => (
                     <button
                       key={query}
@@ -789,10 +802,10 @@ export function DiscoveryWorkspace() {
 
               <div className="flex flex-col gap-2 border-t border-brand-mist/60 pt-2.5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Modo</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.mode")}</span>
                   <div className="grid grid-cols-2 rounded-[14px] border border-brand-mist bg-brand-sand/50 p-0.5">
-                    <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>Cidade/região</ToggleButton>
-                    <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>Coordenadas</ToggleButton>
+                    <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>{t("discovery.areaMode")}</ToggleButton>
+                    <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>{t("discovery.coordinatesMode")}</ToggleButton>
                   </div>
                 </div>
 
@@ -800,39 +813,39 @@ export function DiscoveryWorkspace() {
                   {form.locationMode === "area" ? (
                     <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
-                        <span>+ Localização</span>
+                        <span>{t("discovery.addLocation")}</span>
                         <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
                       </summary>
                       <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
                         <div className="grid gap-3 md:grid-cols-2">
                       <TextField
-                        label="Bairro"
+                        label={t("discovery.neighborhood")}
                         value={form.neighborhood}
                         onChange={(value) => updateAreaLocationField("neighborhood", value)}
-                        placeholder="Opcional"
+                        placeholder={t("common.optional")}
                       />
                       <TextField
-                        label="CEP"
+                        label={t("discovery.postalCode")}
                         value={form.postalCode}
                         onChange={(value) => updateAreaLocationField("postalCode", value)}
-                        placeholder="Opcional"
+                        placeholder={t("common.optional")}
                       />
-                      <NumberField label="Raio" min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
+                      <NumberField label={t("discovery.radius")} min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
                         </div>
                       </div>
                     </details>
                   ) : (
                     <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
-                        <span>+ Coordenadas</span>
+                        <span>+ {t("discovery.coordinatesMode")}</span>
                         <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
                       </summary>
                       <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
                         <div className="grid gap-3 md:grid-cols-2">
                     <TextField label="Latitude" value={form.latitude} onChange={(value) => updateForm("latitude", value)} placeholder="-23.5505" />
                     <TextField label="Longitude" value={form.longitude} onChange={(value) => updateForm("longitude", value)} placeholder="-46.6333" />
-                    <TextField label="Rótulo do local" value={form.locationLabel} onChange={(value) => updateCoordinateLabel(value)} placeholder="Opcional" />
-                    <NumberField label="Raio" min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
+                    <TextField label={t("discovery.locationLabel")} value={form.locationLabel} onChange={(value) => updateCoordinateLabel(value)} placeholder={t("common.optional")} />
+                    <NumberField label={t("discovery.radius")} min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
                         </div>
                       </div>
                     </details>
@@ -840,9 +853,9 @@ export function DiscoveryWorkspace() {
 
                   <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
-                      <span>+ Termos relacionados</span>
+                      <span>+ {t("discovery.termsTitle")}</span>
                       <span className="font-medium text-brand-muted">
-                        {optionalTermsCount > 0 ? `${optionalTermsCount.toLocaleString()}` : ""}
+                        {optionalTermsCount > 0 ? `${formatNumber(optionalTermsCount, locale)}` : ""}
                       </span>
                     </summary>
                     <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
@@ -862,8 +875,8 @@ export function DiscoveryWorkspace() {
                     ))}
                       </div>
                       <label className="mt-3 block">
-                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">Termos livres</span>
-                    <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder="Um por linha ou separados por vírgula" className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
+                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.termsTitle")}</span>
+                    <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder={t("discovery.customTermsPlaceholder")} className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
                       </label>
                     </div>
                   </details>
@@ -874,33 +887,38 @@ export function DiscoveryWorkspace() {
         </div>
 
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
-        {previewError ? <InlineMessage tone="danger">{errorMessage(previewError)}</InlineMessage> : null}
+        {previewError ? <InlineMessage tone="danger">{errorMessage(previewError, locale)}</InlineMessage> : null}
 
         <div className="rounded-[20px] border border-brand-mist/75 bg-white/[0.62] p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset] lg:p-4">
           {hasSearchActivity ? (
             <div>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <p className="text-base font-semibold text-brand-graphite">Prévia da busca</p>
+                  <p className="text-base font-semibold text-brand-graphite">{t("discovery.previewTitle")}</p>
                   {preview ? (
                     <p className="mt-1 text-sm leading-6 text-brand-muted">
-                      {previewCount.toLocaleString()} encontradas • {websiteReadyCount.toLocaleString()} com site • {existingPreviewCount.toLocaleString()} já salvas • {selectedClientResultIds.length.toLocaleString()} selecionadas
+                      {t("discovery.previewResultsSummary", {
+                        count: formatNumber(previewCount, locale),
+                        websiteCount: formatNumber(websiteReadyCount, locale),
+                        savedCount: formatNumber(existingPreviewCount, locale),
+                        selectedCount: formatNumber(selectedClientResultIds.length, locale),
+                      })}
                     </p>
                   ) : (
-                    <p className="mt-1 text-sm leading-6 text-brand-muted">A prévia aparece aqui assim que a busca terminar.</p>
+                    <p className="mt-1 text-sm leading-6 text-brand-muted">{t("discovery.previewWaiting")}</p>
                   )}
                 </div>
                 <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-end">
                   {preview && selectedClientResultIds.length > 0 ? (
                     <div className="flex items-center gap-2 rounded-full border border-brand-olive/20 bg-brand-olive/10 px-3 py-2">
-                      <span className="text-sm font-semibold text-brand-graphite">{selectedClientResultIds.length.toLocaleString()} selecionada(s)</span>
+                      <span className="text-sm font-semibold text-brand-graphite">{t("discovery.selectedCount", { count: formatNumber(selectedClientResultIds.length, locale) })}</span>
                       <button
                         type="button"
                         disabled={importMutation.isPending}
                         onClick={saveSelected}
                         className="ea-button-primary px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {importMutation.isPending ? "Salvando..." : "Salvar selecionadas"}
+                        {importMutation.isPending ? t("discovery.savingPending") : t("discovery.importSelected")}
                       </button>
                     </div>
                   ) : null}
@@ -911,16 +929,16 @@ export function DiscoveryWorkspace() {
                       onChange={(event) => setHideExistingLeads(event.target.checked)}
                       className="h-4 w-4 rounded border-neutral-300"
                     />
-                    <span>Ocultar já salvos</span>
+                    <span>{t("discovery.hideAlreadySaved")}</span>
                   </label>
                   <label className="block w-full lg:w-40">
-                    <span className="text-xs font-medium text-brand-muted">Bloqueio</span>
+                    <span className="text-xs font-medium text-brand-muted">{t("discovery.blocking")}</span>
                     <select
                       value={blockedFilter}
                       onChange={(event) => setBlockedFilter(event.target.value as LeadBlockedFilter)}
                       className="ea-input mt-1 w-full px-2 py-2 text-sm"
                     >
-                      {blockedOptions.map((option) => (
+                      {localizedBlockedOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
@@ -934,7 +952,7 @@ export function DiscoveryWorkspace() {
                       onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
                       className="ea-input mt-1 w-full px-2 py-2 text-sm"
                     >
-                      {websiteOptions.map((option) => (
+                      {localizedWebsiteOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
@@ -951,7 +969,7 @@ export function DiscoveryWorkspace() {
                   onClick={recoverSelected}
                   className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {recoverMutation.isPending ? "Recuperando..." : "Recuperar sites"}
+                  {recoverMutation.isPending ? t("discovery.recoveryPending") : t("discovery.recoverWebsites")}
                 </button>
                 <button
                   type="button"
@@ -959,7 +977,7 @@ export function DiscoveryWorkspace() {
                   onClick={enrichSelected}
                   className="ea-button-primary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {enrichMutation.isPending ? "Enriquecendo..." : "Enriquecer selecionadas"}
+                  {enrichMutation.isPending ? t("discovery.enrichmentPending") : t("discovery.enrichSelected")}
                 </button>
                 <button
                   type="button"
@@ -967,7 +985,7 @@ export function DiscoveryWorkspace() {
                   onClick={enrichVisible}
                   className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Enriquecer visíveis
+                  {t("discovery.enrichVisible")}
                 </button>
               </div>
 
@@ -984,13 +1002,13 @@ export function DiscoveryWorkspace() {
               ) : null}
 
               {actionMessage ? <InlineMessage tone="info">{actionMessage}</InlineMessage> : null}
-              {recoverMutation.isError ? <InlineMessage tone="danger">{errorMessage(recoverMutation.error)}</InlineMessage> : null}
-              {enrichMutation.isError ? <InlineMessage tone="danger">{errorMessage(enrichMutation.error)}</InlineMessage> : null}
-              {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error)}</InlineMessage> : null}
-              {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error)}</InlineMessage> : null}
+              {recoverMutation.isError ? <InlineMessage tone="danger">{errorMessage(recoverMutation.error, locale)}</InlineMessage> : null}
+              {enrichMutation.isError ? <InlineMessage tone="danger">{errorMessage(enrichMutation.error, locale)}</InlineMessage> : null}
+              {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error, locale)}</InlineMessage> : null}
+              {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error, locale)}</InlineMessage> : null}
               {preview ? (
                 <p className="mt-3 rounded-2xl border border-brand-mist/70 bg-brand-sand/70 px-3 py-2 text-xs leading-5 text-brand-muted">
-                  O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas: {selectedEnrichableClientResultIds.length.toLocaleString()}. Visíveis prontas: {visibleEnrichableIds.length.toLocaleString()}. Recuperáveis agora: {selectedRecoverableClientResultIds.length.toLocaleString()}. Bloqueadas na prévia: {blockedCount.toLocaleString()}.
+                   O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas: {formatNumber(selectedEnrichableClientResultIds.length, locale)}. Visíveis prontas: {formatNumber(visibleEnrichableIds.length, locale)}. Recuperáveis agora: {formatNumber(selectedRecoverableClientResultIds.length, locale)}. Bloqueadas na prévia: {formatNumber(blockedCount, locale)}.
                 </p>
               ) : null}
 
@@ -1004,6 +1022,7 @@ export function DiscoveryWorkspace() {
                     hideExistingLeads,
                     blockedFilter,
                     websiteFilter,
+                    locale,
                   })}
                   selectedIds={selectedIds}
                   newlyBlockedIds={newlyBlockedIds}
@@ -1017,17 +1036,17 @@ export function DiscoveryWorkspace() {
                 />
               ) : (
                 <EmptyResultsScaffold
-                  title="Nenhuma empresa encontrada"
-                  description="Teste outro nicho, cidade ou termos relacionados."
+                  title={t("discovery.noResultsTitle")}
+                  description={locale === "en" ? "Try another niche, city, or related terms." : "Teste outro nicho, cidade ou termos relacionados."}
                 />
               )}
             </div>
           ) : (
             <div>
-              <p className="text-sm font-semibold text-brand-graphite">Prévia dos resultados</p>
+              <p className="text-sm font-semibold text-brand-graphite">{t("discovery.previewTitle")}</p>
               <EmptyResultsScaffold
-                title="Faça uma busca para visualizar empresas públicas por nicho e cidade."
-                description="As empresas encontradas aparecerão aqui para revisão e seleção."
+                title={t("discovery.startTitle")}
+                description={locale === "en" ? "Found companies will appear here for review and selection." : "As empresas encontradas aparecerão aqui para revisão e seleção."}
               />
             </div>
           )}
@@ -1048,12 +1067,13 @@ export function DiscoveryWorkspace() {
 }
 
 function PreviewSkeleton() {
+  const { locale } = useI18n();
   return (
     <div className="mt-4 rounded-[20px] border border-brand-mist/80 bg-white/[0.64] p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-bold text-brand-graphite">Gerando prévia</p>
-          <p className="mt-1 text-sm text-brand-muted">Consultando provedores e consolidando duplicatas.</p>
+          <p className="text-sm font-bold text-brand-graphite">{locale === "en" ? "Generating preview" : "Gerando prévia"}</p>
+          <p className="mt-1 text-sm text-brand-muted">{locale === "en" ? "Querying providers and consolidating duplicates." : "Consultando provedores e consolidando duplicatas."}</p>
         </div>
         <div className="h-9 w-9 rounded-full border border-brand-mist bg-brand-sand" />
       </div>
@@ -1075,7 +1095,8 @@ function PreviewSkeleton() {
 }
 
 function EmptyResultsScaffold({ title, description }: { title: string; description: string }) {
-  const rows = ["Empresa", "Cidade", "Contato", "Status"];
+  const { t } = useI18n();
+  const rows = [t("common.company"), t("leads.city"), t("common.contact"), t("common.status")];
 
   return (
     <div className="mt-3 overflow-hidden rounded-[18px] border border-dashed border-brand-mist bg-white/[0.48]">
@@ -1108,9 +1129,10 @@ function EmptyResultsScaffold({ title, description }: { title: string; descripti
 }
 
 function PreviewTableFallback() {
+  const { t } = useI18n();
   return (
     <div className="mt-4 rounded-2xl border border-brand-mist/80 bg-brand-surface/70 px-4 py-6">
-      <p className="text-sm font-semibold text-brand-graphite">Carregando tabela da prévia...</p>
+      <p className="text-sm font-semibold text-brand-graphite">{t("discovery.loadingPreviewTable")}</p>
       <div className="mt-4 space-y-3">
         {[0, 1, 2].map((row) => (
           <div key={row} className="grid gap-3 rounded-xl border border-brand-mist/60 bg-white/60 p-3 md:grid-cols-[1.2fr_0.8fr_0.8fr_120px]">
@@ -1138,23 +1160,24 @@ function BlockRuleDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { locale, t } = useI18n();
   const isCompany = draft.mode === "company";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-graphite/45 px-4 py-6 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-3xl border border-brand-mist bg-brand-surface p-5 shadow-panel">
         <p className="ea-kicker">
-          {isCompany ? "Bloquear empresa" : "Bloquear domínio"}
+          {isCompany ? t("common.blockCompany") : t("common.blockDomain")}
         </p>
         <h2 className="mt-2 text-lg font-semibold text-brand-graphite">{draft.item.candidate.business_name}</h2>
         <p className="mt-1 text-sm text-brand-muted">
-          Salve uma regra de exclusão ativa e aplique a checagem novamente nesta prévia.
+          {locale === "en" ? "Save an active exclusion rule and re-run the check on this preview." : "Salve uma regra de exclusão ativa e aplique a checagem novamente nesta prévia."}
         </p>
 
         <div className="mt-4 space-y-3">
           {isCompany ? (
             <label className="block">
-              <span className="text-xs font-medium text-neutral-600">Tipo de regra</span>
+              <span className="text-xs font-medium text-neutral-600">{locale === "en" ? "Rule type" : "Tipo de regra"}</span>
               <select
                 value={draft.ruleType}
                 onChange={(event) =>
@@ -1162,23 +1185,23 @@ function BlockRuleDialog({
                 }
                 className="ea-input mt-1 w-full px-2 py-2 text-sm"
               >
-                <option value="exact_name">Nome exato da empresa</option>
-                <option value="business_name_contains">Nome da empresa contém</option>
+                <option value="exact_name">{locale === "en" ? "Exact company name" : "Nome exato da empresa"}</option>
+                <option value="business_name_contains">{locale === "en" ? "Company name contains" : "Nome da empresa contém"}</option>
               </select>
             </label>
           ) : (
             <div className="ea-card-flat px-3 py-2 text-sm text-brand-muted">
-              Regra por domínio
+              {locale === "en" ? "Domain rule" : "Regra por domínio"}
             </div>
           )}
 
           <TextField
-            label="Padrão"
+            label={locale === "en" ? "Pattern" : "Padrão"}
             value={draft.pattern}
             onChange={(value) => onChange({ ...draft, pattern: value })}
           />
           <TextField
-            label="Motivo"
+            label={locale === "en" ? "Reason" : "Motivo"}
             value={draft.reason}
             onChange={(value) => onChange({ ...draft, reason: value })}
           />
@@ -1191,7 +1214,7 @@ function BlockRuleDialog({
             disabled={isSaving}
             className="ea-button-secondary px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Cancelar
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -1199,7 +1222,7 @@ function BlockRuleDialog({
             disabled={isSaving || !draft.pattern.trim()}
             className="rounded-md border border-rose-900 bg-rose-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSaving ? "Salvando regra..." : "Salvar regra de bloqueio"}
+            {isSaving ? (locale === "en" ? "Saving rule..." : "Salvando regra...") : (locale === "en" ? "Save block rule" : "Salvar regra de bloqueio")}
           </button>
         </div>
       </div>
@@ -1548,25 +1571,35 @@ function buildPreviewEmptyMessage({
   hideExistingLeads,
   blockedFilter,
   websiteFilter,
+  locale,
 }: {
   preview: DiscoveryPreviewResponse;
   hideExistingLeads: boolean;
   blockedFilter: LeadBlockedFilter;
   websiteFilter: WebsiteFilter;
+  locale: Locale;
 }) {
   if ((preview.items?.length ?? 0) === 0) {
-    return NO_DISCOVERY_RESULTS_UI_MESSAGE;
+    return locale === "en"
+      ? "No companies found for this search. Try another niche, city, or radius."
+      : "Nenhuma empresa encontrada para essa busca. Tente outro nicho, cidade ou raio.";
   }
   if (hideExistingLeads && preview.items.every((item) => item.is_existing_lead || item.exclusion.is_blocked)) {
-    return "Todas as empresas desta busca já estavam salvas ou bloqueadas. Desative 'Ocultar já salvos' para revisar mesmo assim.";
+    return locale === "en"
+      ? "All companies in this search were already saved or blocked. Disable 'Hide already saved' to review them anyway."
+      : "Todas as empresas desta busca já estavam salvas ou bloqueadas. Desative 'Ocultar já salvos' para revisar mesmo assim.";
   }
   if (hideExistingLeads && preview.existing_leads_hidden_count > 0) {
-    return "Nenhuma empresa nova corresponde aos filtros atuais. Desative 'Ocultar já salvos' para revisar empresas encontradas antes.";
+    return locale === "en"
+      ? "No new companies match the current filters. Disable 'Hide already saved' to review previously found companies."
+      : "Nenhuma empresa nova corresponde aos filtros atuais. Desative 'Ocultar já salvos' para revisar empresas encontradas antes.";
   }
   if (blockedFilter !== "include" || websiteFilter !== "all") {
-    return "Nenhuma empresa corresponde aos filtros atuais de bloqueio e site.";
+    return locale === "en"
+      ? "No companies match the current blocking and website filters."
+      : "Nenhuma empresa corresponde aos filtros atuais de bloqueio e site.";
   }
-  return "Nenhuma empresa disponível para esta prévia.";
+  return locale === "en" ? "No companies available for this preview." : "Nenhuma empresa disponível para esta prévia.";
 }
 
 function buildWebsiteRecoveryMessage(response: DiscoveryPreviewWebsiteRecoveryResponse) {
@@ -1653,6 +1686,6 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-function errorMessage(error: unknown) {
-  return formatUserFacingError(error, "Não foi possível concluir a busca.");
+function errorMessage(error: unknown, locale: Locale) {
+  return formatUserFacingError(error, "Não foi possível concluir a busca.", locale);
 }

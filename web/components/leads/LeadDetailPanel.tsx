@@ -3,6 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { formatLeadLabel } from "@/lib/format/lead-labels";
+import { useI18n } from "@/lib/i18n/client";
+import { formatDateTime as formatLocalizedDateTime } from "@/lib/i18n/format";
+import { translateLooseText } from "@/lib/i18n/loose";
 import {
   approveLeadCnpjCandidateByValue,
   getLeadDetail,
@@ -23,6 +26,7 @@ type LeadDetailPanelProps = {
 };
 
 export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const detailQuery = useQuery({
     queryKey: ["lead-detail", leadId],
@@ -63,9 +67,9 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   if (leadId === null) {
     return (
       <aside className="ea-card p-6">
-        <p className="text-sm font-semibold text-brand-graphite">Selecione um lead</p>
+        <p className="text-sm font-semibold text-brand-graphite">{t("leads.selectLead")}</p>
         <p className="mt-1 text-sm leading-6 text-brand-muted">
-          Os detalhes da empresa, contatos, enriquecimento e histórico aparecem aqui.
+          {t("leads.selectLeadDescription")}
         </p>
       </aside>
     );
@@ -74,7 +78,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   if (detailQuery.isLoading) {
     return (
       <aside className="ea-card p-6">
-        <p className="text-sm text-brand-muted">Carregando detalhes do lead...</p>
+        <p className="text-sm text-brand-muted">{t("leads.loadingDetails")}</p>
       </aside>
     );
   }
@@ -82,9 +86,9 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   if (detailQuery.isError || !detailQuery.data) {
     return (
       <aside className="rounded-md border border-rose-200 bg-white p-6">
-        <p className="text-sm font-medium text-rose-800">Não foi possível carregar este lead</p>
+        <p className="text-sm font-medium text-rose-800">{t("leads.detailsErrorTitle")}</p>
         <p className="mt-1 text-sm text-neutral-500">
-          {formatUserFacingError(detailQuery.error, "Tente novamente em instantes.")}
+          {formatUserFacingError(detailQuery.error, "Tente novamente em instantes.", locale)}
         </p>
       </aside>
     );
@@ -106,13 +110,13 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   return (
     <aside className="ea-card overflow-hidden">
       <div className="border-b border-brand-mist/80 p-4">
-        <p className="ea-kicker">Detalhes do lead</p>
+        <p className="ea-kicker">{t("leads.detailsTitle")}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold text-brand-graphite">{lead.business_name}</h2>
           {lead.is_blocked ? <BlockedBadge /> : null}
         </div>
         <p className="mt-1 text-sm text-brand-muted">
-          {[lead.category, lead.city, lead.state].filter(Boolean).join(" - ") || "Local não informado"}
+          {[lead.category, lead.city, lead.state].filter(Boolean).join(" - ") || t("leads.localMissing")}
         </p>
         {lead.is_blocked ? (
           <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
@@ -122,25 +126,25 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
       </div>
 
       <div className="divide-y divide-brand-mist/80">
-        <DetailSection title="Empresa">
+        <DetailSection title={t("leads.companySection")}>
           <InfoGrid>
             <InfoItem label="Website" value={lead.website} />
-            <InfoItem label="Domínio" value={lead.domain} />
-            <InfoItem label="Endereço" value={compact([lead.address, lead.neighborhood, lead.postal_code])} />
-            <InfoItem label="Status" value={labelToken(lead.status)} />
-            <InfoItem label="Score" value={String(lead.lead_score)} />
-            <InfoItem label="Origem" value={labelToken(lead.lead_source_type)} />
+            <InfoItem label={t("leads.domain")} value={lead.domain} />
+            <InfoItem label={t("leads.address")} value={compact([lead.address, lead.neighborhood, lead.postal_code])} />
+            <InfoItem label={t("common.status")} value={formatLeadLabel(lead.status, locale)} />
+            <InfoItem label={t("common.score")} value={String(lead.lead_score)} />
+            <InfoItem label={t("leads.source")} value={formatLeadLabel(lead.lead_source_type, locale)} />
           </InfoGrid>
         </DetailSection>
 
-        <DetailSection title="Cadastro">
+        <DetailSection title={t("leads.registrationSection")}>
           <InfoGrid>
-            <InfoItem label="CNPJ" value={lead.cnpj ?? "Sem CNPJ"} />
-            <InfoItem label="Razão Social" value={lead.legal_name} />
-            <InfoItem label="Status CNPJ" value={cnpjClientStatusLabel(lead)} />
-            <InfoItem label="Confiança" value={formatConfidence(lead.cnpj_match_confidence)} />
-            <InfoItem label="Última consulta" value={formatDateTime(lead.cnpj_last_enriched_at)} />
-            <InfoItem label="Provedor" value={labelToken(lead.cnpj_source_provider)} />
+            <InfoItem label="CNPJ" value={lead.cnpj ?? t("leads.noCnpj")} />
+            <InfoItem label={t("leads.legalName")} value={lead.legal_name} />
+            <InfoItem label={t("leads.cnpjStatus")} value={cnpjClientStatusLabel(lead)} />
+            <InfoItem label={t("leads.confidence")} value={formatConfidence(lead.cnpj_match_confidence)} />
+            <InfoItem label={t("leads.lastLookup")} value={formatLocalizedDateTime(lead.cnpj_last_enriched_at, locale)} />
+            <InfoItem label={t("leads.provider")} value={formatLeadLabel(lead.cnpj_source_provider, locale)} />
           </InfoGrid>
           {cnpjStatusHint ? (
             <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -427,9 +431,10 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
 }
 
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const { locale } = useI18n();
   return (
     <section className="p-4">
-      <h3 className="text-sm font-semibold text-neutral-950">{title}</h3>
+      <h3 className="text-sm font-semibold text-neutral-950">{translateLooseText(title, locale)}</h3>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -440,27 +445,30 @@ function InfoGrid({ children }: { children: React.ReactNode }) {
 }
 
 function InfoItem({ label, value }: { label: string; value?: string | null }) {
+  const { locale, t } = useI18n();
   return (
     <div>
-      <dt className="text-xs font-medium text-neutral-500">{label}</dt>
-      <dd className="mt-1 break-words text-sm text-neutral-900">{value || "Não informado"}</dd>
+      <dt className="text-xs font-medium text-neutral-500">{translateLooseText(label, locale)}</dt>
+      <dd className="mt-1 break-words text-sm text-neutral-900">{value ? translateLooseText(value, locale) : t("common.notInformed")}</dd>
     </div>
   );
 }
 
 function BlockedBadge() {
+  const { t } = useI18n();
   return (
     <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">
-      Bloqueado
+      {t("common.blocked")}
     </span>
   );
 }
 
 function ContactLine({ label, value }: { label: string; value?: string | null }) {
+  const { locale, t } = useI18n();
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
-      <span className="break-all text-right text-sm text-neutral-950">{value || "Não informado"}</span>
+      <span className="text-sm font-medium text-neutral-700">{translateLooseText(label, locale)}</span>
+      <span className="break-all text-right text-sm text-neutral-950">{value ? translateLooseText(value, locale) : t("common.notInformed")}</span>
     </div>
   );
 }
