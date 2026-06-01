@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
 
 import { useI18n } from "@/lib/i18n/client";
+import { isDemoMode } from "@/lib/demo/mode";
 import type { TranslationKey } from "@/lib/i18n/translations";
 
 type AppShellProps = {
@@ -158,6 +159,11 @@ export function AppShell({ children }: AppShellProps) {
     <div className="relative min-h-screen overflow-hidden bg-brand-canvas text-brand-graphite">
       <div className="ea-ambient-noise pointer-events-none fixed inset-0 z-0 opacity-50" />
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_78%_10%,rgba(139,92,246,0.16),transparent_28rem),radial-gradient(circle_at_18%_82%,rgba(96,165,250,0.12),transparent_30rem)]" />
+      {isDemoMode() ? (
+        <div className="fixed right-4 top-4 z-50 rounded-full border border-brand-olive/50 bg-brand-surface/85 px-3 py-1.5 text-xs font-bold text-brand-graphite shadow-panel backdrop-blur-xl lg:right-6 lg:top-5">
+          {t("app.demoBadge")}
+        </div>
+      ) : null}
 
       {/* Desktop Adaptive Dock */}
       <aside

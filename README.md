@@ -6,6 +6,24 @@ Encontra.ai is a full-stack lead discovery and enrichment platform built for Bra
 
 Built as a practical SaaS-style product for real lead operations, not as a demo toy.
 
+## Live Recruiter Demo
+
+The project supports a Vercel-only demo mode for reviewers and recruiters:
+
+- no backend deployment required
+- no API keys required
+- fictional sample data
+- browser-local saved leads and exports
+- English and Portuguese UI
+
+Enable it with:
+
+```env
+NEXT_PUBLIC_DEMO_MODE=true
+```
+
+The live demo is intentionally frontend-only so reviewers can explore the product without paid infrastructure or private provider credentials. The full working backend/API implementation remains in this repository.
+
 ## Overview
 
 Encontra.ai turns raw business searches into a structured operating workflow. Instead of stopping at search results, the product supports preview, import, deduplication, enrichment, CNPJ resolution, review, and export inside one workspace.
@@ -178,6 +196,8 @@ Core templates:
 
 Deployment notes:
 
+- [`docs/DEMO_MODE.md`](docs/DEMO_MODE.md)
+- [`docs/deployment/VERCEL_DEMO.md`](docs/deployment/VERCEL_DEMO.md)
 - [`docs/deployment/VERCEL_BACKEND.md`](docs/deployment/VERCEL_BACKEND.md)
 - [`docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md`](docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md)
 

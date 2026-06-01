@@ -1,4 +1,13 @@
 import { postJson } from "@/lib/api/client";
+import {
+  createDemoExclusionRule,
+  enrichDemoDiscoveryPreview,
+  evaluateDemoDiscoveryExclusions,
+  importDemoDiscoveryPreview,
+  previewDemoDiscovery,
+  recoverDemoDiscoveryWebsites,
+} from "@/lib/demo/discovery";
+import { isDemoMode } from "@/lib/demo/mode";
 import type {
   DiscoveryImportRequest,
   DiscoveryImportResponse,
@@ -15,10 +24,16 @@ import type {
 const DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE = 3;
 
 export function previewDiscovery(request: DiscoverySearchRequest) {
+  if (isDemoMode()) {
+    return previewDemoDiscovery(request);
+  }
   return postJson<DiscoveryPreviewResponse, DiscoverySearchRequest>("/discovery/preview", request);
 }
 
 export function evaluateDiscoveryExclusions(preview: DiscoveryPreviewResponse) {
+  if (isDemoMode()) {
+    return evaluateDemoDiscoveryExclusions(preview);
+  }
   return postJson<DiscoveryPreviewResponse, { preview: DiscoveryPreviewResponse }>(
     "/discovery/evaluate-exclusions",
     { preview },
@@ -26,10 +41,16 @@ export function evaluateDiscoveryExclusions(preview: DiscoveryPreviewResponse) {
 }
 
 export function importDiscoveryPreview(payload: DiscoveryImportRequest) {
+  if (isDemoMode()) {
+    return importDemoDiscoveryPreview(payload);
+  }
   return postJson<DiscoveryImportResponse, DiscoveryImportRequest>("/discovery/import", payload);
 }
 
 export async function enrichDiscoveryPreview(payload: DiscoveryPreviewEnrichmentRequest) {
+  if (isDemoMode()) {
+    return enrichDemoDiscoveryPreview(payload);
+  }
   const requestedIds = Array.from(new Set(payload.client_result_ids));
   if (requestedIds.length <= DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE) {
     return postJson<DiscoveryPreviewEnrichmentResponse, DiscoveryPreviewEnrichmentRequest>(
@@ -80,6 +101,9 @@ export async function enrichDiscoveryPreview(payload: DiscoveryPreviewEnrichment
 }
 
 export function recoverDiscoveryWebsites(payload: DiscoveryPreviewWebsiteRecoveryRequest) {
+  if (isDemoMode()) {
+    return recoverDemoDiscoveryWebsites(payload);
+  }
   return postJson<DiscoveryPreviewWebsiteRecoveryResponse, DiscoveryPreviewWebsiteRecoveryRequest>(
     "/discovery/recover-websites",
     payload,
@@ -87,6 +111,9 @@ export function recoverDiscoveryWebsites(payload: DiscoveryPreviewWebsiteRecover
 }
 
 export function createExclusionRule(payload: ExclusionRuleCreateRequest) {
+  if (isDemoMode()) {
+    return createDemoExclusionRule(payload);
+  }
   return postJson<ExclusionRuleCreateResponse, ExclusionRuleCreateRequest>("/exclusion-rules", payload);
 }
 

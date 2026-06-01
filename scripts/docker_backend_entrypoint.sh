@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-mkdir -p /app/data /app/exports /app/backups
+mkdir -p /app/data /app/data/exports /app/data/backups
 
 python scripts/init_local_db.py
 

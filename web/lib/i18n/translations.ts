@@ -13,6 +13,7 @@ export const translations = {
   "pt-BR": {
     "app.leadOperations": "Lead operations",
     "app.workspaceActive": "Ativo",
+    "app.demoBadge": "Modo demo: dados fictícios",
     "nav.discovery": "Descoberta",
     "nav.discoveryDescription": "Buscar empresas",
     "nav.leads": "Leads",
@@ -192,6 +193,7 @@ export const translations = {
   en: {
     "app.leadOperations": "Lead operations",
     "app.workspaceActive": "Active",
+    "app.demoBadge": "Demo mode: sample data",
     "nav.discovery": "Discovery",
     "nav.discoveryDescription": "Find companies",
     "nav.leads": "Leads",
