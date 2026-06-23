@@ -1,21 +1,29 @@
 # Encontra.ai
 
-## B2B Lead Discovery & CNPJ Enrichment Platform
+Full-stack B2B lead discovery, enrichment, review, and export platform.
 
-Encontra.ai is a full-stack lead discovery and enrichment platform built for Brazilian B2B prospecting. It helps users find companies by niche and location, clean and deduplicate lead data, resolve CNPJ candidates through provider integrations, review uncertain matches, and export client-ready spreadsheets.
+Encontra.ai turns niche-and-location business searches into structured lead lists. It supports discovery previews, duplicate prevention, lead import, contact enrichment, CNPJ matching, human review for uncertain matches, and spreadsheet export.
 
-Built as a practical SaaS-style product for real lead operations, not as a demo toy.
+## Highlights
 
-## Live Demo
+- Search companies by niche, city, region, or coordinates
+- Preview results before saving leads
+- Prevent duplicates and detect already-saved companies
+- Enrich leads with contacts, domains, profiles, and quality signals
+- Resolve CNPJ candidates with scoring and manual review
+- Filter, assign, review, and export lead lists
+- Run as a hosted demo, local Docker deployment, or full backend-backed app
+- Bilingual interface: Portuguese and English
 
-The project supports a Vercel-only demo mode for reviewers:
+## Live Demo Mode
 
-- no backend deployment required
+The frontend supports a hosted demo mode designed for safe public review:
+
+- no backend required
 - no API keys required
 - fictional sample data
-- guided Brazil and Europe search scenarios
+- curated Brazil and Europe search scenarios
 - browser-local saved leads and exports
-- English and Portuguese UI
 
 Enable it with:
 
@@ -23,140 +31,85 @@ Enable it with:
 NEXT_PUBLIC_DEMO_MODE=true
 ```
 
-The live demo is intentionally frontend-only so reviewers can explore the product without paid infrastructure or private provider credentials. It uses curated fictional searches rather than simulating arbitrary live provider results. The full working backend/API implementation remains in this repository and supports real provider-backed searches when configured with private API keys.
-
-## Overview
-
-Encontra.ai turns raw business searches into a structured operating workflow. Instead of stopping at search results, the product supports preview, import, deduplication, enrichment, CNPJ resolution, review, and export inside one workspace.
-
-The project was designed around a common operational problem: commercial teams spend too much time finding and cleaning prospects before they can actually start selling. In Brazilian B2B data, company names, trade names, legal names, websites, addresses, and CNPJs often do not line up neatly. Encontra.ai is built to handle that mess in a controlled way.
-
-## Why I Built It
-
-I built Encontra.ai to solve a real sales-operations problem: turning niche-and-location searches into clean lead lists that sales teams can actually use. The hard part was not only finding businesses, but handling duplicates, incomplete data, uncertain CNPJ matches, and export formats without forcing operators to clean everything manually in spreadsheets.
-
-What started as an internal lead-generation tool evolved into a more complete SaaS-style MVP because the real value was in the workflow around the data, not just the initial search. The product had to be useful when the data was incomplete, ambiguous, or inconsistent, which is exactly where most prospecting tools become operationally painful.
-
-## Key Features
-
-- Lead discovery by niche and city or region
-- Lead preview before import
-- Duplicate and already-saved lead prevention
-- Lead enrichment workflow
-- CNPJ discovery and validation
-- Evidence-based CNPJ candidate scoring
-- Human-in-the-loop CNPJ review queue
-- Manual and bulk candidate approval
-- Client-ready Excel export
-- Docker-based local installation
-- Debug tools for CNPJ resolution diagnostics
-
-## CNPJ Resolution Workflow
-
-This is one of the strongest parts of the product.
-
-1. **Website extraction**  
-   The system first tries to find a CNPJ published on the company's own website.
-
-2. **Public validation**  
-   Known CNPJ values are validated through public lookup providers such as CNPJA Open and the public CNPJ.ws API.
-
-3. **Commercial provider search**  
-   When configured, the platform can use CNPJA Commercial to search candidates using evidence such as name, alias, municipality, ZIP code, domain, and category signals.
-
-4. **Evidence scoring**  
-   Candidates are compared against business name, trade name, legal name, city/state, CEP, address, phone, domain/email, and category/CNAE signals.
-
-5. **Review queue**  
-   Uncertain or ambiguous candidates are sent to a review queue instead of being blindly written to the lead.
-
-6. **Approval and export**  
-   Only confirmed or manually approved CNPJs are exported.
-
-The system is designed to reduce wrong CNPJ assignments, not pretend that every lead can be matched automatically.
+Demo mode is intentionally guided. It does not pretend that every arbitrary provider search is available. The full backend implementation remains in this repository and supports real provider-backed discovery when configured with private API keys.
 
 ## Tech Stack
 
-### Backend
+Backend:
 
 - Python
 - FastAPI
 - SQLAlchemy
-- SQLite for MVP and local deployment
+- SQLite
 - pytest
 
-### Frontend
+Frontend:
 
 - Next.js
 - React
 - TypeScript
+- Tailwind CSS
 
-### Integrations
+Integrations:
 
-- Google Places
-- CNPJA when configured
-- Optional fallback CNPJ provider adapters where configured
+- Google Places discovery and geocoding
+- Optional CNPJ provider adapters
+- Excel export pipeline
 
-### Data and Export
+Deployment:
 
-- Excel export workflow
-- CNPJ scoring and review metadata
-
-### Deployment
-
-- Docker
-- Docker Compose
-- PowerShell install, start, and backup scripts for Windows client machines
+- Docker and Docker Compose
+- Vercel frontend demo path
+- Render backend blueprint
+- Windows local deployment scripts
 
 ## Architecture
 
 ```text
-Next.js Frontend
-        ->
-API Proxy
-        ->
-FastAPI Backend
-        ->
-SQLite + Enrichment Services + Export Service
-        ->
-Google Places / Optional CNPJ Provider Integrations
+Next.js frontend
+  -> API proxy
+  -> FastAPI backend
+  -> SQLite + enrichment services + export service
+  -> Google Places / optional CNPJ providers
 ```
 
-- The frontend talks to the backend through an API proxy layer.
-- The backend owns discovery, enrichment, CNPJ scoring, review metadata, and export generation.
-- SQLite is used for MVP and local client delivery.
-- Docker Compose is used for local and client-machine installation.
+The frontend owns the product workspace and user interactions. The backend owns provider calls, persistence, scoring, enrichment, CNPJ workflows, and export generation. Demo mode swaps backend API calls for browser-local fixtures so the product can be reviewed without secrets or paid infrastructure.
 
-## Data Quality and Safety
+## Product Workflow
 
-- Duplicate prevention is part of the normal workflow, not an afterthought.
-- Existing leads are detected before import.
-- CNPJ assignments are scored before confirmation.
-- Ambiguous candidates stay reviewable instead of being auto-filled recklessly.
-- Exported spreadsheets only include confirmed or manually approved CNPJs.
-- The project intentionally does not perform CPF or person-level lookup.
-- Secrets belong in `.env` files and are never meant to be committed.
+1. Search for businesses by segment and location.
+2. Review the discovery preview before importing anything.
+3. Save selected companies into the leads workspace.
+4. Enrich and score leads using available public/provider data.
+5. Review uncertain CNPJ matches before approval.
+6. Filter, assign, and export clean lead lists.
+
+## CNPJ Resolution
+
+CNPJ matching is designed to reduce bad assignments rather than silently guessing.
+
+The workflow can combine:
+
+- CNPJ extraction from company websites
+- public CNPJ validation
+- optional commercial provider search
+- evidence scoring across names, city/state, CEP, address, phone, domain/email, and category signals
+- manual review for ambiguous candidates
+- export rules that prefer confirmed or approved CNPJs
 
 ## Getting Started
 
-### Option A - Docker client install
+### Hosted Demo Frontend
 
-Recommended for non-developer usage and client-machine installation.
+Use Vercel with the project root set to `web` and this environment variable:
 
-```powershell
-git clone https://github.com/HanuBehr/encontraaiapp.git
-cd encontraaiapp
-
-.\scripts\client_install.ps1
-notepad .env
-.\scripts\client_start.ps1
+```env
+NEXT_PUBLIC_DEMO_MODE=true
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+See [`docs/deployment/VERCEL_DEMO.md`](docs/deployment/VERCEL_DEMO.md).
 
-For local client-machine installation, see the [client install guide](docs/client-install/README.md) and the [client install checklist](docs/client-install/CHECKLIST.md).
-
-### Option B - Local development
+### Local Development
 
 Backend:
 
@@ -187,56 +140,92 @@ Open:
 - [http://localhost:3000](http://localhost:3000)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
+### Docker Deployment
+
+For a local Docker installation:
+
+```powershell
+git clone https://github.com/HanuBehr/encontraaiapp.git
+cd encontraaiapp
+
+.\scripts\client_install.ps1
+notepad .env
+.\scripts\client_start.ps1
+```
+
+Then open [http://localhost:3000](http://localhost:3000).
+
+See [`docs/client-install/README.md`](docs/client-install/README.md) for the full installation guide.
+
 ## Environment
 
-Core templates:
+Templates:
 
 - [`.env.example`](.env.example)
-- [`deploy/client/.env.client.example`](deploy/client/.env.client.example)
 - [`web/.env.example`](web/.env.example)
+- [`deploy/client/.env.client.example`](deploy/client/.env.client.example)
 
-Deployment notes:
-
-- [`docs/DEMO_MODE.md`](docs/DEMO_MODE.md)
-- [`docs/deployment/VERCEL_DEMO.md`](docs/deployment/VERCEL_DEMO.md)
-- [`docs/deployment/VERCEL_BACKEND.md`](docs/deployment/VERCEL_BACKEND.md)
-- [`docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md`](docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md)
-
-Important runtime values include:
+Important variables:
 
 - `GOOGLE_API_KEY`
 - `DATABASE_URL`
+- `EXPORT_DIR`
+- `BACKEND_URL`
+- `NEXT_PUBLIC_DEMO_MODE`
 - `CNPJ_LOOKUP_PROVIDER`
 - `CNPJ_COMPANY_SEARCH_ENABLED`
 - `CNPJ_COMPANY_SEARCH_PROVIDER`
-- `CNPJA_API_KEY` when CNPJ enrichment/search is enabled
-- `BACKEND_URL`
+- `CNPJA_API_KEY` when paid CNPJ enrichment/search is enabled
+
+Secrets must stay in local environment files or deployment secret managers. They should not be committed.
 
 ## Repository Structure
 
 ```text
-app/        FastAPI backend, services, provider integrations, exports
-web/        Next.js frontend and API proxy
-scripts/    Local ops, client install helpers, and debug tooling
-data/       Local SQLite runtime data
-exports/    Generated export files
-backups/    Client-side backups
+app/       FastAPI backend, models, services, providers, exports
+web/       Next.js frontend, demo mode, API proxy, UI components
+scripts/   Local operations, setup, debug, and packaging helpers
+tests/     Backend regression and service tests
+docs/      Demo, deployment, installation, and operations guides
+deploy/    Deployment-specific environment templates
 ```
 
-## Operational Notes
+Runtime folders such as `data/`, `exports/`, `backups/`, `dist/`, `.venv/`, `.next/`, and `node_modules/` are intentionally ignored.
 
-- `scripts/debug_cnpja_resolution.py` helps inspect how a lead was matched, reviewed, or rejected during CNPJ resolution.
-- The client package includes install, start, stop, log, backup, and update scripts for Windows environments.
-- Docker support exists to make client-machine installation practical without manual Python or Node setup.
+## Documentation
+
+- [`docs/README.md`](docs/README.md)
+- [`docs/DEMO_MODE.md`](docs/DEMO_MODE.md)
+- [`docs/deployment/VERCEL_DEMO.md`](docs/deployment/VERCEL_DEMO.md)
+- [`docs/deployment/VERCEL_BACKEND.md`](docs/deployment/VERCEL_BACKEND.md)
+- [`docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md`](docs/deployment/PRODUCTION_LAUNCH_CHECKLIST.md)
+- [`docs/client-install/README.md`](docs/client-install/README.md)
+- [`CONTRIBUTING.md`](CONTRIBUTING.md)
+
+## Verification
+
+Backend tests:
+
+```powershell
+pytest
+```
+
+Frontend checks:
+
+```powershell
+cd web
+npm run typecheck
+npm test
+npm run build
+```
+
+Demo build:
+
+```powershell
+cd web
+cmd.exe /c "set NEXT_PUBLIC_DEMO_MODE=true&& npm run build"
+```
 
 ## Current Scope
 
-Encontra.ai is intentionally focused on lead discovery, enrichment, CNPJ resolution, review, and export. It does not currently implement:
-
-- authentication
-- billing
-- CRM features
-- campaign automation
-- multi-tenant account management
-
-That scope is deliberate. The value of the project is the workflow that turns raw business discovery into structured, reviewable, exportable lead data.
+Encontra.ai is focused on discovery, enrichment, CNPJ review, lead operations, and export. It does not currently include authentication, billing, campaign automation, or multi-tenant account management.
