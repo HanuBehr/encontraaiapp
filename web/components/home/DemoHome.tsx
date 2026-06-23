@@ -6,6 +6,29 @@ import { useI18n } from "@/lib/i18n/client";
 import { isDemoMode } from "@/lib/demo/mode";
 import { LOCALES, type Locale } from "@/lib/i18n/translations";
 
+function FlagIcon({ locale }: { locale: Locale }) {
+  if (locale === "pt-BR") {
+    return (
+      <svg viewBox="0 0 28 20" aria-hidden="true" className="h-4 w-6 overflow-hidden rounded-[4px] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]">
+        <rect width="28" height="20" fill="#229E45" />
+        <path d="M14 3 24 10 14 17 4 10Z" fill="#F8E04E" />
+        <circle cx="14" cy="10" r="4.2" fill="#2B4EA2" />
+        <path d="M10.1 8.9c2.8-.6 5.3-.2 7.8 1.5" stroke="#FFFFFF" strokeWidth="1" fill="none" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 28 20" aria-hidden="true" className="h-4 w-6 overflow-hidden rounded-[4px] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]">
+      <rect width="28" height="20" fill="#1F3D8F" />
+      <path d="M0 0 28 20M28 0 0 20" stroke="#FFFFFF" strokeWidth="4" />
+      <path d="M0 0 28 20M28 0 0 20" stroke="#C8102E" strokeWidth="2" />
+      <path d="M14 0v20M0 10h28" stroke="#FFFFFF" strokeWidth="6" />
+      <path d="M14 0v20M0 10h28" stroke="#C8102E" strokeWidth="3.5" />
+    </svg>
+  );
+}
+
 function GitHubIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
@@ -47,7 +70,7 @@ export function DemoHome() {
                       : "text-brand-muted hover:bg-white hover:text-brand-graphite"
                   }`}
                 >
-                  <span className="text-lg leading-none" aria-hidden="true">{option === "pt-BR" ? "🇧🇷" : "🇬🇧"}</span>
+                  <FlagIcon locale={option} />
                   <span>{option === "pt-BR" ? "Português" : "English"}</span>
                 </button>
               );
