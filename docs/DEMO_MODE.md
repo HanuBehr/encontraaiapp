@@ -1,6 +1,6 @@
 # Demo Mode
 
-The hosted recruiter demo can run as a frontend-only Vercel app with no backend, no API keys, and no paid infrastructure.
+The hosted demo can run as a frontend-only Vercel app with no backend, no API keys, and no paid infrastructure.
 
 ## Purpose
 
@@ -53,7 +53,7 @@ Demo interactions are stored in browser `localStorage`:
 - saved demo leads
 - demo import batches
 
-This is intentional for a recruiter demo. Each reviewer can interact with the app without changing shared backend data.
+This is intentional for the hosted demo. Each reviewer can interact with the app without changing shared backend data.
 
 ## Full Project Still Included
 

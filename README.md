@@ -6,9 +6,9 @@ Encontra.ai is a full-stack lead discovery and enrichment platform built for Bra
 
 Built as a practical SaaS-style product for real lead operations, not as a demo toy.
 
-## Live Recruiter Demo
+## Live Demo
 
-The project supports a Vercel-only demo mode for reviewers and recruiters:
+The project supports a Vercel-only demo mode for reviewers:
 
 - no backend deployment required
 - no API keys required

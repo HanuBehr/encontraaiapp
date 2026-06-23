@@ -1,6 +1,6 @@
 # Vercel Demo Deployment
 
-Use this for the free recruiter demo.
+Use this for the free hosted demo.
 
 ## 1. Import Project
 

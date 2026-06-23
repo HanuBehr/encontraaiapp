@@ -193,7 +193,15 @@ export function AppShell({ children }: AppShellProps) {
 
         <div className="relative flex h-full flex-col">
           {/* Logo */}
-          <div className="relative flex items-center px-1" style={{ minHeight: "40px" }}>
+          <Link
+            href="/"
+            prefetch
+            onMouseEnter={() => router.prefetch("/")}
+            onFocus={() => router.prefetch("/")}
+            aria-label="Encontra.ai home"
+            className="relative flex items-center rounded-[16px] px-1 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/35 motion-reduce:transition-none"
+            style={{ minHeight: "40px" }}
+          >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] border border-white/[0.24] bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0.11))] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_22px_rgba(76,29,149,0.10)]">
               <svg aria-hidden="true" viewBox="0 0 40 40" className="h-[22px] w-[22px]">
                 <path d="M22.2 3.7C31.1 8 36.1 16.2 36.4 27.9c-4.5-5.2-11.7-6.7-19.3-2.8 4.2-7.2 4.5-14.4 5.1-21.4Z" fill="#FFFFFF" />
@@ -215,7 +223,7 @@ export function AppShell({ children }: AppShellProps) {
               <p className="text-[14px] font-bold tracking-tight text-white/96">Encontra.ai</p>
               <p className="text-xs font-medium text-white/68">{t("app.leadOperations")}</p>
             </div>
-          </div>
+          </Link>
 
           {/* Navigation */}
           <nav className={`mt-5 space-y-[6px] ${expanded ? "" : "flex flex-col items-center"}`}>
