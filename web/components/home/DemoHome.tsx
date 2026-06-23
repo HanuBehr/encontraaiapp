@@ -3,7 +3,6 @@
 import Link from "next/link";
 
 import { useI18n } from "@/lib/i18n/client";
-import { isDemoMode } from "@/lib/demo/mode";
 import { LOCALES, type Locale } from "@/lib/i18n/translations";
 
 function FlagIcon({ locale }: { locale: Locale }) {
@@ -39,7 +38,6 @@ function GitHubIcon({ className }: { className?: string }) {
 
 export function DemoHome() {
   const { locale, setLocale } = useI18n();
-  const demoMode = isDemoMode();
   const copy = homeCopy[locale];
 
   return (
@@ -84,7 +82,7 @@ export function DemoHome() {
           <div className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full bg-brand-orchid/10 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-140px] left-[-90px] h-80 w-80 rounded-full bg-brand-olive/20 blur-3xl" />
 
-          <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_310px] lg:items-center">
+          <div className="relative max-w-3xl">
             <div>
               <p className="ea-kicker">Encontra.ai</p>
               <h2 className="mt-4 max-w-3xl text-4xl font-bold tracking-[-0.055em] text-brand-graphite sm:text-5xl lg:text-6xl">
@@ -101,28 +99,6 @@ export function DemoHome() {
                 <Link href="/leads" className="ea-button-secondary inline-flex items-center justify-center px-5 py-3 text-sm font-bold">
                   {copy.secondaryAction}
                 </Link>
-              </div>
-            </div>
-
-            <div className="rounded-[2rem] border border-white/70 bg-white/65 p-4 shadow-panel backdrop-blur-xl">
-              <div className="rounded-[1.5rem] bg-[#2F263D] p-4 text-white shadow-[0_24px_60px_rgba(47,38,61,0.22)]">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/55">{copy.previewLabel}</p>
-                  <span className="rounded-full bg-emerald-300/18 px-2 py-1 text-[11px] font-bold text-emerald-100">{copy.previewStatus}</span>
-                </div>
-                <div className="mt-5 space-y-3">
-                  {copy.previewRows.map((row) => (
-                    <div key={row.name} className="rounded-2xl bg-white/[0.08] p-3 ring-1 ring-white/[0.08]">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-bold">{row.name}</p>
-                          <p className="mt-1 text-xs text-white/58">{row.meta}</p>
-                        </div>
-                        <span className="rounded-full bg-white/12 px-2 py-1 text-xs font-bold">{row.score}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -171,13 +147,6 @@ export function DemoHome() {
               </a>
             </div>
           </section>
-
-          <section className="ea-card p-5">
-            <p className="text-sm font-bold text-brand-graphite">{demoMode ? copy.demoTitle : copy.fullTitle}</p>
-            <p className="mt-2 text-sm leading-6 text-brand-muted">
-              {demoMode ? copy.demoDescription : copy.fullDescription}
-            </p>
-          </section>
         </aside>
       </div>
     </div>
@@ -196,23 +165,11 @@ const homeCopy = {
       "Teste um fluxo completo com dados fictícios: encontre empresas por nicho e cidade, salve as melhores opções, revise contatos e exporte uma planilha.",
     primaryAction: "Começar o demo",
     secondaryAction: "Ver leads salvos",
-    demoTitle: "Demo sem backend e sem chaves",
-    demoDescription:
-      "Esta versão roda só no navegador. As buscas são guiadas e usam empresas fictícias, então você pode explorar sem custo, segredos ou dados reais.",
-    fullTitle: "Projeto completo",
-    fullDescription: "Quando configurado com backend e chaves privadas, o projeto suporta buscas reais por provedores e persistência em banco.",
     repoTitle: "Código completo",
     repoDescription:
       "Repositório full-stack com frontend Next.js, backend FastAPI, serviços de descoberta, enriquecimento, CNPJ, exportação e documentação de deploy.",
     repoAction: "Abrir no GitHub",
     repoTags: ["Next.js", "FastAPI", "Demo mode", "Deploy docs"],
-    previewLabel: "Prévia do workspace",
-    previewStatus: "Demo ativo",
-    previewRows: [
-      { name: "Aurora Dental Studio", meta: "São Paulo • site + WhatsApp", score: "88" },
-      { name: "Bistrô Jardim Campinas", meta: "Campinas • email + Instagram", score: "83" },
-      { name: "Construminas Savassi", meta: "Belo Horizonte • CNPJ revisado", score: "82" },
-    ],
     steps: [
       { label: "01", title: "Busque", description: "Escolha uma busca sugerida para ver empresas coerentes com o nicho e a cidade." },
       { label: "02", title: "Salve", description: "Selecione empresas relevantes e envie para a área de leads." },
@@ -230,23 +187,11 @@ const homeCopy = {
       "Try the complete flow with fictional data: find companies by niche and city, save the best matches, review contacts, and export a spreadsheet.",
     primaryAction: "Start demo",
     secondaryAction: "View saved leads",
-    demoTitle: "No backend or keys needed",
-    demoDescription:
-      "This version runs fully in the browser. Searches are guided and use fictional companies, so you can explore without costs, secrets, or real provider data.",
-    fullTitle: "Full project",
-    fullDescription: "When configured with backend hosting and private keys, the project supports real provider searches and database persistence.",
     repoTitle: "Full source code",
     repoDescription:
       "Full-stack repository with the Next.js frontend, FastAPI backend, discovery services, enrichment, CNPJ workflows, export pipeline, and deployment docs.",
     repoAction: "Open on GitHub",
     repoTags: ["Next.js", "FastAPI", "Demo mode", "Deploy docs"],
-    previewLabel: "Workspace preview",
-    previewStatus: "Demo active",
-    previewRows: [
-      { name: "Alfama Dental Care", meta: "Lisbon • website + email", score: "87" },
-      { name: "Rambla Table", meta: "Barcelona • reservations + Instagram", score: "84" },
-      { name: "Spree Solar Technik", meta: "Berlin • phone + email", score: "83" },
-    ],
     steps: [
       { label: "01", title: "Search", description: "Pick a suggested search to see coherent companies for the niche and city." },
       { label: "02", title: "Save", description: "Select relevant companies and move them into the leads workspace." },
