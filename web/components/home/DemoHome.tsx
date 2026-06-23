@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { useI18n } from "@/lib/i18n/client";
 import { isDemoMode } from "@/lib/demo/mode";
-import { LOCALE_LABELS, LOCALES, type Locale } from "@/lib/i18n/translations";
+import { LOCALES, type Locale } from "@/lib/i18n/translations";
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -21,18 +21,18 @@ export function DemoHome() {
 
   return (
     <div className="space-y-5">
-      <section className="ea-card relative overflow-hidden p-5 sm:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-brand-olive/20 blur-3xl" />
-        <div className="relative grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-center">
+      <section className="ea-card relative overflow-hidden px-4 py-3 sm:px-5">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-44 w-44 rounded-full bg-brand-olive/20 blur-3xl" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="ea-kicker">{copy.languageEyebrow}</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-[-0.04em] text-brand-graphite sm:text-3xl">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orchid/70">{copy.languageEyebrow}</p>
+            <h1 className="mt-1 text-lg font-bold tracking-[-0.03em] text-brand-graphite sm:text-xl">
               {copy.languageTitle}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-brand-muted">{copy.languageDescription}</p>
+            <p className="mt-1 text-xs leading-5 text-brand-muted sm:text-sm">{copy.languageDescription}</p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="inline-flex rounded-full border border-brand-mist/80 bg-white/70 p-1 shadow-[0_14px_34px_rgba(47,38,61,0.08)] backdrop-blur-xl">
             {LOCALES.map((option) => {
               const active = option === locale;
               return (
@@ -41,17 +41,14 @@ export function DemoHome() {
                   type="button"
                   onClick={() => setLocale(option as Locale)}
                   aria-pressed={active}
-                  className={`rounded-3xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/35 motion-reduce:transition-none ${
+                  className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/35 sm:px-4 motion-reduce:transition-none ${
                     active
-                      ? "border-brand-orchid/35 bg-brand-orchid text-white shadow-panel"
-                      : "border-brand-mist/80 bg-white/70 text-brand-graphite hover:-translate-y-0.5 hover:border-brand-orchid/25 hover:bg-white"
+                      ? "bg-brand-orchid text-white shadow-[0_10px_24px_rgba(109,40,217,0.24)]"
+                      : "text-brand-muted hover:bg-white hover:text-brand-graphite"
                   }`}
                 >
-                  <span className="text-xs font-bold uppercase tracking-[0.24em] opacity-70">{option === "pt-BR" ? "PT-BR" : "EN"}</span>
-                  <span className="mt-2 block text-lg font-bold">{LOCALE_LABELS[option]}</span>
-                  <span className={`mt-1 block text-sm ${active ? "text-white/78" : "text-brand-muted"}`}>
-                    {option === "pt-BR" ? copy.portugueseHint : copy.englishHint}
-                  </span>
+                  <span className="text-lg leading-none" aria-hidden="true">{option === "pt-BR" ? "🇧🇷" : "🇬🇧"}</span>
+                  <span>{option === "pt-BR" ? "Português" : "English"}</span>
                 </button>
               );
             })}
