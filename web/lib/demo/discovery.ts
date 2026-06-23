@@ -13,12 +13,15 @@ import type {
   ExclusionRuleCreateRequest,
   ExclusionRuleCreateResponse,
 } from "@/lib/api/types";
-import { demoSalesRegions, lead, normalize } from "@/lib/demo/fixtures";
+import { lead, normalize } from "@/lib/demo/fixtures";
+import { matchDemoScenario } from "@/lib/demo/scenarios";
 import { addDemoImportBatch, getDemoLeads, nextDemoBatchId, nextDemoLeadId, saveDemoLeads } from "@/lib/demo/storage";
 
 export async function previewDemoDiscovery(request: DiscoverySearchRequest): Promise<DiscoveryPreviewResponse> {
-  const locationLabel = request.location_query ?? "Demo location";
-  const templates = candidatesForRequest(request);
+  const rawQuery = request.raw_query ?? request.search_terms.join(" ");
+  const scenario = matchDemoScenario(rawQuery, request.location_query);
+  const locationLabel = scenario ? `${scenario.city}, ${scenario.state}` : request.location_query ?? "Guided demo searches";
+  const templates = scenario?.candidates ?? [];
   const existingLeads = getDemoLeads();
   const items = templates.slice(0, Math.max(1, request.max_results_per_term * Math.max(1, request.search_terms.length))).map((candidate, index) => {
     const existing = existingLeads.find((leadItem) =>
@@ -32,11 +35,11 @@ export async function previewDemoDiscovery(request: DiscoverySearchRequest): Pro
     provider: "demo",
     resolved_location: {
       label: locationLabel,
-      latitude: request.latitude ?? -23.5505,
-      longitude: request.longitude ?? -46.6333,
+      latitude: request.latitude ?? scenario?.latitude ?? -23.5505,
+      longitude: request.longitude ?? scenario?.longitude ?? -46.6333,
     },
     total_provider_results: items.length,
-    duplicates_removed: 1,
+    duplicates_removed: items.length > 0 ? 1 : 0,
     existing_leads_hidden_count: items.filter((item) => item.is_existing_lead).length,
     items,
   };
@@ -219,56 +222,6 @@ export async function createDemoExclusionRule(payload: ExclusionRuleCreateReques
   };
 }
 
-function candidatesForRequest(request: DiscoverySearchRequest): DiscoveryLeadCandidate[] {
-  const query = `${request.raw_query ?? ""} ${request.search_terms.join(" ")}`.toLocaleLowerCase("pt-BR");
-  if (/restaurant|restaurante|cafe|bistr/.test(query)) {
-    return [
-      candidate("Mesa Clara Restaurante", "Restaurant", "Campinas", "SP", "https://mesaclara.example", "contato@mesaclara.example", "+55 19 94002-6101", "https://instagram.com/mesaclara"),
-      candidate("Brasa Urbana Campinas", "Restaurant", "Campinas", "SP", "https://brasaurbana.example", null, "+55 19 94002-6102", "https://instagram.com/brasaurbana"),
-      candidate("Café Alameda", "Cafe", "Campinas", "SP", null, null, "+55 19 94002-6103", null),
-    ];
-  }
-  if (/estet|aesthetic|clinic|clínica|dermal|beauty/.test(query)) {
-    return [
-      candidate("Vitta Pele Ipanema", "Aesthetic clinic", "Rio de Janeiro", "RJ", "https://vittapele.example", "hello@vittapele.example", "+55 21 94002-7201", "https://instagram.com/vittapele"),
-      candidate("Nobile Estética Rio", "Beauty clinic", "Rio de Janeiro", "RJ", "https://nobilerio.example", null, "+55 21 94002-7202", "https://instagram.com/nobilerio"),
-      candidate("Essenza Derm Center", "Skin care clinic", "Rio de Janeiro", "RJ", null, null, "+55 21 94002-7203", null),
-    ];
-  }
-  return [
-    candidate("Prime Odonto Jardins", "Dental clinic", "São Paulo", "SP", "https://primeodonto.example", "agenda@primeodonto.example", "+55 11 94002-5101", "https://instagram.com/primeodonto"),
-    candidate("Dental Care Pinheiros", "Dental clinic", "São Paulo", "SP", "https://dentalpinheiros.example", null, "+55 11 94002-5102", "https://instagram.com/dentalpinheiros"),
-    candidate("Sorriso Norte Clinic", "Dental clinic", "São Paulo", "SP", null, null, "+55 11 94002-5103", null),
-  ];
-}
-
-function candidate(name: string, category: string, city: string, state: string, website: string | null, email: string | null, phone: string | null, instagram: string | null): DiscoveryLeadCandidate {
-  const domain = website ? new URL(website).hostname : null;
-  return {
-    business_name: name,
-    normalized_business_name: normalize(name),
-    category,
-    address: `${Math.floor(Math.random() * 900) + 100} Demo Street`,
-    neighborhood: null,
-    city,
-    state,
-    postal_code: null,
-    latitude: null,
-    longitude: null,
-    website,
-    domain,
-    email,
-    phone,
-    whatsapp: phone,
-    instagram,
-    google_maps_url: `https://maps.google.com/?q=${encodeURIComponent(name)}`,
-    google_place_id: `demo-${normalize(name).replace(/\s+/g, "-")}`,
-    source_provider: "demo",
-    source_url: null,
-    lead_source_type: "demo_seed",
-  };
-}
-
 function previewItem(candidateValue: DiscoveryLeadCandidate, searchTerm: string, index: number, existingLeadId: number | null): DiscoveryPreviewItem {
   return {
     client_result_id: `demo-preview-${normalize(candidateValue.business_name).replace(/\s+/g, "-")}-${index}`,
@@ -295,6 +248,7 @@ function previewItem(candidateValue: DiscoveryLeadCandidate, searchTerm: string,
 function leadFromCandidate(id: number, candidateValue: DiscoveryLeadCandidate, now: string) {
   const isRestaurant = /restaurant|cafe|bistr/i.test(candidateValue.category ?? "");
   const isBeauty = /esthetic|aesthetic|beauty|skin|clinic/i.test(candidateValue.category ?? "");
+  const isConstruction = /construction|material|ferragens|solar|photovoltaic|energy/i.test(candidateValue.category ?? "");
   return lead({
     id,
     business_name: candidateValue.business_name,
@@ -310,14 +264,22 @@ function leadFromCandidate(id: number, candidateValue: DiscoveryLeadCandidate, n
     address: candidateValue.address,
     status: "new",
     lead_score: candidateValue.website ? 78 : 62,
-    sales_region_id: candidateValue.state === "RJ" ? 3 : candidateValue.city === "Campinas" ? 2 : 1,
-    market_segment_id: isRestaurant ? 2 : isBeauty ? 3 : 1,
-    market_subsegment_id: isRestaurant ? 2 : isBeauty ? 3 : 1,
+    sales_region_id: regionIdForCandidate(candidateValue),
+    market_segment_id: isRestaurant ? 2 : isBeauty ? 3 : isConstruction ? 4 : 1,
+    market_subsegment_id: isRestaurant ? 2 : isBeauty ? 3 : isConstruction ? 4 : 1,
     company_size_fit: candidateValue.website ? "ideal_sme" : "possible_sme",
     trade_type: "varejo",
     created_at: now,
     updated_at: now,
   });
+}
+
+function regionIdForCandidate(candidateValue: DiscoveryLeadCandidate) {
+  if (candidateValue.city === "Campinas") return 2;
+  if (candidateValue.state === "RJ") return 3;
+  if (candidateValue.state === "MG") return 4;
+  if (["Lisbon", "Catalonia", "England", "Berlin"].includes(candidateValue.state ?? "")) return 5;
+  return 1;
 }
 
 function extractedContact(contactType: string, value: string, sourceUrl: string | null): EnrichmentExtractedContact {

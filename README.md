@@ -13,6 +13,7 @@ The project supports a Vercel-only demo mode for reviewers and recruiters:
 - no backend deployment required
 - no API keys required
 - fictional sample data
+- guided Brazil and Europe search scenarios
 - browser-local saved leads and exports
 - English and Portuguese UI
 
@@ -22,7 +23,7 @@ Enable it with:
 NEXT_PUBLIC_DEMO_MODE=true
 ```
 
-The live demo is intentionally frontend-only so reviewers can explore the product without paid infrastructure or private provider credentials. The full working backend/API implementation remains in this repository.
+The live demo is intentionally frontend-only so reviewers can explore the product without paid infrastructure or private provider credentials. It uses curated fictional searches rather than simulating arbitrary live provider results. The full working backend/API implementation remains in this repository and supports real provider-backed searches when configured with private API keys.
 
 ## Overview
 

@@ -33,6 +33,8 @@ import {
 } from "@/lib/ui/messages";
 import { useI18n } from "@/lib/i18n/client";
 import { formatNumber } from "@/lib/i18n/format";
+import { isDemoMode } from "@/lib/demo/mode";
+import { getDemoGuidedSearches } from "@/lib/demo/scenarios";
 import type { Locale } from "@/lib/i18n/translations";
 
 type LocationMode = "area" | "coordinates";
@@ -150,7 +152,7 @@ const searchTermGroups = [
     ],
   },
 ];
-const discoveryExampleQueries = [
+const defaultDiscoveryExampleQueries = [
   "dentistas em São Paulo",
   "restaurantes em Campinas",
   "clínicas de estética no Rio de Janeiro",
@@ -178,6 +180,9 @@ const DiscoveryPreviewTable = dynamic(
 
 export function DiscoveryWorkspace() {
   const { locale, t } = useI18n();
+  const demoMode = isDemoMode();
+  const guidedDemoSearches = demoMode ? getDemoGuidedSearches(locale) : [];
+  const exampleQueries = demoMode ? guidedDemoSearches.map((search) => search.query) : defaultDiscoveryExampleQueries;
   const [form, setForm] = useState<DiscoveryFormState>(defaultForm);
   const [searchRequest, setSearchRequest] = useState<DiscoverySearchRequest | null>(null);
   const [preview, setPreview] = useState<DiscoveryPreviewResponse | null>(null);
@@ -218,7 +223,7 @@ export function DiscoveryWorkspace() {
     setPreviewError(null);
     setActionMessage(
       totalCount === 0 && data.existing_leads_hidden_count === 0
-        ? t("error.noDiscoveryResults")
+        ? demoMode ? t("discovery.demoUnsupported") : t("error.noDiscoveryResults")
         : buildPreviewReadyMessage({
             newCount: totalCount,
             websiteReadyCount,
@@ -728,6 +733,30 @@ export function DiscoveryWorkspace() {
             ) : null}
           </div>
 
+          {demoMode ? (
+            <section className="rounded-[20px] border border-brand-olive/60 bg-brand-olive/15 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset]">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-brand-graphite">{t("discovery.demoGuideTitle")}</p>
+                  <p className="mt-1 max-w-3xl text-sm leading-6 text-brand-muted">{t("discovery.demoGuideDescription")}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  {guidedDemoSearches.map((search) => (
+                    <button
+                      key={search.query}
+                      type="button"
+                      onClick={() => applySuggestedQuery(search.query)}
+                      className="rounded-full border border-brand-olive/60 bg-white/70 px-3 py-1.5 text-xs font-bold text-brand-graphite transition hover:border-brand-signal hover:bg-white motion-reduce:transition-none"
+                      title={search.description}
+                    >
+                      {search.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <div className="rounded-[20px] border border-white/70 bg-white/[0.62] p-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset] lg:p-3.5">
             <div className="space-y-2.5">
               <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.2fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
@@ -787,7 +816,7 @@ export function DiscoveryWorkspace() {
 
               <div className="flex flex-wrap items-center gap-2 text-xs text-brand-muted">
                 <span className="font-semibold uppercase tracking-[0.08em]">{t("discovery.suggestions")}</span>
-                  {discoveryExampleQueries.map((query) => (
+                  {exampleQueries.map((query) => (
                     <button
                       key={query}
                       type="button"
@@ -1023,6 +1052,7 @@ export function DiscoveryWorkspace() {
                     blockedFilter,
                     websiteFilter,
                     locale,
+                    demoMode,
                   })}
                   selectedIds={selectedIds}
                   newlyBlockedIds={newlyBlockedIds}
@@ -1572,14 +1602,21 @@ function buildPreviewEmptyMessage({
   blockedFilter,
   websiteFilter,
   locale,
+  demoMode,
 }: {
   preview: DiscoveryPreviewResponse;
   hideExistingLeads: boolean;
   blockedFilter: LeadBlockedFilter;
   websiteFilter: WebsiteFilter;
   locale: Locale;
+  demoMode: boolean;
 }) {
   if ((preview.items?.length ?? 0) === 0) {
+    if (demoMode) {
+      return locale === "en"
+        ? "This demo uses curated sample searches. Try one of the guided searches above."
+        : "Este demo usa buscas guiadas com dados fictícios. Tente uma das sugestões acima.";
+    }
     return locale === "en"
       ? "No companies found for this search. Try another niche, city, or radius."
       : "Nenhuma empresa encontrada para essa busca. Tente outro nicho, cidade ou raio.";

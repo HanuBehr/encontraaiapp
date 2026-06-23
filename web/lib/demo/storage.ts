@@ -1,8 +1,8 @@
 import type { LeadDetail, LeadImportBatchResponse } from "@/lib/api/types";
 import { demoInitialImportBatch, demoSeedLeads } from "@/lib/demo/fixtures";
 
-const LEADS_KEY = "encontraai.demo.leads";
-const BATCHES_KEY = "encontraai.demo.importBatches";
+const LEADS_KEY = "encontraai.demo.v2.leads";
+const BATCHES_KEY = "encontraai.demo.v2.importBatches";
 
 export function getDemoLeads(): LeadDetail[] {
   return readJson<LeadDetail[]>(LEADS_KEY, demoSeedLeads);

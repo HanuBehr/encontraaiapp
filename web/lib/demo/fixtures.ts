@@ -4,12 +4,15 @@ export const demoSalesReps = [
   { id: 1, name: "Marina Costa", email: "marina@example.com" },
   { id: 2, name: "Rafael Lima", email: "rafael@example.com" },
   { id: 3, name: "Ana Torres", email: "ana@example.com" },
+  { id: 4, name: "Sofia Meyer", email: "sofia@example.com" },
 ];
 
 export const demoSalesRegions = [
   { id: 1, name: "São Paulo Metro", region_type: "state", state: "SP", code: "SP-METRO" },
   { id: 2, name: "Interior SP", region_type: "state", state: "SP", code: "SP-INT" },
   { id: 3, name: "Rio de Janeiro", region_type: "state", state: "RJ", code: "RJ" },
+  { id: 4, name: "Minas Gerais", region_type: "state", state: "MG", code: "MG" },
+  { id: 5, name: "Europe Demo", region_type: "region", state: null, code: "EU-DEMO" },
 ];
 
 export const demoMarketSegments = [
@@ -40,7 +43,13 @@ export const demoSeedLeads: LeadDetail[] = [
   lead({ id: 109, business_name: "Forma & Pele Botafogo", category: "Beauty clinic", city: "Rio de Janeiro", state: "RJ", website: null, domain: null, phone: "+55 21 4002-3003", instagram: "https://instagram.com/formaepelerio", status: "new", lead_score: 70, sales_region_id: 3, market_segment_id: 3, market_subsegment_id: 3, company_size_fit: "possible_sme", trade_type: "varejo" }),
   lead({ id: 110, business_name: "Constrular Norte", category: "Building materials", city: "São Paulo", state: "SP", website: "https://constrularnorte.example", domain: "constrularnorte.example", email: "vendas@constrularnorte.example", whatsapp: "+55 11 94002-4001", status: "approved", lead_score: 84, assigned_sales_rep_id: 1, sales_region_id: 1, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "ideal_sme", trade_type: "distribuidora" }),
   lead({ id: 111, business_name: "Materiais Ponte Verde", category: "Construction supplier", city: "Campinas", state: "SP", website: "https://ponteverde.example", domain: "ponteverde.example", phone: "+55 19 4002-4002", status: "reviewed", lead_score: 76, assigned_sales_rep_id: 2, sales_region_id: 2, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "possible_sme", trade_type: "atacado" }),
-  lead({ id: 112, business_name: "Blocked Demo Supplier", category: "Supplier", city: "São Paulo", state: "SP", website: "https://blocked-demo.example", domain: "blocked-demo.example", phone: "+55 11 4002-9999", status: "do_not_contact", lead_score: 20, sales_region_id: 1, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "unknown", trade_type: "unknown", is_blocked: true, blocked_reason: "Demo exclusion rule: competitor / do not contact." }),
+  lead({ id: 112, business_name: "Construminas Savassi", category: "Materiais de construção", city: "Belo Horizonte", state: "MG", website: "https://construminas.example", domain: "construminas.example", email: "vendas@construminas.example", whatsapp: "+55 31 94002-8101", status: "approved", lead_score: 82, assigned_sales_rep_id: 1, sales_region_id: 4, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "ideal_sme", trade_type: "distribuidora" }),
+  lead({ id: 113, business_name: "BH Ferragens Pro", category: "Ferragens", city: "Belo Horizonte", state: "MG", website: "https://bhferragens.example", domain: "bhferragens.example", phone: "+55 31 94002-8102", instagram: "https://instagram.com/bhferragens", status: "new", lead_score: 73, sales_region_id: 4, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "possible_sme", trade_type: "atacado" }),
+  lead({ id: 114, business_name: "Alfama Dental Care", category: "Dental clinic", city: "Lisbon", state: "Lisbon", website: "https://alfamadental.example", domain: "alfamadental.example", email: "hello@alfamadental.example", phone: "+351 210 000 101", instagram: "https://instagram.com/alfamadental", status: "approved", lead_score: 87, assigned_sales_rep_id: 4, sales_region_id: 5, market_segment_id: 1, market_subsegment_id: 1, company_size_fit: "ideal_sme", trade_type: "varejo" }),
+  lead({ id: 115, business_name: "Rambla Table", category: "Restaurant", city: "Barcelona", state: "Catalonia", website: "https://ramblatable.example", domain: "ramblatable.example", email: "reservations@ramblatable.example", phone: "+34 930 000 201", instagram: "https://instagram.com/ramblatable", status: "contacted", lead_score: 84, assigned_sales_rep_id: 4, sales_region_id: 5, market_segment_id: 2, market_subsegment_id: 2, company_size_fit: "ideal_sme", trade_type: "varejo" }),
+  lead({ id: 116, business_name: "Mayfair Skin Lab", category: "Aesthetic clinic", city: "London", state: "England", website: "https://mayfairskin.example", domain: "mayfairskin.example", email: "bookings@mayfairskin.example", phone: "+44 20 0000 301", instagram: "https://instagram.com/mayfairskin", status: "replied", lead_score: 86, assigned_sales_rep_id: 4, sales_region_id: 5, market_segment_id: 3, market_subsegment_id: 3, company_size_fit: "ideal_sme", trade_type: "varejo" }),
+  lead({ id: 117, business_name: "Spree Solar Technik", category: "Solar installer", city: "Berlin", state: "Berlin", website: "https://spreesolar.example", domain: "spreesolar.example", email: "sales@spreesolar.example", phone: "+49 30 0000 401", status: "interested", lead_score: 83, assigned_sales_rep_id: 4, sales_region_id: 5, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "ideal_sme", trade_type: "distribuidora" }),
+  lead({ id: 118, business_name: "Blocked Demo Supplier", category: "Supplier", city: "São Paulo", state: "SP", website: "https://blocked-demo.example", domain: "blocked-demo.example", phone: "+55 11 4002-9999", status: "do_not_contact", lead_score: 20, sales_region_id: 1, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "unknown", trade_type: "unknown", is_blocked: true, blocked_reason: "Demo exclusion rule: competitor / do not contact." }),
 ];
 
 export const demoInitialImportBatch: LeadImportBatchResponse = {

@@ -48,6 +48,7 @@ Open the deployed Vercel URL and test:
 - `/discovery`
 - `/leads`
 - language switching
+- guided demo searches
 - saving demo leads from discovery
 - exporting leads
 
@@ -60,3 +61,5 @@ Demo mode: sample data
 ## Notes
 
 This deployment intentionally does not run the FastAPI backend. It is a frontend-only product demo using fictional browser-local data.
+
+The demo supports curated fictional searches only. The full repository includes the backend implementation for real provider-backed searches when private API keys are configured.
