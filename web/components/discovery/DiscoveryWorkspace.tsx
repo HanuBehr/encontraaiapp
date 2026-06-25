@@ -733,27 +733,6 @@ export function DiscoveryWorkspace() {
             ) : null}
           </div>
 
-          {demoMode ? (
-            <section className="ea-card-flat px-3 py-2">
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-muted">{t("discovery.demoGuideTitle")}</p>
-                <div className="flex flex-wrap gap-1.5 lg:justify-end">
-                  {guidedDemoSearches.map((search) => (
-                    <button
-                      key={search.query}
-                      type="button"
-                      onClick={() => applySuggestedQuery(search.query)}
-                      className="ea-chip px-2.5 py-1 text-xs font-bold motion-reduce:transition-none"
-                      title={search.description}
-                    >
-                      {search.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-          ) : null}
-
           <div className="ea-card p-3 lg:p-3.5">
             <div className="space-y-2.5">
               <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.2fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">

@@ -207,8 +207,8 @@ export function LeadBatchActions({
 
   return (
     <section className="ea-card p-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(720px,0.95fr)] xl:items-end">
+        <div className="max-w-2xl">
           <p className="ea-kicker">{t("batch.kicker")}</p>
           <h2 className="mt-2 text-base font-semibold text-brand-graphite">{t("batch.title")}</h2>
           <p className="mt-1 text-sm leading-6 text-brand-muted">
@@ -254,47 +254,56 @@ export function LeadBatchActions({
           ) : null}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[220px_150px_minmax(0,1fr)] xl:min-w-[780px]">
-          <label className="block">
-            <span className="text-xs font-medium text-brand-muted">{t("batch.scope")}</span>
-            <select
-              value={scope}
-              onChange={(event) => {
-                setScope(event.target.value as ActionScope);
-                setLastResult(null);
-              }}
-              className="ea-input mt-1 w-full px-2 py-2 text-sm"
-            >
-              <option value="selected">{t("batch.selectedScope", { count: formatNumber(selectedLeadIds.length, locale) })}</option>
-              <option value="current">{t("batch.currentScope", { count: formatNumber(currentTotal, locale) })}</option>
-              <option value="latest">
-                {t("batch.latestScope", { count: latestBatchQuery.data ? ` (${formatNumber(latestBatchQuery.data.lead_count, locale)})` : "" })}
-              </option>
-            </select>
-          </label>
+        <div className="space-y-2">
+          <p className="text-left text-xs font-medium text-brand-muted xl:text-right">
+            {t("batch.scopeSummary", {
+              selected: formatNumber(selectedLeadIds.length, locale),
+              total: formatNumber(currentTotal, locale),
+            })}
+          </p>
 
-          <div className="ea-card-flat px-3 py-2">
-            <p className="text-xs font-medium text-brand-muted">{t("batch.count")}</p>
-            <p className="mt-1 text-xl font-semibold text-brand-graphite">
-              {actionCount === null ? "..." : formatNumber(actionCount, locale)}
-            </p>
-          </div>
+          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_118px_minmax(360px,1.55fr)] lg:items-end">
+            <label className="block">
+              <span className="text-xs font-medium text-brand-muted">{t("batch.scope")}</span>
+              <select
+                value={scope}
+                onChange={(event) => {
+                  setScope(event.target.value as ActionScope);
+                  setLastResult(null);
+                }}
+                className="ea-input mt-1 w-full px-2 py-2 text-sm"
+              >
+                <option value="selected">{t("batch.selectedScope", { count: formatNumber(selectedLeadIds.length, locale) })}</option>
+                <option value="current">{t("batch.currentScope", { count: formatNumber(currentTotal, locale) })}</option>
+                <option value="latest">
+                  {t("batch.latestScope", { count: latestBatchQuery.data ? ` (${formatNumber(latestBatchQuery.data.lead_count, locale)})` : "" })}
+                </option>
+              </select>
+            </label>
 
-          <div className={`grid gap-2 sm:grid-cols-2 ${cnpjEnabled ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
-            <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
-              {t("batch.enrich")}
-            </ActionButton>
-            {cnpjEnabled ? (
-              <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
-                {t("batch.cnpj")}
+            <div className="ea-card-flat px-3 py-2">
+              <p className="text-xs font-medium text-brand-muted">{t("batch.count")}</p>
+              <p className="mt-1 text-lg font-semibold text-brand-graphite">
+                {actionCount === null ? "..." : formatNumber(actionCount, locale)}
+              </p>
+            </div>
+
+            <div className={`grid gap-2 sm:grid-cols-2 ${cnpjEnabled ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+              <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
+                {t("batch.enrich")}
               </ActionButton>
-            ) : null}
-            <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
-              {t("batch.assign")}
-            </ActionButton>
-            <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("export")}>
-              {t("batch.export")}
-            </ActionButton>
+              {cnpjEnabled ? (
+                <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
+                  {t("batch.cnpj")}
+                </ActionButton>
+              ) : null}
+              <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
+                {t("batch.assign")}
+              </ActionButton>
+              <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("export")}>
+                {t("batch.export")}
+              </ActionButton>
+            </div>
           </div>
         </div>
       </div>

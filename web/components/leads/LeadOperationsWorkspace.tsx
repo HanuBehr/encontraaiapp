@@ -19,9 +19,8 @@ import {
   type QueueFilters,
 } from "@/lib/state/lead-workspace";
 import { useI18n } from "@/lib/i18n/client";
-import { formatNumber } from "@/lib/i18n/format";
 import { formatUserFacingError } from "@/lib/ui/messages";
-import type { Locale, TranslationKey } from "@/lib/i18n/translations";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 const LeadBatchActions = dynamic(
   () => import("@/components/leads/LeadBatchActions").then((module) => module.LeadBatchActions),
@@ -102,7 +101,6 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
   const pageItems = leadsQuery.data?.items ?? [];
   const currentFilteredTotal = leadsQuery.data?.total ?? 0;
   const total = currentFilteredTotal;
-  const selectedCount = Object.values(rowSelection).filter(Boolean).length;
   const selectedLeadIds = selectedLeadIdsFromSelection(rowSelection);
   const selectedLeadId = firstSelectedLeadId(rowSelection);
   const detailLeadId = activeLeadId ?? selectedLeadId;
@@ -153,12 +151,6 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         </div>
       </div>
 
-      <div className="ea-card-flat grid grid-cols-3 gap-2 p-2 text-center lg:max-w-xl">
-        <Metric label={t("common.currentList")} value={formatNumber(total, locale)} />
-        <Metric label={t("common.selected")} value={formatNumber(selectedCount, locale)} />
-        <Metric label={t("common.rowsPerPage")} value={String(pageSize)} />
-      </div>
-
       {importBatchId ? (
         <section className="flex flex-col gap-3 rounded-3xl border border-brand-olive/70 bg-brand-olive/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -177,9 +169,6 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
       <LeadQueueSearch
         value={search}
         onChange={updateSearch}
-        resultCount={total}
-        searchActive={Boolean(searchTerm)}
-        locale={locale}
       />
 
       <LeadQueueFilters
@@ -261,33 +250,18 @@ function DeferredPanel({ labelKey }: { labelKey: TranslationKey }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-brand-orchid/10 bg-brand-orchid/[0.045] px-3 py-2">
-      <p className="text-xs font-medium text-brand-muted">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-brand-graphite">{value}</p>
-    </div>
-  );
-}
-
 function LeadQueueSearch({
   value,
   onChange,
-  resultCount,
-  searchActive,
-  locale,
 }: {
   value: string;
   onChange: (value: string) => void;
-  resultCount: number;
-  searchActive: boolean;
-  locale: Locale;
 }) {
   const { t } = useI18n();
   return (
     <section className="ea-card p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <label className="block w-full lg:max-w-2xl" htmlFor="lead-search">
+      <div className="max-w-3xl">
+        <label className="block" htmlFor="lead-search">
           <span className="text-sm font-semibold text-brand-graphite">{t("leads.quickSearch")}</span>
           <input
             id="lead-search"
@@ -297,10 +271,6 @@ function LeadQueueSearch({
             className="ea-input mt-2 w-full px-3 py-2 text-sm"
           />
         </label>
-        <div className="ea-card-flat px-3 py-2 lg:min-w-[180px]">
-          <p className="text-xs font-medium text-brand-muted">{searchActive ? t("common.results") : t("common.visibleList")}</p>
-          <p className="mt-1 text-lg font-semibold text-brand-graphite">{formatNumber(resultCount, locale)}</p>
-        </div>
       </div>
       <p className="mt-2 text-xs text-brand-muted">
         {t("leads.searchHelp")}

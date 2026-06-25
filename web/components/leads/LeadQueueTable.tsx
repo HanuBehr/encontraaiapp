@@ -132,17 +132,17 @@ export function LeadQueueTable({
         enableSorting: false,
         header: t("common.channels"),
         cell: ({ row }) => (
-          <div className="flex flex-wrap gap-1">
-            <ContactPill active={Boolean(row.original.email)}>Email</ContactPill>
-            <ContactPill active={Boolean(row.original.whatsapp)}>WA</ContactPill>
-            <ContactPill active={Boolean(row.original.instagram)}>IG</ContactPill>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <ContactPill active={Boolean(row.original.email)} channel="email" label="Email" />
+            <ContactPill active={Boolean(row.original.whatsapp)} channel="whatsapp" label="WhatsApp" />
+            <ContactPill active={Boolean(row.original.instagram)} channel="instagram" label="Instagram" />
           </div>
         ),
       },
       {
         accessorKey: "lead_score",
         header: ({ column }) => <SortHeader column={column} label={t("common.score")} />,
-        cell: ({ getValue }) => <span className="font-medium">{String(getValue())}</span>,
+        cell: ({ getValue }) => <span className="inline-flex h-6 items-center font-semibold">{String(getValue())}</span>,
       },
       {
         accessorKey: "updated_at",
@@ -305,16 +305,88 @@ function BlockedBadge() {
   );
 }
 
-function ContactPill({ active, children }: { active: boolean; children: React.ReactNode }) {
+function ContactPill({ active, channel, label }: { active: boolean; channel: "email" | "whatsapp" | "instagram"; label: string }) {
   return (
     <span
+      aria-label={label}
+      title={label}
       className={
         active
-          ? "rounded-md border border-brand-olive/70 bg-brand-olive/20 px-2 py-1 text-xs font-medium text-brand-graphite"
-          : "rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-400"
+          ? "inline-flex h-6 w-6 items-center justify-center"
+          : "inline-flex h-6 w-6 items-center justify-center opacity-45"
       }
     >
-      {children}
+      {channel === "email" ? <EmailIcon active={active} className="h-[21px] w-[21px]" /> : null}
+      {channel === "whatsapp" ? <WhatsAppIcon active={active} className="h-[21px] w-[21px]" /> : null}
+      {channel === "instagram" ? <InstagramIcon active={active} className="h-[21px] w-[21px]" /> : null}
     </span>
+  );
+}
+
+function EmailIcon({ active, className }: { active: boolean; className?: string }) {
+  if (!active) {
+    return (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" className="text-brand-muted" />
+        <path d="m5 8 7 5 7-5" className="text-brand-muted" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path fill="#EA4335" d="M4.5 6.8 12 12.4l7.5-5.6v10.1c0 .9-.7 1.6-1.6 1.6H6.1c-.9 0-1.6-.7-1.6-1.6V6.8Z" />
+      <path fill="#FBBC04" d="M4.5 6.8 12 12.4 4.5 17V6.8Z" />
+      <path fill="#34A853" d="M19.5 6.8 12 12.4l7.5 4.6V6.8Z" />
+      <path fill="#4285F4" d="M6.1 5.5h11.8c.5 0 .9.2 1.2.6L12 11.4 4.9 6.1c.3-.4.7-.6 1.2-.6Z" />
+      <path fill="#FFFFFF" d="M5.7 6.1 12 10.8l6.3-4.7.7.9-7 5.2L5 7l.7-.9Z" opacity="0.92" />
+    </svg>
+  );
+}
+
+function WhatsAppIcon({ active, className }: { active: boolean; className?: string }) {
+  if (!active) {
+    return (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 4a8 8 0 0 0-6.8 12.2L4.4 20l3.9-1A8 8 0 1 0 12 4Z" className="text-brand-muted" />
+        <path d="M9 8.9c.2 2.7 2.4 5 5.1 5.5l1.2-1.1" className="text-brand-muted" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path fill="#25D366" d="M12 3.2a8.6 8.6 0 0 0-7.3 13.2L3.8 20.8l4.5-1.1A8.6 8.6 0 1 0 12 3.2Z" />
+      <path fill="#FFFFFF" d="M16.9 14.2c-.2-.1-1.3-.6-1.5-.7-.2-.1-.4-.1-.5.1-.2.2-.6.7-.7.9-.1.1-.3.2-.5.1a7 7 0 0 1-2.1-1.3 7.8 7.8 0 0 1-1.4-1.8c-.1-.2 0-.4.1-.5l.4-.5c.1-.1.1-.3.2-.4.1-.1 0-.3 0-.4l-.7-1.6c-.2-.4-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 1.9s.8 2.2.9 2.3c.1.2 1.6 2.5 3.9 3.5.5.2 1 .4 1.3.5.6.2 1.1.2 1.5.1.5-.1 1.3-.5 1.5-1 .2-.5.2-1 .1-1.1Z" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ active, className }: { active: boolean; className?: string }) {
+  if (!active) {
+    return (
+      <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="4" y="4" width="16" height="16" rx="5" className="text-brand-muted" />
+        <circle cx="12" cy="12" r="3.5" className="text-brand-muted" />
+        <circle cx="16.6" cy="7.4" r="0.8" fill="currentColor" className="text-brand-muted" stroke="none" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <defs>
+        <radialGradient id="instagram-gradient" cx="30%" cy="107%" r="130%">
+          <stop offset="0" stopColor="#FEDA75" />
+          <stop offset="0.35" stopColor="#FA7E1E" />
+          <stop offset="0.58" stopColor="#D62976" />
+          <stop offset="0.78" stopColor="#962FBF" />
+          <stop offset="1" stopColor="#4F5BD5" />
+        </radialGradient>
+      </defs>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="url(#instagram-gradient)" />
+      <circle cx="12" cy="12" r="4" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
+      <circle cx="16.9" cy="7.1" r="1.2" fill="#FFFFFF" />
+    </svg>
   );
 }
