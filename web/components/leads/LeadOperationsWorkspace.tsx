@@ -143,19 +143,20 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
 
   return (
     <div className="space-y-5">
-      <div className="ea-card flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="ea-kicker">{t("leads.kicker")}</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-brand-graphite">{t("leads.title")}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
+          <h1 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-[2.35rem]">{t("leads.title")}</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-brand-muted">
             {t("leads.description")}
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[360px]">
-          <Metric label={t("common.currentList")} value={formatNumber(total, locale)} />
-          <Metric label={t("common.selected")} value={formatNumber(selectedCount, locale)} />
-          <Metric label={t("common.rowsPerPage")} value={String(pageSize)} />
-        </div>
+      </div>
+
+      <div className="ea-card-flat grid grid-cols-3 gap-2 p-2 text-center lg:max-w-xl">
+        <Metric label={t("common.currentList")} value={formatNumber(total, locale)} />
+        <Metric label={t("common.selected")} value={formatNumber(selectedCount, locale)} />
+        <Metric label={t("common.rowsPerPage")} value={String(pageSize)} />
       </div>
 
       {importBatchId ? (
@@ -262,7 +263,7 @@ function DeferredPanel({ labelKey }: { labelKey: TranslationKey }) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-brand-mist/80 bg-brand-sand/70 px-3 py-2">
+    <div className="rounded-2xl border border-brand-orchid/10 bg-brand-orchid/[0.045] px-3 py-2">
       <p className="text-xs font-medium text-brand-muted">{label}</p>
       <p className="mt-1 text-lg font-semibold text-brand-graphite">{value}</p>
     </div>

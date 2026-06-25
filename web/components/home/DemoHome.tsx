@@ -28,32 +28,18 @@ function FlagIcon({ locale }: { locale: Locale }) {
   );
 }
 
-function GitHubIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
-      <path d="M12 .5A11.5 11.5 0 0 0 8.37 22.9c.58.11.79-.25.79-.56v-2.18c-3.23.7-3.91-1.38-3.91-1.38-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.58-.29-5.29-1.29-5.29-5.74 0-1.27.45-2.31 1.2-3.12-.12-.29-.52-1.48.11-3.08 0 0 .98-.31 3.17 1.19A10.9 10.9 0 0 1 12 5.86c.98 0 1.96.13 2.89.39 2.2-1.5 3.17-1.19 3.17-1.19.63 1.6.23 2.79.11 3.08.75.81 1.2 1.85 1.2 3.12 0 4.46-2.72 5.44-5.3 5.73.42.36.79 1.07.79 2.16v3.19c0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .5Z" />
-    </svg>
-  );
-}
-
 export function DemoHome() {
   const { locale, setLocale } = useI18n();
   const copy = homeCopy[locale];
 
   return (
-    <div className="space-y-5">
-      <section className="ea-card relative overflow-hidden px-4 py-3 sm:px-5">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-44 w-44 rounded-full bg-brand-olive/20 blur-3xl" />
-        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orchid/70">{copy.languageEyebrow}</p>
-            <h1 className="mt-1 text-lg font-bold tracking-[-0.03em] text-brand-graphite sm:text-xl">
-              {copy.languageTitle}
-            </h1>
-            <p className="mt-1 text-xs leading-5 text-brand-muted sm:text-sm">{copy.languageDescription}</p>
-          </div>
+    <div className="relative min-h-[calc(100vh-4rem)] py-1">
+      <div className="pointer-events-none absolute left-[-12rem] top-10 h-[28rem] w-[28rem] rounded-full bg-brand-orchid/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-[-10rem] top-0 h-[24rem] w-[24rem] rounded-full bg-brand-olive/18 blur-3xl" />
 
-          <div className="inline-flex rounded-full border border-brand-mist/80 bg-white/70 p-1 shadow-[0_14px_34px_rgba(47,38,61,0.08)] backdrop-blur-xl">
+      <div className="relative mx-auto max-w-6xl">
+        <section className="flex justify-end py-1">
+          <div className="inline-flex self-start rounded-full bg-white/55 p-1 shadow-[0_14px_34px_rgba(47,38,61,0.08)] backdrop-blur-xl sm:self-auto">
             {LOCALES.map((option) => {
               const active = option === locale;
               return (
@@ -74,80 +60,36 @@ export function DemoHome() {
               );
             })}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="ea-card relative overflow-hidden p-6 sm:p-8 lg:p-10">
-          <div className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full bg-brand-orchid/10 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-[-140px] left-[-90px] h-80 w-80 rounded-full bg-brand-olive/20 blur-3xl" />
+        <section className="py-8 text-center lg:py-10">
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-brand-orchid">Encontra.ai</p>
+          <h2 className="mx-auto mt-3 max-w-5xl text-4xl font-bold tracking-[-0.055em] text-brand-graphite sm:text-5xl lg:text-[4.6rem] lg:leading-[0.96]">
+            {copy.title}
+          </h2>
+          <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-brand-muted sm:text-lg">
+            {copy.description}
+          </p>
 
-          <div className="relative max-w-3xl">
-            <div>
-              <p className="ea-kicker">Encontra.ai</p>
-              <h2 className="mt-4 max-w-3xl text-4xl font-bold tracking-[-0.055em] text-brand-graphite sm:text-5xl lg:text-6xl">
-                {copy.title}
-              </h2>
-              <p className="mt-5 max-w-2xl text-base leading-7 text-brand-muted sm:text-lg">
-                {copy.description}
-              </p>
-
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link href="/discovery" className="ea-button-primary inline-flex items-center justify-center px-5 py-3 text-sm font-bold">
-                  {copy.primaryAction}
-                </Link>
-                <Link href="/leads" className="ea-button-secondary inline-flex items-center justify-center px-5 py-3 text-sm font-bold">
-                  {copy.secondaryAction}
-                </Link>
-              </div>
-            </div>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link href="/discovery" className="ea-button-primary inline-flex items-center justify-center px-5 py-3 text-sm font-bold">
+              {copy.primaryAction}
+            </Link>
+            <Link href="/leads" className="ea-button-secondary inline-flex items-center justify-center px-5 py-3 text-sm font-bold">
+              {copy.secondaryAction}
+            </Link>
           </div>
 
-          <div className="relative mt-8 grid gap-3 sm:grid-cols-3">
+          <div className="mx-auto mt-9 grid max-w-5xl gap-5 border-t border-brand-mist/70 pt-5 text-left sm:grid-cols-3">
             {copy.steps.map((step) => (
-              <div key={step.title} className="rounded-3xl border border-brand-mist/80 bg-white/65 p-4 shadow-[0_18px_40px_rgba(47,38,61,0.06)]">
+              <div key={step.title} className="relative pr-4">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orchid/70">{step.label}</p>
                 <p className="mt-2 text-base font-bold text-brand-graphite">{step.title}</p>
-                <p className="mt-2 text-sm leading-6 text-brand-muted">{step.description}</p>
+                <p className="mt-1.5 max-w-[18rem] text-sm leading-6 text-brand-muted">{step.description}</p>
               </div>
             ))}
           </div>
         </section>
-
-        <aside className="space-y-5">
-          <section className="ea-card overflow-hidden p-0">
-            <div className="bg-[#201A2A] p-5 text-white">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#201A2A]">
-                  <GitHubIcon className="h-7 w-7" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/55">GitHub</p>
-                  <h3 className="text-lg font-bold">{copy.repoTitle}</h3>
-                </div>
-              </div>
-              <p className="mt-4 text-sm leading-6 text-white/72">{copy.repoDescription}</p>
-            </div>
-            <div className="space-y-4 p-5">
-              <div className="flex flex-wrap gap-2">
-                {copy.repoTags.map((tag) => (
-                  <span key={tag} className="rounded-full border border-brand-mist/80 bg-white/70 px-3 py-1 text-xs font-bold text-brand-graphite">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <a
-                href="https://github.com/HanuBehr/encontraaiapp"
-                target="_blank"
-                rel="noreferrer"
-                className="ea-button-secondary inline-flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-bold"
-              >
-                <GitHubIcon className="h-4 w-4" />
-                {copy.repoAction}
-              </a>
-            </div>
-          </section>
-        </aside>
       </div>
     </div>
   );
@@ -155,9 +97,6 @@ export function DemoHome() {
 
 const homeCopy = {
   "pt-BR": {
-    languageEyebrow: "Primeiro passo",
-    languageTitle: "Escolha como quer usar a interface",
-    languageDescription: "A página muda na hora e sua escolha fica salva neste navegador.",
     portugueseHint: "Fluxo guiado para buscas no Brasil.",
     englishHint: "Guided flow for Europe examples.",
     title: "Uma central simples para descobrir e organizar leads B2B.",
@@ -165,11 +104,6 @@ const homeCopy = {
       "Teste um fluxo completo com dados fictícios: encontre empresas por nicho e cidade, salve as melhores opções, revise contatos e exporte uma planilha.",
     primaryAction: "Começar o demo",
     secondaryAction: "Ver leads salvos",
-    repoTitle: "Código completo",
-    repoDescription:
-      "Repositório full-stack com frontend Next.js, backend FastAPI, serviços de descoberta, enriquecimento, CNPJ, exportação e documentação de deploy.",
-    repoAction: "Abrir no GitHub",
-    repoTags: ["Next.js", "FastAPI", "Demo mode", "Deploy docs"],
     steps: [
       { label: "01", title: "Busque", description: "Escolha uma busca sugerida para ver empresas coerentes com o nicho e a cidade." },
       { label: "02", title: "Salve", description: "Selecione empresas relevantes e envie para a área de leads." },
@@ -177,9 +111,6 @@ const homeCopy = {
     ],
   },
   en: {
-    languageEyebrow: "First step",
-    languageTitle: "Choose how you want to use the interface",
-    languageDescription: "The page updates immediately and your choice is saved in this browser.",
     portugueseHint: "Fluxo guiado para buscas no Brasil.",
     englishHint: "Guided flow for Europe examples.",
     title: "A simple workspace to find and organize B2B leads.",
@@ -187,11 +118,6 @@ const homeCopy = {
       "Try the complete flow with fictional data: find companies by niche and city, save the best matches, review contacts, and export a spreadsheet.",
     primaryAction: "Start demo",
     secondaryAction: "View saved leads",
-    repoTitle: "Full source code",
-    repoDescription:
-      "Full-stack repository with the Next.js frontend, FastAPI backend, discovery services, enrichment, CNPJ workflows, export pipeline, and deployment docs.",
-    repoAction: "Open on GitHub",
-    repoTags: ["Next.js", "FastAPI", "Demo mode", "Deploy docs"],
     steps: [
       { label: "01", title: "Search", description: "Pick a suggested search to see coherent companies for the niche and city." },
       { label: "02", title: "Save", description: "Select relevant companies and move them into the leads workspace." },

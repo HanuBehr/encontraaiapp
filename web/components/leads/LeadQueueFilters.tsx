@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
+
 import { formatLeadLabel } from "@/lib/format/lead-labels";
 import type { LeadOptionsResponse } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/client";
-import type { QueueFilters } from "@/lib/state/lead-workspace";
+import { defaultQueueFilters, type QueueFilters } from "@/lib/state/lead-workspace";
 
 type LeadQueueFiltersProps = {
   filters: QueueFilters;
@@ -19,29 +21,55 @@ export function LeadQueueFilters({
   onReset,
 }: LeadQueueFiltersProps) {
   const { locale, t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const activeFilterCount = countActiveFilters(filters);
+
   function updateFilter<Key extends keyof QueueFilters>(key: Key, value: QueueFilters[Key]) {
     onFiltersChange({ ...filters, [key]: value });
   }
 
   return (
-    <section className="ea-card p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-brand-graphite">{t("leads.filtersTitle")}</p>
-          <p className="mt-1 text-sm leading-6 text-brand-muted">
-            {t("leads.filtersDescription")}
-          </p>
-        </div>
+    <section className={`ea-card overflow-hidden ${open ? "p-4" : "p-3"}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <button
           type="button"
-          onClick={onReset}
-          className="ea-button-secondary w-full px-3 py-2 text-sm font-semibold lg:w-auto"
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+          className="group flex min-w-0 flex-1 items-center gap-3 rounded-[1.15rem] text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25"
         >
-          {t("leads.clearFilters")}
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand-orchid/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.78),rgba(139,92,246,0.10))] text-brand-orchid shadow-[0_12px_28px_rgba(109,40,217,0.10)]">
+            <FilterIcon className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 py-1">
+            <span className="flex flex-wrap items-center gap-2 text-base font-bold text-brand-graphite">
+              {t("leads.filtersTitle")}
+              {activeFilterCount > 0 ? (
+                <span className="rounded-full bg-brand-orchid/10 px-2 py-0.5 text-xs font-bold text-brand-orchid">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </span>
+            <span className="mt-1 block text-sm leading-5 text-brand-muted">
+              {open ? t("leads.filtersDescription") : activeFilterCount > 0 ? t("leads.filtersActive", { count: activeFilterCount }) : t("leads.filtersCollapsed")}
+            </span>
+          </span>
+          <span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-brand-orchid/12 bg-brand-orchid/[0.055] text-brand-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.52)] backdrop-blur-xl transition group-hover:text-brand-orchid">
+            <ChevronIcon className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          </span>
         </button>
+
+        {activeFilterCount > 0 ? (
+          <button
+            type="button"
+            onClick={onReset}
+            className="ea-button-secondary w-full px-3 py-2 text-sm font-semibold lg:w-auto"
+          >
+            {t("leads.clearFilters")}
+          </button>
+        ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+      {open ? <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <SelectField
           label={t("leads.blockStatus")}
           value={filters.blocked}
@@ -136,8 +164,26 @@ export function LeadQueueFilters({
           onChange={(value) => updateFilter("hasInstagram", value as QueueFilters["hasInstagram"])}
           options={booleanOptions(t)}
         />
-      </div>
+      </div> : null}
     </section>
+  );
+}
+
+function FilterIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M4 6h16" />
+      <path d="M7 12h10" />
+      <path d="M10 18h4" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }
 
@@ -185,4 +231,10 @@ function blockedOptions(t: ReturnType<typeof useI18n>["t"]) {
     { value: "include", label: t("discovery.blockedInclude") },
     { value: "only", label: t("discovery.blockedOnly") },
   ];
+}
+
+function countActiveFilters(filters: QueueFilters) {
+  return (Object.keys(defaultQueueFilters) as Array<keyof QueueFilters>).filter(
+    (key) => filters[key] !== defaultQueueFilters[key],
+  ).length;
 }

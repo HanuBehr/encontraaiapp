@@ -711,8 +711,8 @@ export function DiscoveryWorkspace() {
   ];
 
   return (
-    <div className="space-y-3 lg:max-w-[1480px]">
-      <form onSubmit={runPreview} className="space-y-3">
+    <div className="space-y-5 lg:max-w-[1480px]">
+      <form onSubmit={runPreview} className="space-y-5">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -726,7 +726,7 @@ export function DiscoveryWorkspace() {
               <button
                 type="button"
                 onClick={resetDiscoveryForm}
-                className="self-start rounded-full border border-brand-mist bg-white/50 px-3 py-1.5 text-xs font-semibold text-brand-muted transition hover:border-brand-orchid hover:text-brand-graphite lg:self-auto"
+                className="ea-button-secondary self-start rounded-full px-3 py-1.5 text-xs font-semibold lg:self-auto"
               >
                 {t("leads.clearFilters")}
               </button>
@@ -734,19 +734,16 @@ export function DiscoveryWorkspace() {
           </div>
 
           {demoMode ? (
-            <section className="rounded-[20px] border border-brand-olive/60 bg-brand-olive/15 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset]">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-bold text-brand-graphite">{t("discovery.demoGuideTitle")}</p>
-                  <p className="mt-1 max-w-3xl text-sm leading-6 text-brand-muted">{t("discovery.demoGuideDescription")}</p>
-                </div>
-                <div className="flex flex-wrap gap-2 lg:justify-end">
+            <section className="ea-card-flat px-3 py-2">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-muted">{t("discovery.demoGuideTitle")}</p>
+                <div className="flex flex-wrap gap-1.5 lg:justify-end">
                   {guidedDemoSearches.map((search) => (
                     <button
                       key={search.query}
                       type="button"
                       onClick={() => applySuggestedQuery(search.query)}
-                      className="rounded-full border border-brand-olive/60 bg-white/70 px-3 py-1.5 text-xs font-bold text-brand-graphite transition hover:border-brand-signal hover:bg-white motion-reduce:transition-none"
+                      className="ea-chip px-2.5 py-1 text-xs font-bold motion-reduce:transition-none"
                       title={search.description}
                     >
                       {search.label}
@@ -757,13 +754,13 @@ export function DiscoveryWorkspace() {
             </section>
           ) : null}
 
-          <div className="rounded-[20px] border border-white/70 bg-white/[0.62] p-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset] lg:p-3.5">
+          <div className="ea-card p-3 lg:p-3.5">
             <div className="space-y-2.5">
               <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.2fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.queryLabel")}</span>
                   <div className="relative mt-1.5">
-                    <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌕</span>
+                    <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-signal" />
                     <input
                       value={form.naturalLanguageQuery}
                       onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
@@ -777,7 +774,7 @@ export function DiscoveryWorkspace() {
                   <label className="block">
                     <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.cityLabel")}</span>
                     <div className="relative mt-1.5">
-                      <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-brand-signal">⌖</span>
+                      <LocationIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-signal" />
                       <input
                         value={form.city}
                         onChange={(event) => updateAreaLocationField("city", event.target.value)}
@@ -832,7 +829,7 @@ export function DiscoveryWorkspace() {
               <div className="flex flex-col gap-2 border-t border-brand-mist/60 pt-2.5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.mode")}</span>
-                  <div className="grid grid-cols-2 rounded-[14px] border border-brand-mist bg-brand-sand/50 p-0.5">
+                  <div className="ea-card-flat grid grid-cols-2 p-0.5">
                     <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>{t("discovery.areaMode")}</ToggleButton>
                     <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>{t("discovery.coordinatesMode")}</ToggleButton>
                   </div>
@@ -840,10 +837,10 @@ export function DiscoveryWorkspace() {
 
                 <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[520px]">
                   {form.locationMode === "area" ? (
-                    <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
+                    <details className="ea-card-flat group">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
                         <span>{t("discovery.addLocation")}</span>
-                        <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
+                        <ChevronIcon className="h-4 w-4 text-brand-signal transition group-open:rotate-180" />
                       </summary>
                       <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
                         <div className="grid gap-3 md:grid-cols-2">
@@ -864,10 +861,10 @@ export function DiscoveryWorkspace() {
                       </div>
                     </details>
                   ) : (
-                    <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
+                    <details className="ea-card-flat group">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
                         <span>+ {t("discovery.coordinatesMode")}</span>
-                        <span className="text-brand-signal transition group-open:rotate-180">⌄</span>
+                        <ChevronIcon className="h-4 w-4 text-brand-signal transition group-open:rotate-180" />
                       </summary>
                       <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
                         <div className="grid gap-3 md:grid-cols-2">
@@ -880,7 +877,7 @@ export function DiscoveryWorkspace() {
                     </details>
                   )}
 
-                  <details className="group rounded-[14px] border border-brand-mist/80 bg-white/45">
+                  <details className="ea-card-flat group">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
                       <span>+ {t("discovery.termsTitle")}</span>
                       <span className="font-medium text-brand-muted">
@@ -894,7 +891,7 @@ export function DiscoveryWorkspace() {
                         <h3 className="ea-kicker">{group.category}</h3>
                         <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                           {group.terms.map((term) => (
-                            <label key={term} className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-white/70 px-3 py-2 text-sm text-brand-graphite transition hover:border-brand-orchid hover:bg-white">
+                            <label key={term} className="ea-card-flat flex items-center gap-2 px-3 py-2 text-sm text-brand-graphite transition hover:border-brand-orchid">
                               <input type="checkbox" checked={form.selectedTerms.includes(term)} onChange={() => toggleSearchTerm(term)} className="h-4 w-4 rounded border-neutral-300" />
                               <span>{term}</span>
                             </label>
@@ -918,7 +915,7 @@ export function DiscoveryWorkspace() {
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
         {previewError ? <InlineMessage tone="danger">{errorMessage(previewError, locale)}</InlineMessage> : null}
 
-        <div className="rounded-[20px] border border-brand-mist/75 bg-white/[0.62] p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset] lg:p-4">
+        <div className="ea-card p-3.5 lg:p-4">
           {hasSearchActivity ? (
             <div>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -951,7 +948,7 @@ export function DiscoveryWorkspace() {
                       </button>
                     </div>
                   ) : null}
-                  <label className="flex items-center gap-2 rounded-xl border border-brand-mist/80 bg-brand-sand/70 px-3 py-2 text-sm text-brand-graphite">
+                  <label className="ea-card-flat flex items-center gap-2 px-3 py-2 text-sm text-brand-graphite">
                     <input
                       type="checkbox"
                       checked={hideExistingLeads}
@@ -1036,7 +1033,7 @@ export function DiscoveryWorkspace() {
               {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error, locale)}</InlineMessage> : null}
               {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error, locale)}</InlineMessage> : null}
               {preview ? (
-                <p className="mt-3 rounded-2xl border border-brand-mist/70 bg-brand-sand/70 px-3 py-2 text-xs leading-5 text-brand-muted">
+                <p className="ea-card-flat mt-3 px-3 py-2 text-xs leading-5 text-brand-muted">
                    O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas: {formatNumber(selectedEnrichableClientResultIds.length, locale)}. Visíveis prontas: {formatNumber(visibleEnrichableIds.length, locale)}. Recuperáveis agora: {formatNumber(selectedRecoverableClientResultIds.length, locale)}. Bloqueadas na prévia: {formatNumber(blockedCount, locale)}.
                 </p>
               ) : null}
@@ -1096,20 +1093,46 @@ export function DiscoveryWorkspace() {
   );
 }
 
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m16.5 16.5 3.5 3.5" />
+    </svg>
+  );
+}
+
+function LocationIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 function PreviewSkeleton() {
   const { locale } = useI18n();
   return (
-    <div className="mt-4 rounded-[20px] border border-brand-mist/80 bg-white/[0.64] p-4">
+    <div className="ea-card-flat mt-4 p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-brand-graphite">{locale === "en" ? "Generating preview" : "Gerando prévia"}</p>
           <p className="mt-1 text-sm text-brand-muted">{locale === "en" ? "Querying providers and consolidating duplicates." : "Consultando provedores e consolidando duplicatas."}</p>
         </div>
-        <div className="h-9 w-9 rounded-full border border-brand-mist bg-brand-sand" />
+        <div className="ea-card-flat h-9 w-9 rounded-full" />
       </div>
       <div className="mt-5 space-y-3">
         {[0, 1, 2].map((item) => (
-          <div key={item} className="grid gap-3 rounded-2xl border border-brand-mist/70 bg-white/70 p-3 md:grid-cols-[1.4fr_0.9fr_0.9fr_120px]">
+          <div key={item} className="ea-card-flat grid gap-3 p-3 md:grid-cols-[1.4fr_0.9fr_0.9fr_120px]">
             <div className="space-y-2">
               <div className="ea-skeleton h-4 w-44 rounded-full" />
               <div className="ea-skeleton h-3 w-28 rounded-full" />
@@ -1129,12 +1152,12 @@ function EmptyResultsScaffold({ title, description }: { title: string; descripti
   const rows = [t("common.company"), t("leads.city"), t("common.contact"), t("common.status")];
 
   return (
-    <div className="mt-3 overflow-hidden rounded-[18px] border border-dashed border-brand-mist bg-white/[0.48]">
+    <div className="ea-card-flat mt-3 overflow-hidden border-dashed">
       <div className="px-4 py-4 text-center">
         <p className="text-sm font-bold text-brand-graphite">{title}</p>
         <p className="mx-auto mt-1 max-w-xl text-sm leading-6 text-brand-muted">{description}</p>
       </div>
-      <div className="overflow-x-auto border-t border-brand-mist/60 bg-white/[0.34] px-3 pb-3 pt-2">
+      <div className="overflow-x-auto border-t border-brand-mist/60 px-3 pb-3 pt-2">
         <div className="min-w-[620px]">
           <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr_96px] gap-3 rounded-t-xl border-b border-brand-mist/70 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-muted">
             {rows.map((row) => (
@@ -1149,7 +1172,7 @@ function EmptyResultsScaffold({ title, description }: { title: string; descripti
               </div>
               <div className="h-3 w-24 rounded-full bg-brand-mist/55" />
               <div className="h-3 w-28 rounded-full bg-brand-mist/55" />
-              <div className="h-6 rounded-full border border-brand-mist/70 bg-white/[0.54]" />
+              <div className="ea-card-flat h-6 rounded-full" />
             </div>
           ))}
         </div>
@@ -1161,11 +1184,11 @@ function EmptyResultsScaffold({ title, description }: { title: string; descripti
 function PreviewTableFallback() {
   const { t } = useI18n();
   return (
-    <div className="mt-4 rounded-2xl border border-brand-mist/80 bg-brand-surface/70 px-4 py-6">
+    <div className="ea-card-flat mt-4 px-4 py-6">
       <p className="text-sm font-semibold text-brand-graphite">{t("discovery.loadingPreviewTable")}</p>
       <div className="mt-4 space-y-3">
         {[0, 1, 2].map((row) => (
-          <div key={row} className="grid gap-3 rounded-xl border border-brand-mist/60 bg-white/60 p-3 md:grid-cols-[1.2fr_0.8fr_0.8fr_120px]">
+          <div key={row} className="ea-card-flat grid gap-3 p-3 md:grid-cols-[1.2fr_0.8fr_0.8fr_120px]">
             <div className="ea-skeleton h-4 rounded-full" />
             <div className="ea-skeleton h-4 rounded-full" />
             <div className="ea-skeleton h-4 rounded-full" />
@@ -1195,7 +1218,7 @@ function BlockRuleDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-graphite/45 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-3xl border border-brand-mist bg-brand-surface p-5 shadow-panel">
+      <div className="ea-card w-full max-w-lg p-5">
         <p className="ea-kicker">
           {isCompany ? t("common.blockCompany") : t("common.blockDomain")}
         </p>
@@ -1327,8 +1350,8 @@ function ToggleButton({
       onClick={onClick}
       className={
         active
-          ? "rounded-[12px] border border-brand-signal bg-white px-2.5 py-1.5 text-xs font-bold text-brand-graphite shadow-[0_8px_20px_rgba(124,58,237,0.14)]"
-          : "rounded-[12px] border border-transparent px-2.5 py-1.5 text-xs font-semibold text-brand-muted transition hover:bg-white/70 hover:text-brand-graphite"
+          ? "rounded-[12px] border border-brand-signal bg-brand-orchid/[0.08] px-2.5 py-1.5 text-xs font-bold text-brand-graphite shadow-[0_8px_20px_rgba(124,58,237,0.14)]"
+          : "rounded-[12px] border border-transparent px-2.5 py-1.5 text-xs font-semibold text-brand-muted transition hover:bg-brand-orchid/[0.07] hover:text-brand-graphite"
       }
     >
       {children}

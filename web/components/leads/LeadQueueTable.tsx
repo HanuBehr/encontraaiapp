@@ -195,11 +195,11 @@ export function LeadQueueTable({
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="bg-brand-sand/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
+          <thead className="bg-brand-orchid/[0.07] text-xs font-semibold uppercase tracking-wide text-brand-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="border-b border-neutral-200 px-3 py-3">
+                  <th key={header.id} className="border-b border-brand-orchid/10 px-3 py-3">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
@@ -214,12 +214,12 @@ export function LeadQueueTable({
                   onClick={() => onActivateLead(row.original.id)}
                   className={
                     row.original.id === activeLeadId
-                      ? "cursor-pointer bg-brand-olive/10"
-                      : "cursor-pointer bg-brand-surface hover:bg-brand-sand/70"
+                      ? "cursor-pointer bg-brand-orchid/[0.11]"
+                      : "cursor-pointer bg-white/[0.14] hover:bg-brand-orchid/[0.07]"
                   }
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-800">
+                    <td key={cell.id} className="border-b border-brand-orchid/[0.08] px-3 py-3 align-top text-neutral-800">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 import { useI18n } from "@/lib/i18n/client";
 import { isDemoMode } from "@/lib/demo/mode";
@@ -73,12 +73,12 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
         onFocus={() => router.prefetch(item.href)}
         aria-current={active ? "page" : undefined}
         aria-label={item.label}
-        className={`relative flex items-center overflow-hidden rounded-[15px] border px-2 motion-reduce:transition-none ${
-          expanded ? "w-full justify-start min-h-[52px]" : "h-11 w-11 justify-center"
+        className={`relative flex items-center overflow-hidden rounded-[13px] border px-1 motion-reduce:transition-none ${
+          expanded ? "w-full justify-start min-h-[52px]" : "h-9 w-9 justify-center"
         } ${
           active
-            ? "border-white/[0.34] bg-[linear-gradient(135deg,rgba(255,255,255,0.24),rgba(139,92,246,0.24))] text-white/98 shadow-[inset_0_1px_0_rgba(255,255,255,0.26),0_14px_32px_rgba(76,29,149,0.16)]"
-            : "border-transparent text-white/76 hover:border-white/[0.18] hover:bg-white/[0.10] hover:text-white/96 hover:translate-x-px"
+            ? "border-white/55 bg-white/38 text-brand-orchid shadow-[inset_0_1px_0_rgba(255,255,255,0.34),0_12px_28px_rgba(109,40,217,0.18)]"
+            : "border-white/20 bg-white/[0.08] text-brand-graphite/74 hover:border-white/45 hover:bg-white/24 hover:text-brand-graphite hover:translate-x-px"
         }`}
         style={{
           gap: expanded ? "12px" : "0px",
@@ -86,16 +86,10 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
           willChange: "width, transform",
         }}
       >
-        {active && (
-          <span className="absolute left-[-7px] top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-white/92 shadow-[0_0_14px_rgba(221,214,254,0.64)]" />
-        )}
-
         <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] border ${
-            active ? "border-white/[0.26] bg-white/[0.18]" : "border-white/[0.16] bg-white/[0.11]"
-          }`}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px]"
         >
-          <item.Icon className={`h-[18px] w-[18px] ${active ? "text-white/98" : "text-white/78"}`} />
+          <item.Icon className={`h-[17px] w-[17px] ${active ? "text-brand-orchid" : "text-brand-graphite/78"}`} />
         </span>
 
         <div
@@ -115,7 +109,7 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
       </Link>
 
       {!expanded && (
-        <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/[0.12] bg-[#554A64]/[0.94] px-3 py-1.5 text-xs font-medium text-white/88 opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-opacity duration-120 motion-reduce:transition-none group-hover:opacity-100">
+        <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/45 bg-white/70 px-3 py-1.5 text-xs font-bold text-brand-graphite opacity-0 shadow-[0_10px_28px_rgba(47,38,61,0.12)] backdrop-blur-2xl transition-opacity duration-120 motion-reduce:transition-none group-hover:opacity-100">
           {item.label}
         </span>
       )}
@@ -127,23 +121,13 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
+  const expanded = false;
   const navItems = navItemConfigs.map((item) => ({
     href: item.href,
     label: t(item.labelKey),
     description: t(item.descriptionKey),
     Icon: item.Icon,
   }));
-
-  const handleMouseEnter = useCallback(() => setExpanded(true), []);
-  const handleMouseLeave = useCallback(() => setExpanded(false), []);
-  const handleFocusCapture = useCallback(() => setExpanded(true), []);
-  const handleBlurCapture = useCallback((e: React.FocusEvent) => {
-    if (sidebarRef.current && !sidebarRef.current.contains(e.relatedTarget as Node)) {
-      setExpanded(false);
-    }
-  }, []);
 
   useEffect(() => {
     const prefetchRoutes = () => navItemConfigs.forEach((item) => router.prefetch(item.href));
@@ -156,77 +140,48 @@ export function AppShell({ children }: AppShellProps) {
   }, [router]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-brand-canvas text-brand-graphite">
+    <div className="relative min-h-screen overflow-x-hidden bg-brand-canvas text-brand-graphite">
       <div className="ea-ambient-noise pointer-events-none fixed inset-0 z-0 opacity-50" />
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_78%_10%,rgba(139,92,246,0.16),transparent_28rem),radial-gradient(circle_at_18%_82%,rgba(96,165,250,0.12),transparent_30rem)]" />
       {isDemoMode() ? (
-        <div className="fixed right-4 top-4 z-50 rounded-full border border-brand-olive/50 bg-brand-surface/85 px-3 py-1.5 text-xs font-bold text-brand-graphite shadow-panel backdrop-blur-xl lg:right-6 lg:top-5">
+        <div className="fixed bottom-20 right-4 z-50 rounded-full border border-brand-orchid/20 bg-white/65 px-2.5 py-1 text-[11px] font-bold text-brand-muted shadow-[0_10px_28px_rgba(47,38,61,0.08)] backdrop-blur-xl lg:bottom-5 lg:right-6">
           {t("app.demoBadge")}
         </div>
       ) : null}
 
-      {/* Desktop Adaptive Dock */}
+      {/* Desktop floating dock */}
       <aside
-        ref={sidebarRef}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onFocusCapture={handleFocusCapture}
-        onBlurCapture={handleBlurCapture}
-        className="fixed inset-y-0 left-0 z-40 hidden flex-col px-2 py-[16px] lg:flex"
+        className="fixed left-4 top-1/2 z-40 hidden -translate-y-1/2 flex-col rounded-[22px] border border-white/45 bg-white/[0.16] px-1 py-2 shadow-[0_20px_54px_rgba(45,36,62,0.14),inset_0_1px_0_rgba(255,255,255,0.36)] backdrop-blur-3xl lg:flex"
         style={{
-          width: expanded ? "224px" : "70px",
-          transition: "width 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
-          willChange: "width, box-shadow",
-          background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.24), transparent 34%),radial-gradient(circle at 50% 100%, rgba(167,139,250,0.06), transparent 44%),linear-gradient(180deg, rgba(146,137,162,0.58) 0%, rgba(118,108,137,0.52) 48%, rgba(91,82,110,0.56) 100%)",
-          backdropFilter: "blur(30px) saturate(145%)",
-          WebkitBackdropFilter: "blur(30px) saturate(145%)",
-          boxShadow: expanded
-            ? "inset -1px 0 0 rgba(255,255,255,0.10), 14px 0 36px rgba(45,36,62,0.08)"
-            : "inset -1px 0 0 rgba(255,255,255,0.10), 8px 0 24px rgba(45,36,62,0.06)",
+          width: "46px",
         }}
       >
-        {/* Soft edge fade */}
-        <div className="pointer-events-none absolute top-0 right-[-52px] h-full w-[52px] bg-[linear-gradient(90deg,rgba(244,241,251,0.42),rgba(244,241,251,0.12),rgba(244,241,251,0))] blur-[16px]" />
-
-        {/* Ambient glow */}
-        <div className="pointer-events-none absolute -top-16 left-1/2 h-36 w-36 -translate-x-1/2 rounded-full bg-brand-orchid/4 blur-3xl" />
-
-        <div className="relative flex h-full flex-col">
+        <div className="relative flex flex-col items-center">
           {/* Logo */}
-          <Link
-            href="/"
-            prefetch
-            onMouseEnter={() => router.prefetch("/")}
-            onFocus={() => router.prefetch("/")}
-            aria-label="Encontra.ai home"
-            className="relative flex items-center rounded-[16px] px-1 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/35 motion-reduce:transition-none"
-            style={{ minHeight: "40px" }}
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] border border-white/[0.24] bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0.11))] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_22px_rgba(76,29,149,0.10)]">
-              <svg aria-hidden="true" viewBox="0 0 40 40" className="h-[22px] w-[22px]">
-                <path d="M22.2 3.7C31.1 8 36.1 16.2 36.4 27.9c-4.5-5.2-11.7-6.7-19.3-2.8 4.2-7.2 4.5-14.4 5.1-21.4Z" fill="#FFFFFF" />
-                <path d="M18.3 15.3c1.8 4.7 1.1 10.3-2.2 17.2 2.9-1.8 5.9-2.7 9.1-3.1-2.5-3.3-3.8-8.1-6.9-14.1Z" fill="#6D28D9" />
-              </svg>
-            </div>
-
-            <div
-              className="whitespace-nowrap motion-reduce:transition-none"
-              style={{
-                opacity: expanded ? 1 : 0,
-                transform: expanded ? "translateX(0)" : "translateX(-4px)",
-                pointerEvents: expanded ? "auto" : "none",
-                marginLeft: expanded ? "12px" : "0",
-                transition: "opacity 160ms ease-out, transform 190ms cubic-bezier(0.22, 1, 0.36, 1), margin-left 210ms cubic-bezier(0.22, 1, 0.36, 1)",
-                willChange: "opacity, transform",
-              }}
+          <div className="group relative flex items-center justify-center">
+            <Link
+              href="/"
+              prefetch
+              onMouseEnter={() => router.prefetch("/")}
+              onFocus={() => router.prefetch("/")}
+              aria-label="Home"
+              className="relative flex h-9 w-9 items-center justify-center rounded-[13px] transition hover:bg-white/24 focus:outline-none focus:ring-2 focus:ring-brand-orchid/25 motion-reduce:transition-none"
+              style={{ minHeight: "36px" }}
             >
-              <p className="text-[14px] font-bold tracking-tight text-white/96">Encontra.ai</p>
-              <p className="text-xs font-medium text-white/68">{t("app.leadOperations")}</p>
-            </div>
-          </Link>
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-white/35 bg-white/[0.18] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_10px_22px_rgba(76,29,149,0.08)]">
+                <svg aria-hidden="true" viewBox="0 0 40 40" className="h-5 w-5">
+                  <path d="M22.2 3.7C31.1 8 36.1 16.2 36.4 27.9c-4.5-5.2-11.7-6.7-19.3-2.8 4.2-7.2 4.5-14.4 5.1-21.4Z" fill="#FFFFFF" />
+                  <path d="M18.3 15.3c1.8 4.7 1.1 10.3-2.2 17.2 2.9-1.8 5.9-2.7 9.1-3.1-2.5-3.3-3.8-8.1-6.9-14.1Z" fill="#6D28D9" />
+                </svg>
+              </div>
+            </Link>
+            <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/45 bg-white/70 px-3 py-1.5 text-xs font-bold text-brand-graphite opacity-0 shadow-[0_10px_28px_rgba(47,38,61,0.12)] backdrop-blur-2xl transition-opacity duration-120 motion-reduce:transition-none group-hover:opacity-100">
+              Home
+            </span>
+          </div>
 
           {/* Navigation */}
-          <nav className={`mt-5 space-y-[6px] ${expanded ? "" : "flex flex-col items-center"}`}>
+          <nav className="mt-2.5 flex flex-col items-center space-y-1.5">
             {navItems.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return <NavItem key={item.href} item={item} active={active} expanded={expanded} />;
@@ -262,7 +217,7 @@ export function AppShell({ children }: AppShellProps) {
       </nav>
 
       {/* Main */}
-      <main className="relative z-10 w-full px-4 py-5 pb-16 sm:px-6 lg:pl-[92px] lg:pr-7 lg:py-7 lg:pb-7">
+      <main className="relative z-10 w-full px-4 py-5 pb-16 sm:px-6 lg:pl-[78px] lg:pr-7 lg:py-7 lg:pb-7">
         <div className="w-full max-w-[1540px]">{children}</div>
       </main>
     </div>

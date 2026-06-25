@@ -34,9 +34,9 @@ export function DiscoveryPreviewTable({
 }: DiscoveryPreviewTableProps) {
   const { locale, t } = useI18n();
   return (
-    <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-mist/80 bg-brand-surface/70">
+    <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-orchid/10 bg-white/[0.14]">
       <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-        <thead className="bg-brand-sand/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
+        <thead className="bg-brand-orchid/[0.07] text-xs font-semibold uppercase tracking-wide text-brand-muted">
           <tr>
             <th className="border-b border-neutral-200 px-3 py-3">
               <input
@@ -65,7 +65,7 @@ export function DiscoveryPreviewTable({
               const hasWebsite = hasWebsiteForCandidate(item.candidate);
               const contactFormUrl = firstExtractedContactUrl(item, "contact_form");
               return (
-                <tr key={clientResultId || `${item.search_term}-${item.candidate.business_name}`} className="bg-brand-surface transition hover:bg-brand-sand/70">
+                <tr key={clientResultId || `${item.search_term}-${item.candidate.business_name}`} className="bg-white/[0.14] transition hover:bg-brand-orchid/[0.07]">
                   <td className="border-b border-neutral-100 px-3 py-3 align-top">
                     <input
                       type="checkbox"

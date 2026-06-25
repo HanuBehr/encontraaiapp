@@ -118,7 +118,7 @@ export function LeadBatchActions({
           currentTotal,
         );
         if (exportScope.requested === 0) {
-          throw new Error("Nenhum lead encontrado nesse escopo.");
+          throw new Error(t("error.noLeadsInScope"));
         }
         const exported = await exportExcelForScope(exportScope.request);
         downloadBlob(exported.blob, exported.filename);
@@ -132,7 +132,7 @@ export function LeadBatchActions({
 
       if (kind === "assign") {
         if (scopeAtClick === "latest") {
-          throw new Error("A atribuição está disponível apenas para leads selecionados ou para a lista filtrada.");
+          throw new Error(t("error.assignLatestScope"));
         }
         const response = await assignLeadBatch(buildScopeRequest(scopeAtClick, selectedLeadIds, currentFilters));
         return {
@@ -147,7 +147,7 @@ export function LeadBatchActions({
 
       if (kind === "enrich") {
         if (resolvedScope.leadIds.length === 0) {
-          throw new Error("Nenhum lead encontrado nesse escopo.");
+          throw new Error(t("error.noLeadsInScope"));
         }
         const response = await enrichLeadBatch(resolvedScope.leadIds);
         return {
@@ -160,10 +160,10 @@ export function LeadBatchActions({
 
       if (kind === "cnpj") {
         if (!cnpjEnabled) {
-          throw new Error("Enriquecimento CNPJ está desativado. Configure um provedor CNPJ antes de usar esta ação.");
+          throw new Error(t("error.cnpjDisabled"));
         }
         if (resolvedScope.leadIds.length === 0) {
-          throw new Error("Nenhum lead encontrado nesse escopo.");
+          throw new Error(t("error.noLeadsInScope"));
         }
         const response = await enrichLeadBatchCnpj(resolvedScope.leadIds, {
           searchMode: deliverySearchMode ? "delivery" : "balanced",
@@ -177,7 +177,7 @@ export function LeadBatchActions({
         } satisfies ActionResult;
       }
 
-      throw new Error("Ação em lote desconhecida.");
+      throw new Error(t("error.unknownBatchAction"));
     },
     onSuccess: (result) => {
       setLastResult(result);
@@ -216,7 +216,7 @@ export function LeadBatchActions({
           </p>
           {cnpjEnabled ? (
             <p className="mt-1 text-xs text-brand-muted">
-              CNPJ está configurado para buscar cadastro já informado, tentar encontrar CNPJ no site da empresa e usar busca cadastral paga.
+              {t("batch.cnpjConfigured")}
             </p>
           ) : null}
           <p className="mt-1 text-xs text-brand-muted">
@@ -231,7 +231,7 @@ export function LeadBatchActions({
                   onChange={(event) => setDeliverySearchMode(event.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-neutral-300"
                 />
-                <span>Buscar com máxima cobertura (usa mais créditos)</span>
+                <span>{t("batch.deliverySearchMode")}</span>
               </label>
               <label className="mt-1 flex items-start gap-2 text-xs text-brand-muted">
                 <input
@@ -240,16 +240,16 @@ export function LeadBatchActions({
                   onChange={(event) => setForcePaidSearch(event.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-neutral-300"
                 />
-                <span>Forçar nova busca mesmo se já consultado recentemente</span>
+                <span>{t("batch.forcePaidSearch")}</span>
               </label>
               {deliverySearchMode ? (
-                <p className="mt-1 text-xs text-amber-700">Modo cobertura pode fazer mais consultas pagas por lead.</p>
+                <p className="mt-1 text-xs text-amber-700">{t("batch.deliverySearchWarning")}</p>
               ) : null}
             </>
           ) : null}
           {searchActive ? (
             <p className="mt-2 text-xs text-brand-muted">
-              {locale === "en" ? "Quick search applies to the loaded table. The filtered list uses the filters above." : "A busca rápida atua só sobre a tabela carregada. A lista filtrada usa os filtros acima."}
+              {t("batch.quickSearchScope")}
             </p>
           ) : null}
         </div>
@@ -300,17 +300,16 @@ export function LeadBatchActions({
       </div>
 
       {selectedDisabled ? (
-        <p className="mt-3 rounded-2xl bg-brand-sand/80 px-3 py-2 text-sm text-brand-muted">
-          Selecione um ou mais leads para agir sobre os itens marcados ou mude o escopo para a lista filtrada.
+        <p className="mt-3 rounded-2xl border border-brand-orchid/10 bg-brand-orchid/[0.06] px-3 py-2 text-sm text-brand-muted">
+          {t("batch.selectedRequired")}
         </p>
       ) : null}
 
       {scope === "latest" ? (
-        <p className="mt-3 rounded-2xl bg-brand-sand/80 px-3 py-2 text-sm text-brand-muted">
-          A última importação pode ser enriquecida e exportada. A atribuição continua restrita aos leads selecionados
-          ou à lista filtrada.
-          {latestBatchQuery.isLoading ? " Carregando a contagem do lote." : ""}
-          {latestBatchQuery.isError ? " Não foi possível carregar a contagem do lote." : ""}
+        <p className="mt-3 rounded-2xl border border-brand-orchid/10 bg-brand-orchid/[0.06] px-3 py-2 text-sm text-brand-muted">
+          {t("batch.latestScopeNotice")}
+          {latestBatchQuery.isLoading ? ` ${t("batch.latestScopeLoading")}` : ""}
+          {latestBatchQuery.isError ? ` ${t("batch.latestScopeError")}` : ""}
         </p>
       ) : null}
 
@@ -393,7 +392,7 @@ function ActionButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
+      className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed"
     >
       {children}
     </button>
@@ -553,9 +552,6 @@ async function buildDirectActionScope(
 
 function buildScopeRequest(scope: ActionScope, selectedLeadIds: number[], currentFilters: LeadListParams): LeadScopeRequest {
   if (scope === "selected") {
-    if (selectedLeadIds.length === 0) {
-      throw new Error("Selecione pelo menos um lead.");
-    }
     return { lead_ids: selectedLeadIds };
   }
 
