@@ -41,6 +41,15 @@ function CogIcon({ className }: { className?: string }) {
   );
 }
 
+function HomeIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+      <path d="M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
 type NavItemConfigEntry = {
   href: string;
   labelKey: TranslationKey;
@@ -52,6 +61,11 @@ const navItemConfigs: NavItemConfigEntry[] = [
   { href: "/discovery", labelKey: "nav.discovery", descriptionKey: "nav.discoveryDescription", Icon: SearchIcon },
   { href: "/leads", labelKey: "nav.leads", descriptionKey: "nav.leadsDescription", Icon: GridIcon },
   { href: "/settings", labelKey: "nav.settings", descriptionKey: "nav.settingsDescription", Icon: CogIcon },
+];
+
+const desktopNavItemConfigs: NavItemConfigEntry[] = [
+  { href: "/", labelKey: "nav.home", descriptionKey: "nav.homeDescription", Icon: HomeIcon },
+  ...navItemConfigs,
 ];
 
 type NavItemConfig = {
@@ -128,6 +142,12 @@ export function AppShell({ children }: AppShellProps) {
     description: t(item.descriptionKey),
     Icon: item.Icon,
   }));
+  const desktopNavItems = desktopNavItemConfigs.map((item) => ({
+    href: item.href,
+    label: t(item.labelKey),
+    description: t(item.descriptionKey),
+    Icon: item.Icon,
+  }));
 
   useEffect(() => {
     const prefetchRoutes = () => navItemConfigs.forEach((item) => router.prefetch(item.href));
@@ -157,33 +177,10 @@ export function AppShell({ children }: AppShellProps) {
         }}
       >
         <div className="relative flex flex-col items-center">
-          {/* Logo */}
-          <div className="group relative flex items-center justify-center">
-            <Link
-              href="/"
-              prefetch
-              onMouseEnter={() => router.prefetch("/")}
-              onFocus={() => router.prefetch("/")}
-              aria-label="Home"
-              className="relative flex h-9 w-9 items-center justify-center rounded-[13px] transition hover:bg-white/24 focus:outline-none focus:ring-2 focus:ring-brand-orchid/25 motion-reduce:transition-none"
-              style={{ minHeight: "36px" }}
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-white/35 bg-white/[0.18] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_10px_22px_rgba(76,29,149,0.08)]">
-                <svg aria-hidden="true" viewBox="0 0 40 40" className="h-5 w-5">
-                  <path d="M22.2 3.7C31.1 8 36.1 16.2 36.4 27.9c-4.5-5.2-11.7-6.7-19.3-2.8 4.2-7.2 4.5-14.4 5.1-21.4Z" fill="#FFFFFF" />
-                  <path d="M18.3 15.3c1.8 4.7 1.1 10.3-2.2 17.2 2.9-1.8 5.9-2.7 9.1-3.1-2.5-3.3-3.8-8.1-6.9-14.1Z" fill="#6D28D9" />
-                </svg>
-              </div>
-            </Link>
-            <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/45 bg-white/70 px-3 py-1.5 text-xs font-bold text-brand-graphite opacity-0 shadow-[0_10px_28px_rgba(47,38,61,0.12)] backdrop-blur-2xl transition-opacity duration-120 motion-reduce:transition-none group-hover:opacity-100">
-              Home
-            </span>
-          </div>
-
           {/* Navigation */}
-          <nav className="mt-2.5 flex flex-col items-center space-y-1.5">
-            {navItems.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          <nav className="flex flex-col items-center space-y-1.5">
+            {desktopNavItems.map((item) => {
+              const active = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`);
               return <NavItem key={item.href} item={item} active={active} expanded={expanded} />;
             })}
           </nav>

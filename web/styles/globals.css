@@ -51,7 +51,39 @@ textarea {
   letter-spacing: 0;
 }
 
-input[type="checkbox"],
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(135deg, rgba(250, 247, 255, 0.38), rgba(229, 222, 252, 0.42));
+  border: 1px solid rgba(109, 40, 217, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  color: #ffffff;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: middle;
+}
+
+input[type="checkbox"]::before {
+  background: currentColor;
+  clip-path: polygon(14% 44%, 0 62%, 39% 100%, 100% 18%, 82% 0, 36% 62%);
+  content: "";
+  height: 0.58rem;
+  transform: scale(0);
+  transform-origin: center;
+  transition: transform 120ms ease;
+  width: 0.58rem;
+}
+
+input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, #6d28d9, #8b5cf6);
+  border-color: rgba(196, 181, 253, 0.72);
+  box-shadow: 0 8px 18px rgba(109, 40, 217, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+input[type="checkbox"]:checked::before {
+  transform: scale(1);
+}
+
 input[type="radio"] {
   accent-color: var(--ea-sage);
 }
@@ -174,6 +206,17 @@ textarea:focus-visible {
     border-color: var(--ea-sage);
     box-shadow: 0 0 0 4px var(--ea-focus);
     outline: none;
+  }
+
+  .ea-input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .ea-input[type="number"]::-webkit-inner-spin-button,
+  .ea-input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 
   .ea-input option {

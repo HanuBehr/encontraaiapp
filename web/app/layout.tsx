@@ -7,6 +7,10 @@ import "@/styles/globals.css";
 export const metadata: Metadata = {
   title: "Encontra.ai | Descoberta de leads",
   description: "Busque empresas por nicho e cidade, enriqueça contatos, salve leads e exporte planilhas prontas.",
+  icons: {
+    icon: "/brand/encontra-logo.png",
+    apple: "/brand/encontra-logo.png",
+  },
 };
 
 type RootLayoutProps = {
