@@ -84,7 +84,9 @@ export function DemoHome() {
         </section>
 
         <section className="py-8 text-center lg:py-10">
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-brand-orchid">Encontra.ai</p>
+          <p className="text-[0.8rem] font-extrabold uppercase tracking-[0.26em] text-brand-orchid drop-shadow-[0_8px_18px_rgba(109,40,217,0.12)]">
+            Encontra.ai
+          </p>
           <h2 className="mx-auto mt-3 max-w-5xl text-4xl font-bold tracking-[-0.055em] text-brand-graphite sm:text-5xl lg:text-[4.6rem] lg:leading-[0.96]">
             {copy.title}
           </h2>
@@ -104,7 +106,7 @@ export function DemoHome() {
           <div className="mx-auto mt-9 grid max-w-5xl gap-5 border-t border-brand-mist/70 pt-5 text-left sm:grid-cols-3">
             {copy.steps.map((step) => (
               <div key={step.title} className="relative pr-4">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orchid/70">{step.label}</p>
+                <p className="ea-kicker">{step.label}</p>
                 <p className="mt-2 text-base font-bold text-brand-graphite">{step.title}</p>
                 <p className="mt-1.5 max-w-[18rem] text-sm leading-6 text-brand-muted">{step.description}</p>
               </div>
