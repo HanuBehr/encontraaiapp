@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { GlassSelect } from "@/components/ui/GlassSelect";
 import {
   assignLeadBatch,
   enrichLeadBatchCnpj,
@@ -204,6 +205,14 @@ export function LeadBatchActions({
   const latestDisabled = scope === "latest" && (latestBatchQuery.isLoading || latestBatchQuery.isError);
   const assignDisabled = actionMutation.isPending || selectedDisabled || currentDisabled || latestDisabled || scope === "latest";
   const scopedActionDisabled = actionMutation.isPending || selectedDisabled || currentDisabled || latestDisabled;
+  const scopeOptions = [
+    { value: "selected", label: t("batch.selectedScope", { count: formatNumber(selectedLeadIds.length, locale) }) },
+    { value: "current", label: t("batch.currentScope", { count: formatNumber(currentTotal, locale) }) },
+    {
+      value: "latest",
+      label: t("batch.latestScope", { count: latestBatchQuery.data ? ` (${formatNumber(latestBatchQuery.data.lead_count, locale)})` : "" }),
+    },
+  ];
 
   return (
     <section className="ea-card p-5">
@@ -263,23 +272,19 @@ export function LeadBatchActions({
           </p>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_118px_minmax(360px,1.55fr)] lg:items-end">
-            <label className="block">
+            <div className="block">
               <span className="text-xs font-medium text-brand-muted">{t("batch.scope")}</span>
-              <select
+              <GlassSelect
                 value={scope}
-                onChange={(event) => {
-                  setScope(event.target.value as ActionScope);
+                options={scopeOptions}
+                ariaLabel={t("batch.scope")}
+                className="mt-1"
+                onChange={(value) => {
+                  setScope(value as ActionScope);
                   setLastResult(null);
                 }}
-                className="ea-input mt-1 w-full px-2 py-2 text-sm"
-              >
-                <option value="selected">{t("batch.selectedScope", { count: formatNumber(selectedLeadIds.length, locale) })}</option>
-                <option value="current">{t("batch.currentScope", { count: formatNumber(currentTotal, locale) })}</option>
-                <option value="latest">
-                  {t("batch.latestScope", { count: latestBatchQuery.data ? ` (${formatNumber(latestBatchQuery.data.lead_count, locale)})` : "" })}
-                </option>
-              </select>
-            </label>
+              />
+            </div>
 
             <div className="ea-card-flat px-3 py-2">
               <p className="text-xs font-medium text-brand-muted">{t("batch.count")}</p>

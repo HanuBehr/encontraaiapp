@@ -176,6 +176,58 @@ textarea:focus-visible {
     outline: none;
   }
 
+  .ea-input option {
+    background: #17131f;
+    color: #ffffff;
+  }
+
+  .ea-input option:checked,
+  .ea-input option:hover {
+    background: #6d28d9;
+    color: #ffffff;
+  }
+
+  .ea-select-menu {
+    background: rgba(23, 19, 31, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 1rem;
+    box-shadow: 0 24px 70px rgba(20, 16, 30, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    overflow: auto;
+    padding: 0.25rem;
+    backdrop-filter: blur(18px) saturate(130%);
+    -webkit-backdrop-filter: blur(18px) saturate(130%);
+  }
+
+  .ea-select-option {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 0.75rem;
+    color: rgba(255, 255, 255, 0.88);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 700;
+    justify-content: space-between;
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    transition: background-color 140ms ease, color 140ms ease;
+    width: 100%;
+  }
+
+  .ea-select-option:hover {
+    background: rgba(255, 255, 255, 0.10);
+    color: #ffffff;
+  }
+
+  .ea-select-option-active,
+  .ea-select-option-active:hover {
+    background: linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%);
+    color: #ffffff;
+  }
+
   .ea-glass {
     background: rgba(29, 22, 48, 0.66);
     border: 1px solid rgba(196, 181, 253, 0.16);

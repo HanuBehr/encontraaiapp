@@ -268,6 +268,7 @@ function LeadQueueSearch({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             placeholder={t("leads.searchPlaceholder")}
+            autoComplete="off"
             className="ea-input mt-2 w-full px-3 py-2 text-sm"
           />
         </label>

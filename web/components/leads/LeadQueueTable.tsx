@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-table";
 import { useMemo } from "react";
 
+import { GlassSelect } from "@/components/ui/GlassSelect";
 import { formatLeadLabel } from "@/lib/format/lead-labels";
 import type { LeadSummary } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/client";
@@ -49,6 +50,7 @@ export function LeadQueueTable({
 }: LeadQueueTableProps) {
   const { locale, t } = useI18n();
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const pageSizeOptions = [10, 25, 50, 100].map((size) => ({ value: String(size), label: String(size) }));
   const columns = useMemo<ColumnDef<LeadSummary>[]>(
     () => [
       {
@@ -177,20 +179,16 @@ export function LeadQueueTable({
             {isLoading ? t("leads.loadingList") : t("leads.inCurrentList", { count: formatNumber(total, locale) })}
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-brand-muted">
-          {t("common.rows")}
-          <select
-            value={pageSize}
-            onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className="ea-input px-2 py-1"
-          >
-            {[10, 25, 50, 100].map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex items-center gap-2 text-sm text-brand-muted">
+          <span>{t("common.rows")}</span>
+          <GlassSelect
+            value={String(pageSize)}
+            options={pageSizeOptions}
+            ariaLabel={t("common.rowsPerPage")}
+            className="w-20"
+            onChange={(value) => onPageSizeChange(Number(value))}
+          />
+        </div>
       </div>
 
       <div className="overflow-x-auto">

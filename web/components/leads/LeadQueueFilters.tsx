@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { GlassSelect } from "@/components/ui/GlassSelect";
 import { formatLeadLabel } from "@/lib/format/lead-labels";
 import type { LeadOptionsResponse } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/client";
@@ -198,22 +199,22 @@ type SelectFieldProps = {
 function SelectField({ label, value, options, onChange, emptyLabel }: SelectFieldProps) {
   const { t } = useI18n();
   const resolvedEmptyLabel = emptyLabel === undefined ? t("common.all") : emptyLabel;
+  const resolvedOptions = [
+    ...(resolvedEmptyLabel === null ? [] : [{ value: "", label: resolvedEmptyLabel }]),
+    ...options,
+  ];
+
   return (
-    <label className="block">
+    <div className="block">
       <span className="text-xs font-medium text-brand-muted">{label}</span>
-      <select
+      <GlassSelect
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="ea-input mt-1 w-full px-2 py-2 text-sm"
-      >
-        {resolvedEmptyLabel === null ? null : <option value="">{resolvedEmptyLabel}</option>}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+        options={resolvedOptions}
+        ariaLabel={label}
+        className="mt-1"
+        onChange={onChange}
+      />
+    </div>
   );
 }
 

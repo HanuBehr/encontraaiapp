@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
+import { GlassSelect } from "@/components/ui/GlassSelect";
 import {
   createExclusionRule,
   enrichDiscoveryPreview,
@@ -740,12 +741,13 @@ export function DiscoveryWorkspace() {
                   <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.queryLabel")}</span>
                   <div className="relative mt-1.5">
                     <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-signal" />
-                    <input
-                      value={form.naturalLanguageQuery}
-                      onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
-                      placeholder={t("discovery.queryPlaceholder")}
-                      className="ea-input h-[50px] w-full px-10 py-3 text-sm"
-                    />
+                      <input
+                        value={form.naturalLanguageQuery}
+                        onChange={(event) => updateNaturalLanguageQuery(event.target.value)}
+                        placeholder={t("discovery.queryPlaceholder")}
+                        autoComplete="off"
+                        className="ea-input h-[50px] w-full px-10 py-3 text-sm"
+                      />
                   </div>
                 </label>
 
@@ -758,6 +760,7 @@ export function DiscoveryWorkspace() {
                         value={form.city}
                         onChange={(event) => updateAreaLocationField("city", event.target.value)}
                         placeholder={t("discovery.cityPlaceholder")}
+                        autoComplete="off"
                         className="ea-input h-[50px] w-full px-10 py-3 text-sm"
                       />
                     </div>
@@ -769,6 +772,7 @@ export function DiscoveryWorkspace() {
                       value={form.locationLabel}
                       onChange={(event) => updateCoordinateLabel(event.target.value)}
                       placeholder={t("discovery.locationLabelPlaceholder")}
+                      autoComplete="off"
                       className="ea-input mt-1.5 h-[50px] w-full px-4 py-3 text-sm"
                     />
                   </label>
@@ -881,7 +885,7 @@ export function DiscoveryWorkspace() {
                       </div>
                       <label className="mt-3 block">
                     <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.termsTitle")}</span>
-                    <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder={t("discovery.customTermsPlaceholder")} className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
+                    <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder={t("discovery.customTermsPlaceholder")} autoComplete="off" className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
                       </label>
                     </div>
                   </details>
@@ -936,34 +940,26 @@ export function DiscoveryWorkspace() {
                     />
                     <span>{t("discovery.hideAlreadySaved")}</span>
                   </label>
-                  <label className="block w-full lg:w-40">
+                  <div className="block w-full lg:w-40">
                     <span className="text-xs font-medium text-brand-muted">{t("discovery.blocking")}</span>
-                    <select
+                    <GlassSelect
                       value={blockedFilter}
-                      onChange={(event) => setBlockedFilter(event.target.value as LeadBlockedFilter)}
-                      className="ea-input mt-1 w-full px-2 py-2 text-sm"
-                    >
-                      {localizedBlockedOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block w-full lg:w-36">
+                      options={localizedBlockedOptions}
+                      ariaLabel={t("discovery.blocking")}
+                      className="mt-1"
+                      onChange={(value) => setBlockedFilter(value as LeadBlockedFilter)}
+                    />
+                  </div>
+                  <div className="block w-full lg:w-36">
                     <span className="text-xs font-medium text-brand-muted">Site</span>
-                    <select
+                    <GlassSelect
                       value={websiteFilter}
-                      onChange={(event) => setWebsiteFilter(event.target.value as WebsiteFilter)}
-                      className="ea-input mt-1 w-full px-2 py-2 text-sm"
-                    >
-                      {localizedWebsiteOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      options={localizedWebsiteOptions}
+                      ariaLabel="Site"
+                      className="mt-1"
+                      onChange={(value) => setWebsiteFilter(value as WebsiteFilter)}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1208,19 +1204,19 @@ function BlockRuleDialog({
 
         <div className="mt-4 space-y-3">
           {isCompany ? (
-            <label className="block">
+            <div className="block">
               <span className="text-xs font-medium text-neutral-600">{locale === "en" ? "Rule type" : "Tipo de regra"}</span>
-              <select
+              <GlassSelect
                 value={draft.ruleType}
-                onChange={(event) =>
-                  onChange({ ...draft, ruleType: event.target.value as "exact_name" | "business_name_contains" })
-                }
-                className="ea-input mt-1 w-full px-2 py-2 text-sm"
-              >
-                <option value="exact_name">{locale === "en" ? "Exact company name" : "Nome exato da empresa"}</option>
-                <option value="business_name_contains">{locale === "en" ? "Company name contains" : "Nome da empresa contém"}</option>
-              </select>
-            </label>
+                options={[
+                  { value: "exact_name", label: locale === "en" ? "Exact company name" : "Nome exato da empresa" },
+                  { value: "business_name_contains", label: locale === "en" ? "Company name contains" : "Nome da empresa contém" },
+                ]}
+                ariaLabel={locale === "en" ? "Rule type" : "Tipo de regra"}
+                className="mt-1"
+                onChange={(value) => onChange({ ...draft, ruleType: value as "exact_name" | "business_name_contains" })}
+              />
+            </div>
           ) : (
             <div className="ea-card-flat px-3 py-2 text-sm text-brand-muted">
               {locale === "en" ? "Domain rule" : "Regra por domínio"}
@@ -1280,6 +1276,7 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        autoComplete="off"
         className="ea-input mt-1.5 h-10 w-full px-3 py-2 text-sm"
       />
     </label>
