@@ -6,9 +6,13 @@ export type DemoGuidedSearch = {
   query: string;
   label: string;
   description: string;
+  city: string;
+  state: string;
+  resultCount: number;
+  websiteCount: number;
 };
 
-export type DemoScenario = DemoGuidedSearch & {
+export type DemoScenario = Omit<DemoGuidedSearch, "resultCount" | "websiteCount"> & {
   id: string;
   locale: Locale;
   city: string;
@@ -80,22 +84,22 @@ const demoScenarios: DemoScenario[] = [
     ],
   }),
   scenario({
-    id: "pt-construction-bh",
+    id: "pt-logistics-bh",
     locale: "pt-BR",
-    query: "materiais de construção em Belo Horizonte",
-    label: "Materiais de construção em BH",
-    description: "Distribuidores e lojas com perfil B2B.",
+    query: "empresas de logística em Belo Horizonte",
+    label: "Logística em BH",
+    description: "Operadores e fornecedores B2B com cobertura regional.",
     city: "Belo Horizonte",
     state: "MG",
     country: "Brazil",
     latitude: -19.9167,
     longitude: -43.9345,
-    categoryKeywords: ["material", "materiais", "construcao", "construção", "ferragens", "obra", "building", "construction"],
+    categoryKeywords: ["logistica", "logística", "transportadora", "transporte", "distribuidora", "fulfillment", "delivery"],
     candidates: [
-      candidate("Construminas Savassi", "Materiais de construção", "Belo Horizonte", "MG", "https://construminas.example", "vendas@construminas.example", "+55 31 94002-8101", null, "Av. do Contorno, 6100"),
-      candidate("BH Ferragens Pro", "Ferragens", "Belo Horizonte", "MG", "https://bhferragens.example", null, "+55 31 94002-8102", "https://instagram.com/bhferragens", "Rua Curitiba, 900"),
-      candidate("Depósito Serra Verde", "Depósito de materiais", "Belo Horizonte", "MG", null, null, "+55 31 94002-8103", null, "Av. Cristiano Machado, 2100"),
-      candidate("Casa Forte Acabamentos", "Acabamentos", "Belo Horizonte", "MG", "https://casafortebh.example", "orcamentos@casafortebh.example", null, null, "Rua São Paulo, 1120"),
+      candidate("Rota Minas Logística", "Transportadora", "Belo Horizonte", "MG", "https://rotaminas.example", "comercial@rotaminas.example", "+55 31 94002-8101", null, "Av. do Contorno, 6100"),
+      candidate("BH Fulfillment Hub", "Operador logístico", "Belo Horizonte", "MG", "https://bhfulfillment.example", null, "+55 31 94002-8102", "https://instagram.com/bhfulfillment", "Rua Curitiba, 900"),
+      candidate("Serra Verde Distribuição", "Distribuidora", "Belo Horizonte", "MG", null, null, "+55 31 94002-8103", null, "Av. Cristiano Machado, 2100"),
+      candidate("Ponto Cargo Express", "Entrega B2B", "Belo Horizonte", "MG", "https://pontocargo.example", "vendas@pontocargo.example", null, null, "Rua São Paulo, 1120"),
     ],
   }),
   scenario({
@@ -179,7 +183,15 @@ const demoScenarios: DemoScenario[] = [
 export function getDemoGuidedSearches(locale: Locale): DemoGuidedSearch[] {
   return demoScenarios
     .filter((scenarioItem) => scenarioItem.locale === locale)
-    .map(({ query, label, description }) => ({ query, label, description }));
+    .map(({ candidates, city, description, label, query, state }) => ({
+      query,
+      label,
+      description,
+      city,
+      state,
+      resultCount: candidates.length,
+      websiteCount: candidates.filter((candidateItem) => Boolean(candidateItem.website)).length,
+    }));
 }
 
 export function matchDemoScenario(rawQuery: string, locationQuery: string | null | undefined) {

@@ -3,7 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 
 import { GlassSelect } from "@/components/ui/GlassSelect";
 import {
@@ -35,11 +35,12 @@ import {
 import { useI18n } from "@/lib/i18n/client";
 import { formatNumber } from "@/lib/i18n/format";
 import { isDemoMode } from "@/lib/demo/mode";
-import { getDemoGuidedSearches } from "@/lib/demo/scenarios";
+import { getDemoGuidedSearches, type DemoGuidedSearch } from "@/lib/demo/scenarios";
 import type { Locale } from "@/lib/i18n/translations";
 
 type LocationMode = "area" | "coordinates";
 type WebsiteFilter = "all" | "has_website" | "no_website";
+type AdvancedPanel = "location" | "terms" | null;
 
 type DiscoveryFormState = {
   naturalLanguageQuery: string;
@@ -95,81 +96,136 @@ const defaultForm: DiscoveryFormState = {
   customTerms: "",
 };
 
-const searchTermGroups = [
-  {
-    category: "Varejo / Atacado / Distribuidores",
-    terms: [
-      "Materiais de construção",
-      "Casa e construção",
-      "Ferragens",
-      "Depósito de materiais",
-      "Distribuidor de tintas",
-      "Atacadista de construção",
-      "Loja de tintas",
-      "Revendedor de impermeabilizantes",
-    ],
-  },
-  {
-    category: "Construtoras / Incorporadoras",
-    terms: [
-      "Construtora",
-      "Incorporadora",
-      "Empreiteira",
-      "Obra civil",
-      "Engenharia e construção",
-      "Empresa de reformas",
-    ],
-  },
-  {
-    category: "Instaladores / Aplicadores",
-    terms: [
-      "Impermeabilizador",
-      "Aplicador de impermeabilização",
-      "Empresa de reforma e manutenção",
-      "Manutenção predial",
-      "Pintores e reformas",
-      "Dedetizadora e manutenção",
-      "Marmoraria",
-    ],
-  },
-  {
-    category: "Indústria",
-    terms: [
-      "Indústria moveleira",
-      "Fábrica de móveis",
-      "Indústria metalúrgica",
-      "Manutenção industrial",
-      "Metalúrgica",
-      "Serralheria",
-      "Marcenaria",
-    ],
-  },
-  {
-    category: "E-commerce / Revendas Online",
-    terms: [
-      "Marketplace de construção",
-      "Loja virtual de ferragens",
-      "Distribuidor online de materiais",
-    ],
-  },
-];
-const defaultDiscoveryExampleQueries = [
-  "dentistas em São Paulo",
-  "restaurantes em Campinas",
-  "clínicas de estética no Rio de Janeiro",
-];
-
-const blockedOptions: Array<{ value: LeadBlockedFilter; label: string }> = [
-  { value: "exclude", label: "Ocultar bloqueados" },
-  { value: "include", label: "Incluir bloqueados" },
-  { value: "only", label: "Somente bloqueados" },
-];
-const websiteOptions: Array<{ value: WebsiteFilter; label: string }> = [
-  { value: "all", label: "Todas" },
-  { value: "has_website", label: "Com site" },
-  { value: "no_website", label: "Sem site" },
-];
-
+const localizedSearchTermGroups = {
+  "pt-BR": [
+    {
+      category: "Saúde / Clínicas",
+      terms: [
+        "Clínica odontológica",
+        "Clínica de estética",
+        "Clínica médica",
+        "Fisioterapia",
+        "Laboratório de análises",
+        "Ótica",
+        "Farmácia de manipulação",
+        "Consultório veterinário",
+      ],
+    },
+    {
+      category: "Alimentação / Hospitalidade",
+      terms: [
+        "Restaurante",
+        "Cafeteria",
+        "Padaria",
+        "Hamburgueria",
+        "Pizzaria",
+        "Hotel",
+        "Pousada",
+        "Buffet para eventos",
+      ],
+    },
+    {
+      category: "Beleza / Bem-estar",
+      terms: [
+        "Salão de beleza",
+        "Barbearia",
+        "Spa urbano",
+        "Academia",
+        "Estúdio de pilates",
+        "Clínica de massagem",
+        "Centro de bem-estar",
+      ],
+    },
+    {
+      category: "Serviços locais",
+      terms: [
+        "Imobiliária",
+        "Escola de idiomas",
+        "Contabilidade",
+        "Assistência técnica",
+        "Autoescola",
+        "Lavanderia",
+        "Pet shop",
+      ],
+    },
+    {
+      category: "B2B / Operações",
+      terms: [
+        "Software house",
+        "Agência de marketing",
+        "Consultoria empresarial",
+        "Transportadora",
+        "Distribuidora",
+        "Fornecedor industrial",
+        "Empresa de logística",
+      ],
+    },
+  ],
+  en: [
+    {
+      category: "Healthcare / Clinics",
+      terms: [
+        "Dental clinic",
+        "Aesthetic clinic",
+        "Medical clinic",
+        "Physical therapy",
+        "Diagnostic lab",
+        "Optical store",
+        "Compounding pharmacy",
+        "Veterinary clinic",
+      ],
+    },
+    {
+      category: "Food / Hospitality",
+      terms: [
+        "Restaurant",
+        "Cafe",
+        "Bakery",
+        "Burger restaurant",
+        "Pizza restaurant",
+        "Hotel",
+        "Guesthouse",
+        "Event catering",
+      ],
+    },
+    {
+      category: "Beauty / Wellness",
+      terms: [
+        "Beauty salon",
+        "Barbershop",
+        "Urban spa",
+        "Gym",
+        "Pilates studio",
+        "Massage clinic",
+        "Wellness center",
+      ],
+    },
+    {
+      category: "Local services",
+      terms: [
+        "Real estate agency",
+        "Language school",
+        "Accounting firm",
+        "Repair service",
+        "Driving school",
+        "Laundry service",
+        "Pet shop",
+      ],
+    },
+    {
+      category: "B2B / Operations",
+      terms: [
+        "Software house",
+        "Marketing agency",
+        "Business consulting",
+        "Transport company",
+        "Distributor",
+        "Industrial supplier",
+        "Logistics company",
+      ],
+    },
+  ],
+} as const;
 const ENRICH_VISIBLE_CONFIRMATION_THRESHOLD = 10;
 const WEBSITE_RECOVERY_MAX_ROWS = 25;
 const DISCOVERY_PREVIEW_ENRICHMENT_BATCH_SIZE = 3;
@@ -181,9 +237,9 @@ const DiscoveryPreviewTable = dynamic(
 
 export function DiscoveryWorkspace() {
   const { locale, t } = useI18n();
+  const searchTermGroups = localizedSearchTermGroups[locale];
   const demoMode = isDemoMode();
   const guidedDemoSearches = demoMode ? getDemoGuidedSearches(locale) : [];
-  const exampleQueries = demoMode ? guidedDemoSearches.map((search) => search.query) : defaultDiscoveryExampleQueries;
   const [form, setForm] = useState<DiscoveryFormState>(defaultForm);
   const [searchRequest, setSearchRequest] = useState<DiscoverySearchRequest | null>(null);
   const [preview, setPreview] = useState<DiscoveryPreviewResponse | null>(null);
@@ -196,6 +252,7 @@ export function DiscoveryWorkspace() {
   const [lastImport, setLastImport] = useState<DiscoveryImportResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [openAdvancedPanel, setOpenAdvancedPanel] = useState<AdvancedPanel>(null);
   const latestPreviewRequestIdRef = useRef(0);
   const editSequenceRef = useRef(0);
   const queryCategorySequenceRef = useRef(0);
@@ -463,9 +520,9 @@ export function DiscoveryWorkspace() {
     updateForm("customTerms", value);
   }
 
-  function applySuggestedQuery(query: string) {
-    const nextParsedQuery = parseNaturalLanguageDiscoveryQuery(query);
-    if (queryCategoryKey(parsedNaturalLanguageQuery, form.naturalLanguageQuery) !== queryCategoryKey(nextParsedQuery, query)) {
+  function applyDemoMarket(search: DemoGuidedSearch) {
+    const nextParsedQuery = parseNaturalLanguageDiscoveryQuery(search.query);
+    if (queryCategoryKey(parsedNaturalLanguageQuery, form.naturalLanguageQuery) !== queryCategoryKey(nextParsedQuery, search.query)) {
       queryCategorySequenceRef.current = nextEditSequence();
     }
     if (queryLocationKey(parsedNaturalLanguageQuery) !== queryLocationKey(nextParsedQuery)) {
@@ -473,8 +530,9 @@ export function DiscoveryWorkspace() {
     }
     setForm((current) => ({
       ...current,
-      naturalLanguageQuery: query,
+      naturalLanguageQuery: search.query,
       locationMode: "area",
+      city: search.city,
     }));
     setFormError(null);
     setPreviewError(null);
@@ -734,7 +792,7 @@ export function DiscoveryWorkspace() {
             ) : null}
           </div>
 
-          <div className="ea-card p-3 lg:p-3.5">
+          <div className="ea-card relative z-30 overflow-visible p-3 lg:p-3.5">
             <div className="space-y-2.5">
               <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.2fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
                 <label className="block">
@@ -794,101 +852,86 @@ export function DiscoveryWorkspace() {
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-xs text-brand-muted">
-                <span className="font-semibold uppercase tracking-[0.08em]">{t("discovery.suggestions")}</span>
-                  {exampleQueries.map((query) => (
-                    <button
-                      key={query}
-                      type="button"
-                      onClick={() => applySuggestedQuery(query)}
-                      className="ea-chip px-3 py-1.5 text-xs font-semibold"
-                    >
-                      <span aria-hidden="true" className="mr-1 text-brand-signal">+</span>
-                      {query}
-                    </button>
-                  ))}
-              </div>
+              {guidedDemoSearches.length > 0 ? (
+                <DemoMarketRail
+                  activeQuery={form.naturalLanguageQuery}
+                  markets={guidedDemoSearches}
+                  onSelect={applyDemoMarket}
+                />
+              ) : null}
 
-              <div className="flex flex-col gap-2 border-t border-brand-mist/60 pt-2.5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col gap-3 border-t border-brand-mist/60 pt-2.5 lg:flex-row lg:items-start">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.mode")}</span>
-                  <div className="ea-card-flat grid grid-cols-2 p-0.5">
+                  <div className="ea-card-flat grid min-w-[15.5rem] grid-cols-2 p-0.5">
                     <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>{t("discovery.areaMode")}</ToggleButton>
                     <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>{t("discovery.coordinatesMode")}</ToggleButton>
                   </div>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[520px]">
-                  {form.locationMode === "area" ? (
-                    <details className="ea-card-flat group">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
-                        <span>{t("discovery.addLocation")}</span>
-                        <ChevronIcon className="h-4 w-4 text-brand-signal transition group-open:rotate-180" />
-                      </summary>
-                      <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
-                        <div className="grid gap-3 md:grid-cols-2">
-                      <TextField
-                        label={t("discovery.neighborhood")}
-                        value={form.neighborhood}
-                        onChange={(value) => updateAreaLocationField("neighborhood", value)}
-                        placeholder={t("common.optional")}
-                      />
-                      <TextField
-                        label={t("discovery.postalCode")}
-                        value={form.postalCode}
-                        onChange={(value) => updateAreaLocationField("postalCode", value)}
-                        placeholder={t("common.optional")}
-                      />
-                      <NumberField label={t("discovery.radius")} min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
-                        </div>
-                      </div>
-                    </details>
-                  ) : (
-                    <details className="ea-card-flat group">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
-                        <span>+ {t("discovery.coordinatesMode")}</span>
-                        <ChevronIcon className="h-4 w-4 text-brand-signal transition group-open:rotate-180" />
-                      </summary>
-                      <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
-                        <div className="grid gap-3 md:grid-cols-2">
-                    <TextField label="Latitude" value={form.latitude} onChange={(value) => updateForm("latitude", value)} placeholder="-23.5505" />
-                    <TextField label="Longitude" value={form.longitude} onChange={(value) => updateForm("longitude", value)} placeholder="-46.6333" />
-                    <TextField label={t("discovery.locationLabel")} value={form.locationLabel} onChange={(value) => updateCoordinateLabel(value)} placeholder={t("common.optional")} />
-                    <NumberField label={t("discovery.radius")} min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
-                        </div>
-                      </div>
-                    </details>
-                  )}
+                <div className="relative min-w-0 flex-1">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <AdvancedPanelTrigger
+                      active={openAdvancedPanel === "location"}
+                      label={form.locationMode === "area" ? t("discovery.addLocation") : t("discovery.coordinatesMode")}
+                      onClick={() => setOpenAdvancedPanel((current) => (current === "location" ? null : "location"))}
+                    />
+                    <AdvancedPanelTrigger
+                      active={openAdvancedPanel === "terms"}
+                      count={optionalTermsCount > 0 ? formatNumber(optionalTermsCount, locale) : undefined}
+                      label={t("discovery.termsTitle")}
+                      onClick={() => setOpenAdvancedPanel((current) => (current === "terms" ? null : "terms"))}
+                    />
+                  </div>
 
-                  <details className="ea-card-flat group">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-bold text-brand-graphite">
-                      <span>+ {t("discovery.termsTitle")}</span>
-                      <span className="font-medium text-brand-muted">
-                        {optionalTermsCount > 0 ? `${formatNumber(optionalTermsCount, locale)}` : ""}
-                      </span>
-                    </summary>
-                    <div className="border-t border-brand-mist/70 px-3 pb-3 pt-2">
-                      <div className="space-y-3">
-                    {searchTermGroups.map((group) => (
-                      <section key={group.category}>
-                        <h3 className="ea-kicker">{group.category}</h3>
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                          {group.terms.map((term) => (
-                            <label key={term} className="ea-card-flat flex items-center gap-2 px-3 py-2 text-sm text-brand-graphite transition hover:border-brand-orchid">
-                              <input type="checkbox" checked={form.selectedTerms.includes(term)} onChange={() => toggleSearchTerm(term)} className="h-4 w-4 rounded border-neutral-300" />
-                              <span>{term}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </section>
-                    ))}
+                  <CollapsiblePanel open={openAdvancedPanel === "location"}>
+                    {form.locationMode === "area" ? (
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <TextField
+                          label={t("discovery.neighborhood")}
+                          value={form.neighborhood}
+                          onChange={(value) => updateAreaLocationField("neighborhood", value)}
+                          placeholder={t("common.optional")}
+                        />
+                        <TextField
+                          label={t("discovery.postalCode")}
+                          value={form.postalCode}
+                          onChange={(value) => updateAreaLocationField("postalCode", value)}
+                          placeholder={t("common.optional")}
+                        />
+                        <NumberField label={t("discovery.radius")} min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
                       </div>
-                      <label className="mt-3 block">
-                    <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.termsTitle")}</span>
-                    <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder={t("discovery.customTermsPlaceholder")} autoComplete="off" className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
-                      </label>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <TextField label="Latitude" value={form.latitude} onChange={(value) => updateForm("latitude", value)} placeholder="-23.5505" />
+                        <TextField label="Longitude" value={form.longitude} onChange={(value) => updateForm("longitude", value)} placeholder="-46.6333" />
+                        <TextField label={t("discovery.locationLabel")} value={form.locationLabel} onChange={(value) => updateCoordinateLabel(value)} placeholder={t("common.optional")} />
+                        <NumberField label={t("discovery.radius")} min={100} max={50000} value={form.radiusM} onChange={(value) => updateForm("radiusM", value)} />
+                      </div>
+                    )}
+                  </CollapsiblePanel>
+
+                  <CollapsiblePanel open={openAdvancedPanel === "terms"}>
+                    <div className="space-y-3">
+                      {searchTermGroups.map((group) => (
+                        <section key={group.category}>
+                          <h3 className="ea-kicker">{group.category}</h3>
+                          <div className="mt-2 grid auto-rows-[3.5rem] gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {group.terms.map((term) => (
+                              <label key={term} className="ea-card-flat flex h-full items-center gap-3 rounded-[1.05rem] px-3 text-sm text-brand-graphite transition hover:border-brand-orchid">
+                                <input type="checkbox" checked={form.selectedTerms.includes(term)} onChange={() => toggleSearchTerm(term)} className="h-4 w-4 shrink-0 rounded border-neutral-300" />
+                                <span className="leading-5">{term}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </section>
+                      ))}
                     </div>
-                  </details>
+                    <label className="mt-3 block">
+                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.termsTitle")}</span>
+                      <textarea value={form.customTerms} onChange={(event) => updateCustomTerms(event.target.value)} placeholder={t("discovery.customTermsPlaceholder")} autoComplete="off" className="ea-input mt-2 min-h-24 w-full px-3 py-2 text-sm" />
+                    </label>
+                  </CollapsiblePanel>
                 </div>
               </div>
             </div>
@@ -898,7 +941,7 @@ export function DiscoveryWorkspace() {
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
         {previewError ? <InlineMessage tone="danger">{errorMessage(previewError, locale)}</InlineMessage> : null}
 
-        <div className="ea-card p-3.5 lg:p-4">
+        <div className="ea-card relative z-10 p-3.5 lg:p-4">
           {hasSearchActivity ? (
             <div>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -940,7 +983,7 @@ export function DiscoveryWorkspace() {
                     />
                     <span>{t("discovery.hideAlreadySaved")}</span>
                   </label>
-                  <div className="block w-full lg:w-40">
+                  <div className="block w-full lg:w-48">
                     <span className="text-xs font-medium text-brand-muted">{t("discovery.blocking")}</span>
                     <GlassSelect
                       value={blockedFilter}
@@ -950,12 +993,12 @@ export function DiscoveryWorkspace() {
                       onChange={(value) => setBlockedFilter(value as LeadBlockedFilter)}
                     />
                   </div>
-                  <div className="block w-full lg:w-36">
-                    <span className="text-xs font-medium text-brand-muted">Site</span>
+                  <div className="block w-full lg:w-48">
+                    <span className="text-xs font-medium text-brand-muted">{t("discovery.websitePresence")}</span>
                     <GlassSelect
                       value={websiteFilter}
                       options={localizedWebsiteOptions}
-                      ariaLabel="Site"
+                      ariaLabel={t("discovery.websitePresence")}
                       className="mt-1"
                       onChange={(value) => setWebsiteFilter(value as WebsiteFilter)}
                     />
@@ -1311,6 +1354,91 @@ function NumberField({
   );
 }
 
+function DemoMarketRail({
+  activeQuery,
+  markets,
+  onSelect,
+}: {
+  activeQuery: string;
+  markets: DemoGuidedSearch[];
+  onSelect: (search: DemoGuidedSearch) => void;
+}) {
+  const { t } = useI18n();
+  const normalizedActiveQuery = activeQuery.trim().toLowerCase();
+
+  return (
+    <section className="flex items-center gap-2 px-1 text-xs">
+      <div className="flex shrink-0 items-center gap-1.5 text-brand-muted">
+        <span className="text-[0.68rem] font-black uppercase tracking-[0.13em]">{t("discovery.demoMarketsTitle")}</span>
+        <span className="text-brand-muted/60" aria-hidden="true">/</span>
+      </div>
+      <div className="ea-scroll-panel flex min-w-0 flex-1 gap-1 overflow-x-auto py-0.5">
+        {markets.map((market) => {
+          const active = normalizedActiveQuery === market.query.toLowerCase();
+          return (
+            <button
+              key={market.query}
+              type="button"
+              onClick={() => onSelect(market)}
+              title={`${market.label}: ${market.description}`}
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.72rem] font-bold transition ${
+                active
+                  ? "border-brand-orchid/38 bg-brand-orchid/[0.08] text-brand-graphite"
+                  : "border-transparent text-brand-muted hover:border-brand-orchid/16 hover:bg-brand-orchid/[0.05] hover:text-brand-graphite"
+              }`}
+            >
+              {market.label}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function AdvancedPanelTrigger({
+  active,
+  count,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  count?: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={active}
+      onClick={onClick}
+      className={`ea-card-flat flex h-10 items-center justify-between gap-3 px-3 text-left text-xs font-bold text-brand-graphite transition hover:border-brand-orchid ${
+        active ? "border-brand-orchid/32 bg-brand-orchid/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.62),0_10px_24px_rgba(109,40,217,0.10)]" : ""
+      }`}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+      <span className="flex shrink-0 items-center gap-2 text-brand-muted">
+        {count ? <span className="font-semibold">{count}</span> : null}
+        <ChevronIcon className={`h-4 w-4 text-brand-signal transition ${active ? "rotate-180" : ""}`} />
+      </span>
+    </button>
+  );
+}
+
+function CollapsiblePanel({ children, open }: { children: ReactNode; open: boolean }) {
+  return (
+    <div
+      className={`absolute inset-x-0 top-[calc(100%+1.5rem)] z-30 px-0.5 transition-[opacity,transform] duration-200 ease-out sm:px-1 ${
+        open ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"
+      }`}
+    >
+      <div className="ea-card ea-scroll-panel isolate max-h-[min(31rem,48vh)] overflow-y-auto overscroll-contain rounded-[1.25rem] bg-[linear-gradient(135deg,rgba(250,247,255,0.76),rgba(243,239,255,0.78)_48%,rgba(229,222,252,0.72))] p-3.5 shadow-[0_20px_56px_rgba(47,38,61,0.11),inset_0_1px_0_rgba(255,255,255,0.66)] backdrop-blur-[20px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function ToggleButton({
   active,
   children,
@@ -1326,8 +1454,8 @@ function ToggleButton({
       onClick={onClick}
       className={
         active
-          ? "rounded-[12px] border border-brand-signal bg-brand-orchid/[0.08] px-2.5 py-1.5 text-xs font-bold text-brand-graphite shadow-[0_8px_20px_rgba(124,58,237,0.14)]"
-          : "rounded-[12px] border border-transparent px-2.5 py-1.5 text-xs font-semibold text-brand-muted transition hover:bg-brand-orchid/[0.07] hover:text-brand-graphite"
+          ? "whitespace-nowrap rounded-[12px] border border-brand-signal bg-brand-orchid/[0.08] px-3 py-1.5 text-xs font-bold text-brand-graphite shadow-[0_8px_20px_rgba(124,58,237,0.14)]"
+          : "whitespace-nowrap rounded-[12px] border border-transparent px-3 py-1.5 text-xs font-semibold text-brand-muted transition hover:bg-brand-orchid/[0.07] hover:text-brand-graphite"
       }
     >
       {children}
@@ -1613,8 +1741,8 @@ function buildPreviewEmptyMessage({
   if ((preview.items?.length ?? 0) === 0) {
     if (demoMode) {
       return locale === "en"
-        ? "This demo uses curated sample searches. Try one of the guided searches above."
-        : "Este demo usa buscas guiadas com dados fictícios. Tente uma das sugestões acima.";
+        ? "This demo uses curated sample markets. Pick one of the demo markets above."
+        : "Este demo usa mercados curados com dados fictícios. Escolha um dos mercados do demo acima.";
     }
     return locale === "en"
       ? "No companies found for this search. Try another niche, city, or radius."

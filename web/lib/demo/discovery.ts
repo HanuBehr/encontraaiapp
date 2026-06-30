@@ -248,7 +248,7 @@ function previewItem(candidateValue: DiscoveryLeadCandidate, searchTerm: string,
 function leadFromCandidate(id: number, candidateValue: DiscoveryLeadCandidate, now: string) {
   const isRestaurant = /restaurant|cafe|bistr/i.test(candidateValue.category ?? "");
   const isBeauty = /esthetic|aesthetic|beauty|skin|clinic/i.test(candidateValue.category ?? "");
-  const isConstruction = /construction|material|ferragens|solar|photovoltaic|energy/i.test(candidateValue.category ?? "");
+  const isB2BOperations = /logistics|logística|transport|transportadora|fulfillment|software|agency|consulting|distribuidora|supplier/i.test(candidateValue.category ?? "");
   return lead({
     id,
     business_name: candidateValue.business_name,
@@ -265,8 +265,8 @@ function leadFromCandidate(id: number, candidateValue: DiscoveryLeadCandidate, n
     status: "new",
     lead_score: candidateValue.website ? 78 : 62,
     sales_region_id: regionIdForCandidate(candidateValue),
-    market_segment_id: isRestaurant ? 2 : isBeauty ? 3 : isConstruction ? 4 : 1,
-    market_subsegment_id: isRestaurant ? 2 : isBeauty ? 3 : isConstruction ? 4 : 1,
+    market_segment_id: isRestaurant ? 2 : isBeauty ? 3 : isB2BOperations ? 4 : 1,
+    market_subsegment_id: isRestaurant ? 2 : isBeauty ? 3 : isB2BOperations ? 4 : 1,
     company_size_fit: candidateValue.website ? "ideal_sme" : "possible_sme",
     trade_type: "varejo",
     created_at: now,

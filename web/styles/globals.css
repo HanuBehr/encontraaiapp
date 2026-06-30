@@ -271,6 +271,37 @@ textarea:focus-visible {
     color: #ffffff;
   }
 
+  .ea-scroll-panel {
+    scrollbar-color: rgba(109, 40, 217, 0.22) transparent;
+    scrollbar-width: thin;
+  }
+
+  .ea-scroll-panel::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .ea-scroll-panel::-webkit-scrollbar-button,
+  .ea-scroll-panel::-webkit-scrollbar-button:single-button,
+  .ea-scroll-panel::-webkit-scrollbar-button:vertical:start:decrement,
+  .ea-scroll-panel::-webkit-scrollbar-button:vertical:end:increment {
+    display: none;
+    height: 0;
+    width: 0;
+  }
+
+  .ea-scroll-panel::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .ea-scroll-panel::-webkit-scrollbar-thumb {
+    background: rgba(109, 40, 217, 0.22);
+    border-radius: 999px;
+  }
+
+  .ea-scroll-panel::-webkit-scrollbar-thumb:hover {
+    background: rgba(109, 40, 217, 0.34);
+  }
+
   .ea-glass {
     background: rgba(29, 22, 48, 0.66);
     border: 1px solid rgba(196, 181, 253, 0.16);

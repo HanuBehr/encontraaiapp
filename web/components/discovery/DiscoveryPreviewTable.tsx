@@ -79,9 +79,9 @@ export function DiscoveryPreviewTable({
                   <td className="border-b border-neutral-100 px-3 py-3 align-top">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-neutral-950">{item.candidate.business_name}</p>
+                      <WebsitePresenceBadge hasWebsite={hasWebsite} />
                       {blocked ? <BlockedBadge /> : null}
                       {existing ? <OutcomeBadge tone="warning">{t("common.saved")}</OutcomeBadge> : null}
-                      {hasWebsite ? <OutcomeBadge tone="info">{t("common.withWebsite")}</OutcomeBadge> : <OutcomeBadge tone="muted">{t("common.withoutWebsite")}</OutcomeBadge>}
                     </div>
                     <p className="mt-1 text-xs text-neutral-500">{item.candidate.category ?? t("common.noCategory")}</p>
                     <p className="mt-1 text-xs text-neutral-500">{previewSearchTermsLabel(item, locale)}</p>
@@ -184,15 +184,30 @@ function BlockedBadge() {
   return <span className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-800">{t("common.blocked")}</span>;
 }
 
+function WebsitePresenceBadge({ hasWebsite }: { hasWebsite: boolean }) {
+  const { t } = useI18n();
+  return (
+    <span
+      className={
+        hasWebsite
+          ? "inline-flex whitespace-nowrap rounded-full border border-brand-orchid/18 bg-brand-orchid/[0.08] px-2 py-0.5 text-[10px] font-semibold leading-4 text-brand-graphite"
+          : "inline-flex whitespace-nowrap rounded-full border border-neutral-200/80 bg-neutral-50/80 px-2 py-0.5 text-[10px] font-semibold leading-4 text-neutral-600"
+      }
+    >
+      {hasWebsite ? t("common.withWebsite") : t("common.withoutWebsite")}
+    </span>
+  );
+}
+
 function OutcomeBadge({ tone, children }: { tone: "danger" | "info" | "muted" | "warning"; children: string }) {
   const className =
     tone === "danger"
-      ? "inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-800"
+      ? "inline-flex rounded-full border border-rose-200/80 bg-rose-50/80 px-2 py-0.5 text-[10px] font-semibold leading-4 text-rose-800"
       : tone === "warning"
-        ? "inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900"
+        ? "inline-flex rounded-full border border-amber-200/80 bg-amber-50/80 px-2 py-0.5 text-[10px] font-semibold leading-4 text-amber-900"
         : tone === "info"
-          ? "inline-flex rounded-md border border-brand-olive/70 bg-brand-olive/20 px-2 py-1 text-[11px] font-medium text-brand-graphite"
-          : "inline-flex rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-700";
+          ? "inline-flex rounded-full border border-brand-olive/24 bg-brand-olive/10 px-2 py-0.5 text-[10px] font-semibold leading-4 text-brand-graphite"
+          : "inline-flex rounded-full border border-neutral-200/80 bg-neutral-50/80 px-2 py-0.5 text-[10px] font-semibold leading-4 text-neutral-600";
   return <span className={className}>{children}</span>;
 }
 
