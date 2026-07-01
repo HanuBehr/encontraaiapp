@@ -138,7 +138,7 @@ const homeCopy = {
   "pt-BR": {
     portugueseHint: "Fluxo guiado para buscas no Brasil.",
     englishHint: "Guided flow for Europe examples.",
-    titleLines: ["O motor de IA que transforma mercados em", "leads para o seu negócio."],
+    titleLines: ["O motor de IA transforma mercados", "em leads para o seu negócio."],
     description:
       "Encontre empresas por nicho e localização, organize os melhores resultados, enriqueça contatos e exporte listas prontas para prospecção B2B.",
     primaryAction: "Começar o demo",
