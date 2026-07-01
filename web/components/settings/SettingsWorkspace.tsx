@@ -16,20 +16,12 @@ export function SettingsWorkspace() {
           <h1 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-[2.35rem]">
             {t("settings.title")}
           </h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-brand-muted">
-            {t("settings.description")}
-          </p>
         </div>
       </div>
 
       <div className="max-w-3xl space-y-5">
         <section className="ea-card p-5">
-          <div>
-            <p className="text-base font-semibold text-brand-graphite">{t("settings.languageTitle")}</p>
-            <p className="mt-1 text-sm leading-6 text-brand-muted">{t("settings.languageDescription")}</p>
-          </div>
-
-          <div className="mt-5 block max-w-sm">
+          <div className="block max-w-sm">
             <span className="text-xs font-medium text-brand-muted">{t("settings.languageLabel")}</span>
             <GlassSelect
               value={locale}
@@ -39,8 +31,6 @@ export function SettingsWorkspace() {
               onChange={(value) => setLocale(value as Locale)}
             />
           </div>
-
-          <p className="mt-3 text-xs text-brand-muted">{t("settings.updated")}</p>
         </section>
 
         <EmailAccessCard
@@ -58,11 +48,6 @@ export function SettingsWorkspace() {
           description={t("settings.githubDescription")}
           href="https://github.com/HanuBehr/encontraaiapp"
           cta={t("settings.githubAction")}
-          stackKicker={t("settings.stackKicker")}
-          stackTitle={t("settings.stackTitle")}
-          signalTyped={t("settings.stackSignalTyped")}
-          signalApi={t("settings.stackSignalApi")}
-          signalDemo={t("settings.stackSignalDemo")}
           sourceMeta={t("settings.githubSourceMeta")}
           repositoryLabel={t("settings.sourceRepositoryLabel")}
           frontendLabel={t("settings.sourceFrontendLabel")}
@@ -83,11 +68,6 @@ function SourceAccessCard({
   description,
   href,
   cta,
-  stackKicker,
-  stackTitle,
-  signalTyped,
-  signalApi,
-  signalDemo,
   sourceMeta,
   repositoryLabel,
   frontendLabel,
@@ -102,11 +82,6 @@ function SourceAccessCard({
   description: string;
   href: string;
   cta: string;
-  stackKicker: string;
-  stackTitle: string;
-  signalTyped: string;
-  signalApi: string;
-  signalDemo: string;
   sourceMeta: string;
   repositoryLabel: string;
   frontendLabel: string;
@@ -157,18 +132,7 @@ function SourceAccessCard({
         </div>
 
         <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.045] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          <div>
-            <p className="text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/[0.38]">{stackKicker}</p>
-            <p className="mt-1 text-sm font-bold text-white">{stackTitle}</p>
-          </div>
-          <div className="mt-4 rounded-[0.9rem] border border-white/10 bg-black/10 px-3 py-2 font-mono text-[0.72rem] text-white/[0.68]">
-            <span className="text-emerald-300">{signalTyped}</span>
-            <span className="mx-2 text-white/[0.28]">/</span>
-            {signalApi}
-            <span className="mx-2 text-white/[0.28]">/</span>
-            {signalDemo}
-          </div>
-          <div className="mt-4 divide-y divide-white/[0.08]">
+          <div className="divide-y divide-white/[0.08]">
             {architectureRows.map((row) => (
               <div key={row.label} className="grid gap-1 py-2 first:pt-0 last:pb-0 sm:grid-cols-[86px_minmax(0,1fr)]">
                 <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-white/[0.38]">{row.label}</span>

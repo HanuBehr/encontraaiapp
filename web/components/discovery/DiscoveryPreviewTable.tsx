@@ -123,16 +123,16 @@ export function DiscoveryPreviewTable({
                       ) : null}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {item.enrichment?.email_found ? <OutcomeBadge tone="info">Email encontrado</OutcomeBadge> : null}
-                      {item.enrichment?.instagram_found ? <OutcomeBadge tone="info">Instagram encontrado</OutcomeBadge> : null}
-                      {item.enrichment?.contact_form_found ? <OutcomeBadge tone="info">Formulário encontrado</OutcomeBadge> : null}
-                      {item.enrichment?.no_email_found ? <OutcomeBadge tone="muted">Sem email público</OutcomeBadge> : null}
-                      {item.enrichment?.skipped_reason === "No public website." ? <OutcomeBadge tone="warning">Sem site para enriquecer</OutcomeBadge> : null}
-                      {clientResultId && newlyBlockedIds[clientResultId] ? <OutcomeBadge tone="danger">Bloqueada após nova checagem</OutcomeBadge> : null}
+                      {item.enrichment?.email_found ? <OutcomeBadge tone="info">{locale === "en" ? "Email found" : "Email encontrado"}</OutcomeBadge> : null}
+                      {item.enrichment?.instagram_found ? <OutcomeBadge tone="info">{locale === "en" ? "Instagram found" : "Instagram encontrado"}</OutcomeBadge> : null}
+                      {item.enrichment?.contact_form_found ? <OutcomeBadge tone="info">{locale === "en" ? "Form found" : "Formulário encontrado"}</OutcomeBadge> : null}
+                      {item.enrichment?.no_email_found ? <OutcomeBadge tone="muted">{locale === "en" ? "No public email" : "Sem email público"}</OutcomeBadge> : null}
+                      {item.enrichment?.skipped_reason === "No public website." ? <OutcomeBadge tone="warning">{locale === "en" ? "No website to enrich" : "Sem site para enriquecer"}</OutcomeBadge> : null}
+                      {clientResultId && newlyBlockedIds[clientResultId] ? <OutcomeBadge tone="danger">{locale === "en" ? "Blocked after recheck" : "Bloqueada após nova checagem"}</OutcomeBadge> : null}
                     </div>
                     {item.enrichment?.error_message ? (
                       <p className="mt-2 max-w-xs text-xs text-rose-700">
-                        {sanitizeUserFacingMessage(item.enrichment.error_message, "Falha ao enriquecer esta empresa.")}
+                        {sanitizeUserFacingMessage(item.enrichment.error_message, locale === "en" ? "Could not enrich this company." : "Falha ao enriquecer esta empresa.")}
                       </p>
                     ) : null}
                   </td>
@@ -140,12 +140,14 @@ export function DiscoveryPreviewTable({
                     {blocked ? (
                       <div>
                         <p className="font-medium text-rose-800">{t("common.blocked")}</p>
-                        <p className="mt-1 max-w-xs text-xs text-rose-700">{item.exclusion.reason ?? "Corresponde a uma regra de exclusão ativa."}</p>
+                        <p className="mt-1 max-w-xs text-xs text-rose-700">{item.exclusion.reason ?? (locale === "en" ? "Matches an active exclusion rule." : "Corresponde a uma regra de exclusão ativa.")}</p>
                       </div>
                     ) : existing ? (
                       <div>
                         <p className="font-medium text-amber-900">{t("common.saved")}</p>
-                        <p className="mt-1 max-w-xs text-xs text-amber-800">Encontrado antes e mantido fora do save. Match por {existingLeadMatchLabel(item.matched_existing_by)}.</p>
+                        <p className="mt-1 max-w-xs text-xs text-amber-800">
+                          {locale === "en" ? "Found before and kept out of this save." : "Encontrado antes e mantido fora do save."} {locale === "en" ? "Match by" : "Match por"} {existingLeadMatchLabel(item.matched_existing_by, locale)}.
+                        </p>
                       </div>
                     ) : (
                       <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
@@ -249,23 +251,23 @@ function firstExtractedContactUrl(item: DiscoveryPreviewItem, contactType: strin
   return contact?.normalized_value ?? contact?.raw_value ?? null;
 }
 
-function existingLeadMatchLabel(matchedExistingBy: string | null) {
+function existingLeadMatchLabel(matchedExistingBy: string | null, locale: "pt-BR" | "en") {
   switch (matchedExistingBy) {
     case "google_place_id":
-      return "place id do Google";
+      return locale === "en" ? "Google place id" : "place id do Google";
     case "google_maps_url":
       return "Google Maps";
     case "domain":
-      return "domínio";
+      return locale === "en" ? "domain" : "domínio";
     case "phone":
-      return "telefone";
+      return locale === "en" ? "phone" : "telefone";
     case "name_address":
-      return "nome + endereço";
+      return locale === "en" ? "name + address" : "nome + endereço";
     case "name_neighborhood_city":
-      return "nome + bairro + cidade";
+      return locale === "en" ? "name + neighborhood + city" : "nome + bairro + cidade";
     case "name_city":
-      return "nome + cidade";
+      return locale === "en" ? "name + city" : "nome + cidade";
     default:
-      return "dados da empresa";
+      return locale === "en" ? "company data" : "dados da empresa";
   }
 }

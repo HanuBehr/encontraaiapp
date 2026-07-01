@@ -215,103 +215,80 @@ export function LeadBatchActions({
   ];
 
   return (
-    <section className="ea-card p-5">
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(720px,0.95fr)] xl:items-end">
-        <div className="max-w-2xl">
-          <p className="ea-kicker">{t("batch.kicker")}</p>
-          <h2 className="mt-2 text-base font-semibold text-brand-graphite">{t("batch.title")}</h2>
-          <p className="mt-1 text-sm leading-6 text-brand-muted">
-            {t("batch.description")}
-          </p>
-          {cnpjEnabled ? (
-            <p className="mt-1 text-xs text-brand-muted">
-              {t("batch.cnpjConfigured")}
-            </p>
-          ) : null}
-          <p className="mt-1 text-xs text-brand-muted">
-            {t("batch.excelDescription")}
-          </p>
-          {cnpjEnabled ? (
-            <>
-              <label className="mt-2 flex items-start gap-2 text-xs text-brand-muted">
-                <input
-                  type="checkbox"
-                  checked={deliverySearchMode}
-                  onChange={(event) => setDeliverySearchMode(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-neutral-300"
-                />
-                <span>{t("batch.deliverySearchMode")}</span>
-              </label>
-              <label className="mt-1 flex items-start gap-2 text-xs text-brand-muted">
-                <input
-                  type="checkbox"
-                  checked={forcePaidSearch}
-                  onChange={(event) => setForcePaidSearch(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-neutral-300"
-                />
-                <span>{t("batch.forcePaidSearch")}</span>
-              </label>
-              {deliverySearchMode ? (
-                <p className="mt-1 text-xs text-amber-700">{t("batch.deliverySearchWarning")}</p>
-              ) : null}
-            </>
-          ) : null}
-          {searchActive ? (
-            <p className="mt-2 text-xs text-brand-muted">
-              {t("batch.quickSearchScope")}
-            </p>
-          ) : null}
+    <section className="ea-card p-4">
+      <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-end 2xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="ea-kicker">{t("batch.kicker")}</p>
+            {searchActive ? <ToolbarPill>{t("batch.quickSearchScope")}</ToolbarPill> : null}
+          </div>
+          <h2 className="mt-1 text-base font-semibold text-brand-graphite">{t("batch.title")}</h2>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-left text-xs font-medium text-brand-muted xl:text-right">
-            {t("batch.scopeSummary", {
-              selected: formatNumber(selectedLeadIds.length, locale),
-              total: formatNumber(currentTotal, locale),
-            })}
-          </p>
+        <div className="grid gap-3 lg:grid-cols-[minmax(220px,0.9fr)_100px_minmax(360px,1.45fr)] lg:items-end 2xl:min-w-[760px]">
+          <div className="block">
+            <span className="text-xs font-medium text-brand-muted">{t("batch.scope")}</span>
+            <GlassSelect
+              value={scope}
+              options={scopeOptions}
+              ariaLabel={t("batch.scope")}
+              className="mt-1"
+              onChange={(value) => {
+                setScope(value as ActionScope);
+                setLastResult(null);
+              }}
+            />
+          </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_118px_minmax(360px,1.55fr)] lg:items-end">
-            <div className="block">
-              <span className="text-xs font-medium text-brand-muted">{t("batch.scope")}</span>
-              <GlassSelect
-                value={scope}
-                options={scopeOptions}
-                ariaLabel={t("batch.scope")}
-                className="mt-1"
-                onChange={(value) => {
-                  setScope(value as ActionScope);
-                  setLastResult(null);
-                }}
-              />
-            </div>
+          <div className="rounded-[0.95rem] border border-brand-orchid/10 bg-brand-orchid/[0.045] px-3 py-2">
+            <p className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-brand-muted">{t("batch.count")}</p>
+            <p className="text-lg font-semibold text-brand-graphite">
+              {actionCount === null ? "..." : formatNumber(actionCount, locale)}
+            </p>
+          </div>
 
-            <div className="ea-card-flat px-3 py-2">
-              <p className="text-xs font-medium text-brand-muted">{t("batch.count")}</p>
-              <p className="mt-1 text-lg font-semibold text-brand-graphite">
-                {actionCount === null ? "..." : formatNumber(actionCount, locale)}
-              </p>
-            </div>
-
-            <div className={`grid gap-2 sm:grid-cols-2 ${cnpjEnabled ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
-              <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
-                {t("batch.enrich")}
+          <div className={`grid gap-2 sm:grid-cols-2 ${cnpjEnabled ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+            <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("enrich")}>
+              {t("batch.enrich")}
+            </ActionButton>
+            {cnpjEnabled ? (
+              <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
+                {t("batch.cnpj")}
               </ActionButton>
-              {cnpjEnabled ? (
-                <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("cnpj")}>
-                  {t("batch.cnpj")}
-                </ActionButton>
-              ) : null}
-              <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
-                {t("batch.assign")}
-              </ActionButton>
-              <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("export")}>
-                {t("batch.export")}
-              </ActionButton>
-            </div>
+            ) : null}
+            <ActionButton disabled={assignDisabled} onClick={() => requestAction("assign")}>
+              {t("batch.assign")}
+            </ActionButton>
+            <ActionButton disabled={scopedActionDisabled} onClick={() => requestAction("export")}>
+              {t("batch.export")}
+            </ActionButton>
           </div>
         </div>
       </div>
+
+      {cnpjEnabled ? (
+        <div className="mt-3 flex flex-col gap-2 border-t border-brand-mist/60 pt-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <label className="flex items-start gap-2 text-xs text-brand-muted">
+            <input
+              type="checkbox"
+              checked={deliverySearchMode}
+              onChange={(event) => setDeliverySearchMode(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+            />
+            <span>{t("batch.deliverySearchMode")}</span>
+          </label>
+          <label className="flex items-start gap-2 text-xs text-brand-muted">
+            <input
+              type="checkbox"
+              checked={forcePaidSearch}
+              onChange={(event) => setForcePaidSearch(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+            />
+            <span>{t("batch.forcePaidSearch")}</span>
+          </label>
+          {deliverySearchMode ? <span className="text-xs font-medium text-amber-700">{t("batch.deliverySearchWarning")}</span> : null}
+        </div>
+      ) : null}
 
       {selectedDisabled ? (
         <p className="mt-3 rounded-2xl border border-brand-orchid/10 bg-brand-orchid/[0.06] px-3 py-2 text-sm text-brand-muted">
@@ -410,6 +387,14 @@ function ActionButton({
     >
       {children}
     </button>
+  );
+}
+
+function ToolbarPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-brand-orchid/10 bg-brand-orchid/[0.055] px-2.5 py-1 text-xs font-semibold text-brand-muted">
+      {children}
+    </span>
   );
 }
 

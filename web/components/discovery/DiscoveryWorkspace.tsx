@@ -342,7 +342,11 @@ export function DiscoveryWorkspace() {
       setNewlyBlockedIds({});
       setBlockDraft(null);
       const blockedCount = response.reapply_summary?.blocked ?? 0;
-      setActionMessage(`Regra salva. ${blockedCount.toLocaleString()} lead(s) existente(s) foram bloqueados agora.`);
+      setActionMessage(
+        locale === "en"
+          ? `Rule saved. ${blockedCount.toLocaleString()} existing lead(s) were blocked.`
+          : `Regra salva. ${blockedCount.toLocaleString()} lead(s) existente(s) foram bloqueados agora.`,
+      );
     },
   });
 
@@ -350,12 +354,24 @@ export function DiscoveryWorkspace() {
     mutationFn: importDiscoveryPreview,
     onSuccess: (response) => {
       setLastImport(response);
-      const messageParts = [`Lote ${response.batch_id} salvo. ${response.created_count} lead(s) novo(s) salvos.`];
+      const messageParts = [
+        locale === "en"
+          ? `Batch ${response.batch_id} saved. ${response.created_count} new lead(s) saved.`
+          : `Lote ${response.batch_id} salvo. ${response.created_count} lead(s) novo(s) salvos.`,
+      ];
       if (response.skipped_existing_count > 0) {
-        messageParts.push(`${response.skipped_existing_count} já existiam e foram ignorados.`);
+        messageParts.push(
+          locale === "en"
+            ? `${response.skipped_existing_count} already existed and were skipped.`
+            : `${response.skipped_existing_count} já existiam e foram ignorados.`,
+        );
       }
       if (response.skipped_blocked > 0) {
-        messageParts.push(`${response.skipped_blocked} foram ignorados por bloqueio.`);
+        messageParts.push(
+          locale === "en"
+            ? `${response.skipped_blocked} were skipped because they are blocked.`
+            : `${response.skipped_blocked} foram ignorados por bloqueio.`,
+        );
       }
       setActionMessage(messageParts.join(" "));
       setSelectedIds({});
@@ -770,16 +786,13 @@ export function DiscoveryWorkspace() {
   ];
 
   return (
-    <div className="space-y-5 lg:max-w-[1480px]">
+    <div className="space-y-5 lg:max-w-[1800px]">
       <form onSubmit={runPreview} className="space-y-5">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="ea-kicker">{t("discovery.kicker")}</p>
               <h1 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-[2.35rem]">{t("discovery.title")}</h1>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-brand-muted">
-                {t("discovery.description")}
-              </p>
             </div>
             {hasFormChanges ? (
               <button
@@ -794,7 +807,15 @@ export function DiscoveryWorkspace() {
 
           <div className="ea-card relative z-30 overflow-visible p-3 lg:p-3.5">
             <div className="space-y-2.5">
-              <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.2fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
+              <div className="grid gap-3 xl:grid-cols-[minmax(220px,0.72fr)_minmax(280px,1.15fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
+                <div className="block">
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.mode")}</span>
+                  <div className="ea-card-flat mt-1.5 grid h-[50px] min-w-[15.5rem] grid-cols-2 p-0.5">
+                    <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>{t("discovery.areaMode")}</ToggleButton>
+                    <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>{t("discovery.coordinatesMode")}</ToggleButton>
+                  </div>
+                </div>
+
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.queryLabel")}</span>
                   <div className="relative mt-1.5">
@@ -861,14 +882,6 @@ export function DiscoveryWorkspace() {
               ) : null}
 
               <div className="flex flex-col gap-3 border-t border-brand-mist/60 pt-2.5 lg:flex-row lg:items-start">
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("discovery.mode")}</span>
-                  <div className="ea-card-flat grid min-w-[15.5rem] grid-cols-2 p-0.5">
-                    <ToggleButton active={form.locationMode === "area"} onClick={() => updateForm("locationMode", "area")}>{t("discovery.areaMode")}</ToggleButton>
-                    <ToggleButton active={form.locationMode === "coordinates"} onClick={() => updateForm("locationMode", "coordinates")}>{t("discovery.coordinatesMode")}</ToggleButton>
-                  </div>
-                </div>
-
                 <div className="relative min-w-0 flex-1">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <AdvancedPanelTrigger
@@ -962,7 +975,7 @@ export function DiscoveryWorkspace() {
                 </div>
                 <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-end">
                   {preview && selectedClientResultIds.length > 0 ? (
-                    <div className="flex items-center gap-2 rounded-full border border-brand-olive/20 bg-brand-olive/10 px-3 py-2">
+                    <div className="flex flex-col gap-2 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-3 py-2 sm:flex-row sm:items-center">
                       <span className="text-sm font-semibold text-brand-graphite">{t("discovery.selectedCount", { count: formatNumber(selectedClientResultIds.length, locale) })}</span>
                       <button
                         type="button"
@@ -1036,11 +1049,15 @@ export function DiscoveryWorkspace() {
               {lastImport ? (
                 <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-3 py-2 text-sm lg:flex-row lg:items-center lg:justify-between">
                   <p className="text-brand-muted">
-                    <span className="font-semibold text-brand-graphite">Lote {lastImport.batch_id} salvo.</span>{" "}
-                    {lastImport.created_count} criado(s), {lastImport.skipped_existing_count} já existiam e {lastImport.skipped_blocked} ignorado(s).
+                    <span className="font-semibold text-brand-graphite">
+                      {locale === "en" ? `Batch ${lastImport.batch_id} saved.` : `Lote ${lastImport.batch_id} salvo.`}
+                    </span>{" "}
+                    {locale === "en"
+                      ? `${lastImport.created_count} created, ${lastImport.skipped_existing_count} already existed, ${lastImport.skipped_blocked} skipped.`
+                      : `${lastImport.created_count} criado(s), ${lastImport.skipped_existing_count} já existiam e ${lastImport.skipped_blocked} ignorado(s).`}
                   </p>
                   <Link href={`/leads?import_batch_id=${lastImport.batch_id}`} className="text-sm font-bold text-brand-signal hover:text-brand-core">
-                    Abrir lote salvo
+                    {locale === "en" ? "Open saved batch" : "Abrir lote salvo"}
                   </Link>
                 </div>
               ) : null}
@@ -1050,10 +1067,12 @@ export function DiscoveryWorkspace() {
               {enrichMutation.isError ? <InlineMessage tone="danger">{errorMessage(enrichMutation.error, locale)}</InlineMessage> : null}
               {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error, locale)}</InlineMessage> : null}
               {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error, locale)}</InlineMessage> : null}
-              {preview ? (
-                <p className="ea-card-flat mt-3 px-3 py-2 text-xs leading-5 text-brand-muted">
-                   O enriquecimento roda apenas em empresas com site ou domínio. Selecionadas prontas: {formatNumber(selectedEnrichableClientResultIds.length, locale)}. Visíveis prontas: {formatNumber(visibleEnrichableIds.length, locale)}. Recuperáveis agora: {formatNumber(selectedRecoverableClientResultIds.length, locale)}. Bloqueadas na prévia: {formatNumber(blockedCount, locale)}.
-                </p>
+              {preview && (selectedEnrichableClientResultIds.length > 0 || selectedRecoverableClientResultIds.length > 0 || blockedCount > 0) ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-brand-muted">
+                  {selectedEnrichableClientResultIds.length > 0 ? <StatusPill label={locale === "en" ? "Ready to enrich" : "Prontas para enriquecer"} value={formatNumber(selectedEnrichableClientResultIds.length, locale)} /> : null}
+                  {selectedRecoverableClientResultIds.length > 0 ? <StatusPill label={locale === "en" ? "Website lookup" : "Busca de site"} value={formatNumber(selectedRecoverableClientResultIds.length, locale)} /> : null}
+                  {blockedCount > 0 ? <StatusPill label={locale === "en" ? "Blocked" : "Bloqueadas"} value={formatNumber(blockedCount, locale)} /> : null}
+                </div>
               ) : null}
 
               {isPreviewPending ? (
@@ -1422,6 +1441,15 @@ function AdvancedPanelTrigger({
         <ChevronIcon className={`h-4 w-4 text-brand-signal transition ${active ? "rotate-180" : ""}`} />
       </span>
     </button>
+  );
+}
+
+function StatusPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-orchid/10 bg-brand-orchid/[0.055] px-2.5 py-1 font-semibold text-brand-muted">
+      <span>{label}</span>
+      <span className="font-bold text-brand-graphite">{value}</span>
+    </span>
   );
 }
 

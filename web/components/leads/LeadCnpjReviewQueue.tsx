@@ -111,12 +111,9 @@ export function LeadCnpjReviewQueue({
         <div>
           <p className="ea-kicker">CNPJ</p>
           <h2 className="mt-2 text-base font-semibold text-brand-graphite">Candidatos CNPJ para revisão</h2>
-          <p className="mt-1 text-sm leading-6 text-brand-muted">
-            Confira os cadastros encontrados, aprove os casos seguros e mantenha sem CNPJ quando o candidato não servir.
-          </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="ea-card-flat px-3 py-2 text-sm text-brand-muted">
+          <div className="rounded-full border border-brand-orchid/10 bg-brand-orchid/[0.055] px-3 py-2 text-sm font-semibold text-brand-muted">
             {reviewItems.length.toLocaleString()} lead(s) na fila
           </div>
           <button
@@ -163,7 +160,7 @@ export function LeadCnpjReviewQueue({
 
       {reviewItems.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
+          <table className="min-w-[1180px] border-separate border-spacing-0 text-left text-sm 2xl:min-w-full">
             <thead className="bg-brand-sand/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
               <tr>
                 <th className="border-b border-neutral-200 px-3 py-3">Seleção</th>

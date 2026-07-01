@@ -30,7 +30,7 @@ export function LeadQueueFilters({
   }
 
   return (
-    <section className={`ea-card overflow-hidden ${open ? "p-4" : "p-3"}`}>
+    <section className={`rounded-[1.35rem] border border-brand-orchid/10 bg-white/[0.38] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl ${open ? "p-4" : "p-3"}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <button
           type="button"
@@ -38,7 +38,7 @@ export function LeadQueueFilters({
           aria-expanded={open}
           className="group flex min-w-0 flex-1 items-center gap-3 rounded-[1.15rem] text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25"
         >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand-orchid/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.78),rgba(139,92,246,0.10))] text-brand-orchid shadow-[0_12px_28px_rgba(109,40,217,0.10)]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-brand-orchid/12 bg-brand-orchid/[0.06] text-brand-orchid">
             <FilterIcon className="h-4 w-4" />
           </span>
           <span className="min-w-0 py-1">
@@ -49,9 +49,6 @@ export function LeadQueueFilters({
                   {activeFilterCount}
                 </span>
               ) : null}
-            </span>
-            <span className="mt-1 block text-sm leading-5 text-brand-muted">
-              {open ? t("leads.filtersDescription") : activeFilterCount > 0 ? t("leads.filtersActive", { count: activeFilterCount }) : t("leads.filtersCollapsed")}
             </span>
           </span>
           <span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-brand-orchid/12 bg-brand-orchid/[0.055] text-brand-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.52)] backdrop-blur-xl transition group-hover:text-brand-orchid">

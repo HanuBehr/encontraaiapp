@@ -145,9 +145,6 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         <div>
           <p className="ea-kicker">{t("leads.kicker")}</p>
           <h1 className="mt-1 text-3xl font-bold tracking-[-0.045em] text-brand-graphite sm:text-[2.35rem]">{t("leads.title")}</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-brand-muted">
-            {t("leads.description")}
-          </p>
         </div>
       </div>
 
@@ -219,7 +216,7 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,440px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(420px,520px)]">
         <LeadQueueTable
           leads={pageItems}
           total={total}
