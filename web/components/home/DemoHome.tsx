@@ -84,8 +84,12 @@ export function DemoHome() {
         </section>
 
         <section className="py-8 text-center lg:py-10">
-          <h2 className="mx-auto mt-3 max-w-6xl text-4xl font-extrabold leading-[1.08] tracking-[-0.053em] text-brand-graphite sm:text-5xl lg:text-[4.78rem] lg:leading-[1.02] xl:text-[5rem]">
-            {copy.title}
+          <h2 className="mx-auto mt-3 max-w-[92rem] text-4xl font-extrabold leading-[1.08] tracking-[-0.053em] text-brand-graphite sm:text-[clamp(3rem,4.6vw,5rem)] lg:leading-[1.02]">
+            {copy.titleLines.map((line) => (
+              <span key={line} className="block sm:whitespace-nowrap">
+                {line}
+              </span>
+            ))}
           </h2>
           <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-brand-muted sm:text-lg">
             {copy.description}
@@ -134,7 +138,7 @@ const homeCopy = {
   "pt-BR": {
     portugueseHint: "Fluxo guiado para buscas no Brasil.",
     englishHint: "Guided flow for Europe examples.",
-    title: "O motor de IA que transforma mercados em listas de leads.",
+    titleLines: ["O motor de IA que transforma mercados em", "leads para o seu negócio."],
     description:
       "Encontre empresas por nicho e localização, organize os melhores resultados, enriqueça contatos e exporte listas prontas para prospecção B2B.",
     primaryAction: "Começar o demo",
@@ -149,7 +153,7 @@ const homeCopy = {
   en: {
     portugueseHint: "Fluxo guiado para buscas no Brasil.",
     englishHint: "Guided flow for Europe examples.",
-    title: "The AI engine that turns markets into lead lists.",
+    titleLines: ["The AI engine that turns markets into", "leads for your business."],
     description:
       "Find companies by niche and location, organize the best matches, enrich contacts, and export lists ready for B2B prospecting.",
     primaryAction: "Start demo",
