@@ -1460,7 +1460,7 @@ function CollapsiblePanel({ children, open }: { children: ReactNode; open: boole
         open ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"
       }`}
     >
-      <div className="ea-card ea-scroll-panel isolate max-h-[min(31rem,48vh)] overflow-y-auto overscroll-contain rounded-[1.25rem] bg-[linear-gradient(135deg,rgba(250,247,255,0.76),rgba(243,239,255,0.78)_48%,rgba(229,222,252,0.72))] p-3.5 shadow-[0_20px_56px_rgba(47,38,61,0.11),inset_0_1px_0_rgba(255,255,255,0.66)] backdrop-blur-[20px]">
+      <div className="ea-card ea-scroll-panel isolate max-h-[min(31rem,48vh)] overflow-y-auto overscroll-contain rounded-[1.25rem] bg-white/[0.72] p-3.5 shadow-[0_16px_42px_rgba(47,38,61,0.10),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-[20px]">
         {children}
       </div>
     </div>

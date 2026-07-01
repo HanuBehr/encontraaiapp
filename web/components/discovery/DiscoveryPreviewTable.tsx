@@ -36,7 +36,7 @@ export function DiscoveryPreviewTable({
   return (
     <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-orchid/10 bg-white/[0.14]">
       <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-        <thead className="bg-brand-orchid/[0.07] text-xs font-semibold uppercase tracking-wide text-brand-muted">
+        <thead className="bg-white/[0.34] text-xs font-semibold uppercase tracking-wide text-brand-muted">
           <tr>
             <th className="border-b border-neutral-200 px-3 py-3">
               <input

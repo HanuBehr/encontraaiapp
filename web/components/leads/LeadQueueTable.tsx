@@ -193,7 +193,7 @@ export function LeadQueueTable({
 
       <div className="overflow-x-auto">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
-          <thead className="bg-brand-orchid/[0.07] text-xs font-semibold uppercase tracking-wide text-brand-muted">
+          <thead className="bg-white/[0.34] text-xs font-semibold uppercase tracking-wide text-brand-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (

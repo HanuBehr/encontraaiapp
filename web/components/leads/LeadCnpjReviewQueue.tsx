@@ -161,7 +161,7 @@ export function LeadCnpjReviewQueue({
       {reviewItems.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="min-w-[1180px] border-separate border-spacing-0 text-left text-sm 2xl:min-w-full">
-            <thead className="bg-brand-sand/80 text-xs font-semibold uppercase tracking-wide text-brand-muted">
+            <thead className="bg-white/[0.34] text-xs font-semibold uppercase tracking-wide text-brand-muted">
               <tr>
                 <th className="border-b border-neutral-200 px-3 py-3">Seleção</th>
                 <th className="border-b border-neutral-200 px-3 py-3">Lead</th>
@@ -178,7 +178,7 @@ export function LeadCnpjReviewQueue({
                 const checked = selectedIds.includes(lead.id);
                 const diagnostics = getLeadReviewStatusLabel(lead, candidates);
                 return (
-                  <tr key={lead.id} className={lead.id === activeLeadId ? "bg-brand-olive/10" : "bg-brand-surface"}>
+                  <tr key={lead.id} className={lead.id === activeLeadId ? "bg-brand-olive/10" : "bg-white/[0.16]"}>
                     <td className="border-b border-neutral-100 px-3 py-3 align-top">
                       <input
                         type="checkbox"
@@ -217,7 +217,7 @@ export function LeadCnpjReviewQueue({
                           return (
                             <div
                               key={`${lead.id}-${candidate.cnpj ?? candidate.legal_name ?? "candidate"}`}
-                              className="rounded-2xl border border-brand-mist/80 bg-brand-sand/70 p-2"
+                              className="rounded-2xl border border-brand-mist/80 bg-white/[0.34] p-2"
                             >
                               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                                 <div className="space-y-1">

@@ -5,7 +5,7 @@
 :root {
   color-scheme: light;
   --ea-canvas: #f4f1fb;
-  --ea-surface: rgba(255, 255, 255, 0.82);
+  --ea-surface: rgba(255, 255, 255, 0.66);
   --ea-surface-solid: #fbfaff;
   --ea-surface-muted: #f3f0ff;
   --ea-graphite: #1d1630;
@@ -16,7 +16,7 @@
   --ea-sand: #1d1630;
   --ea-olive: #6d28d9;
   --ea-focus: rgba(139, 92, 246, 0.42);
-  --ea-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.85) inset, 0 18px 50px rgba(15, 11, 26, 0.11);
+  --ea-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.72) inset, 0 12px 34px rgba(29, 22, 48, 0.08);
   background: var(--ea-canvas);
   color: var(--ea-graphite);
 }
@@ -33,9 +33,9 @@ body {
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 12% 6%, rgba(167, 139, 250, 0.26), transparent 34rem),
-    radial-gradient(circle at 88% 0%, rgba(96, 165, 250, 0.14), transparent 30rem),
-    linear-gradient(135deg, #f7f5ff 0%, #f4f1fb 45%, #eee9fb 100%);
+    radial-gradient(circle at 10% 4%, rgba(167, 139, 250, 0.18), transparent 34rem),
+    radial-gradient(circle at 88% 0%, rgba(96, 165, 250, 0.09), transparent 30rem),
+    linear-gradient(135deg, #f7f5ff 0%, #f4f1fb 48%, #f0ebfa 100%);
   color: var(--ea-graphite);
   font-family: Manrope, Inter, Geist, "Segoe UI", Arial, Helvetica, sans-serif;
   text-rendering: optimizeLegibility;
@@ -54,7 +54,7 @@ textarea {
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  background: linear-gradient(135deg, rgba(250, 247, 255, 0.38), rgba(229, 222, 252, 0.42));
+  background: rgba(255, 255, 255, 0.48);
   border: 1px solid rgba(109, 40, 217, 0.28);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
   color: #ffffff;
@@ -102,23 +102,21 @@ textarea:focus-visible {
 
 @layer components {
   .ea-card {
-    background:
-      linear-gradient(135deg, rgba(250, 247, 255, 0.50), rgba(243, 239, 255, 0.50) 48%, rgba(229, 222, 252, 0.42)),
-      radial-gradient(circle at 12% 0%, rgba(139, 92, 246, 0.07), transparent 26rem);
-    border: 1px solid rgba(139, 92, 246, 0.12);
+    background: rgba(255, 255, 255, 0.58);
+    border: 1px solid rgba(109, 40, 217, 0.11);
     border-radius: 1.5rem;
-    box-shadow: 0 18px 48px rgba(47, 38, 61, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.70);
-    backdrop-filter: blur(22px) saturate(135%);
-    -webkit-backdrop-filter: blur(22px) saturate(135%);
+    box-shadow: var(--ea-shadow-card);
+    backdrop-filter: blur(18px) saturate(118%);
+    -webkit-backdrop-filter: blur(18px) saturate(118%);
   }
 
   .ea-card-flat {
-    background: linear-gradient(135deg, rgba(250, 247, 255, 0.34), rgba(229, 222, 252, 0.38));
-    border: 1px solid rgba(139, 92, 246, 0.13);
+    background: rgba(255, 255, 255, 0.30);
+    border: 1px solid rgba(109, 40, 217, 0.10);
     border-radius: 1.15rem;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+    backdrop-filter: blur(12px) saturate(112%);
+    -webkit-backdrop-filter: blur(12px) saturate(112%);
   }
 
   .ea-kicker {
@@ -134,13 +132,13 @@ textarea:focus-visible {
     border: 1px solid rgba(196, 181, 253, 0.3);
     border-radius: 0.85rem;
     color: #ffffff;
-    box-shadow: 0 12px 34px rgba(76, 29, 149, 0.26);
+    box-shadow: 0 10px 24px rgba(76, 29, 149, 0.20);
     transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease, transform 160ms ease;
   }
 
   .ea-button-primary:hover:not(:disabled) {
     border-color: rgba(243, 240, 255, 0.48);
-    box-shadow: 0 16px 42px rgba(109, 40, 217, 0.34);
+    box-shadow: 0 14px 30px rgba(109, 40, 217, 0.28);
     transform: translateY(-1px);
   }
 
@@ -153,29 +151,29 @@ textarea:focus-visible {
   }
 
   .ea-button-secondary {
-    background: linear-gradient(135deg, rgba(250, 247, 255, 0.42), rgba(229, 222, 252, 0.38));
+    background: rgba(255, 255, 255, 0.36);
     border: 1px solid rgba(139, 92, 246, 0.16);
     border-radius: 0.85rem;
     color: var(--ea-graphite);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
-    backdrop-filter: blur(14px) saturate(135%);
-    -webkit-backdrop-filter: blur(14px) saturate(135%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46);
+    backdrop-filter: blur(10px) saturate(112%);
+    -webkit-backdrop-filter: blur(10px) saturate(112%);
     transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
   }
 
   .ea-button-secondary:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(250, 247, 255, 0.40), rgba(229, 222, 252, 0.58));
+    background: rgba(255, 255, 255, 0.52);
     border-color: var(--ea-border-strong);
   }
 
   .ea-input {
-    background: linear-gradient(135deg, rgba(250, 247, 255, 0.44), rgba(229, 222, 252, 0.34));
+    background: rgba(255, 255, 255, 0.44);
     border: 1px solid rgba(139, 92, 246, 0.15);
     border-radius: 0.9rem;
     color: var(--ea-graphite);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
-    backdrop-filter: blur(14px) saturate(135%);
-    -webkit-backdrop-filter: blur(14px) saturate(135%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+    backdrop-filter: blur(10px) saturate(112%);
+    -webkit-backdrop-filter: blur(10px) saturate(112%);
     transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
   }
 
@@ -194,12 +192,12 @@ textarea:focus-visible {
   }
 
   .ea-stat-card {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.36), rgba(237, 233, 254, 0.42));
-    border: 1px solid rgba(139, 92, 246, 0.14);
+    background: rgba(255, 255, 255, 0.42);
+    border: 1px solid rgba(109, 40, 217, 0.11);
     border-radius: 1.25rem;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.64) inset, 0 12px 28px rgba(29, 22, 48, 0.07);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.50);
+    backdrop-filter: blur(12px) saturate(112%);
+    -webkit-backdrop-filter: blur(12px) saturate(112%);
   }
 
   .ea-input:focus {
