@@ -162,7 +162,7 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         </section>
       ) : null}
 
-      <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-3 shadow-[0_12px_34px_rgba(29,22,48,0.07),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-xl">
+      <section className="relative z-40 overflow-visible rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-3 shadow-[0_12px_34px_rgba(29,22,48,0.07),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-xl">
         <div className="grid gap-3 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.1fr)] xl:items-end">
           <LeadQueueSearch
             value={search}

@@ -30,15 +30,13 @@ export function LeadQueueFilters({
   }
 
   return (
-    <div className="relative z-30">
+    <div className="relative z-50">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
           aria-expanded={open}
-          className={`group flex h-11 min-w-0 flex-1 items-center gap-3 rounded-[1.05rem] border px-3 text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25 ${
-            open ? "border-brand-orchid/24 bg-brand-orchid/[0.055]" : "border-brand-orchid/10 bg-white/[0.30] hover:border-brand-orchid/18"
-          }`}
+          className="group flex h-11 min-w-0 flex-1 items-center gap-3 rounded-[1.05rem] text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25"
         >
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-brand-orchid/12 bg-brand-orchid/[0.06] text-brand-orchid">
             <FilterIcon className="h-4 w-4" />
@@ -68,7 +66,7 @@ export function LeadQueueFilters({
       </div>
 
       <div
-        className={`absolute inset-x-0 top-[calc(100%+1.5rem)] z-30 px-0.5 transition-[opacity,transform] duration-200 ease-out sm:px-1 ${
+        className={`absolute inset-x-0 top-[calc(100%+1.5rem)] z-50 px-0.5 transition-[opacity,transform] duration-200 ease-out sm:px-1 ${
           open ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"
         }`}
       >
