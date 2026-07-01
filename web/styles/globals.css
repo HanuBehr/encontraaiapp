@@ -236,8 +236,8 @@ textarea:focus-visible {
     color: #ffffff;
     overflow: auto;
     padding: 0.25rem;
-    backdrop-filter: blur(22px) saturate(130%);
-    -webkit-backdrop-filter: blur(22px) saturate(130%);
+    backdrop-filter: blur(30px) saturate(130%);
+    -webkit-backdrop-filter: blur(30px) saturate(130%);
   }
 
   .ea-select-option {
