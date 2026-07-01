@@ -215,7 +215,7 @@ export function AppShell({ children }: AppShellProps) {
 
       {/* Main */}
       <main className="relative z-10 w-full px-4 py-5 pb-16 sm:px-6 lg:pl-[78px] lg:pr-7 lg:py-7 lg:pb-7">
-        <div className="w-full max-w-[1900px]">{children}</div>
+        <div className="mx-auto w-full max-w-[2200px]">{children}</div>
       </main>
     </div>
   );

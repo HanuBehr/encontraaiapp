@@ -786,7 +786,7 @@ export function DiscoveryWorkspace() {
   ];
 
   return (
-    <div className="space-y-5 lg:max-w-[1800px]">
+    <div className="space-y-5 lg:max-w-[2200px]">
       <form onSubmit={runPreview} className="space-y-5">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">

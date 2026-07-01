@@ -19,7 +19,7 @@ export function SettingsWorkspace() {
         </div>
       </div>
 
-      <div className="grid max-w-5xl gap-4 lg:grid-cols-[minmax(260px,0.65fr)_minmax(0,1.35fr)]">
+      <div className="grid max-w-6xl gap-4 lg:grid-cols-[minmax(260px,0.65fr)_minmax(0,1.35fr)]">
         <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-4 shadow-[0_10px_28px_rgba(29,22,48,0.06),inset_0_1px_0_rgba(255,255,255,0.54)] backdrop-blur-xl">
           <div className="block max-w-sm">
             <span className="text-xs font-medium text-brand-muted">{t("settings.languageLabel")}</span>
