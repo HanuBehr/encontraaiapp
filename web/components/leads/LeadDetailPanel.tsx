@@ -98,7 +98,8 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   const cnpjMetadata = asRecord(lead.cnpj_metadata_json);
   const latestEnrichment = lead.enrichments[0];
   const latestEnrichmentAudit = getLatestEnrichmentAudit(lead);
-  const cnpjStatusHint = getCnpjStatusHintV2(lead);
+  const rawCnpjStatusHint = getCnpjStatusHintV2(lead);
+  const cnpjStatusHint = rawCnpjStatusHint ? translateLooseText(rawCnpjStatusHint, locale) : null;
   const cnpjCandidateSummaries = getCnpjCandidateSummaries(lead);
   const cnpjCandidateSummary = cnpjCandidateSummaries[0] ?? null;
   const cnpjSearchDiagnostics = getCnpjSearchDiagnostics(lead);
@@ -120,7 +121,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
         </p>
         {lead.is_blocked ? (
           <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-            {lead.blocked_reason ?? "Corresponde a uma regra de exclusão ativa."}
+            {lead.blocked_reason ?? (locale === "en" ? "Matches an active exclusion rule." : "Corresponde a uma regra de exclusão ativa.")}
           </p>
         ) : null}
       </div>
@@ -141,8 +142,8 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
           <InfoGrid>
             <InfoItem label="CNPJ" value={lead.cnpj ?? t("leads.noCnpj")} />
             <InfoItem label={t("leads.legalName")} value={lead.legal_name} />
-            <InfoItem label={t("leads.cnpjStatus")} value={cnpjClientStatusLabel(lead)} />
-            <InfoItem label={t("leads.confidence")} value={formatConfidence(lead.cnpj_match_confidence)} />
+            <InfoItem label={t("leads.cnpjStatus")} value={cnpjClientStatusLabel(lead, locale)} />
+            <InfoItem label={t("leads.confidence")} value={formatConfidence(lead.cnpj_match_confidence, locale)} />
             <InfoItem label={t("leads.lastLookup")} value={formatLocalizedDateTime(lead.cnpj_last_enriched_at, locale)} />
             <InfoItem label={t("leads.provider")} value={formatLeadLabel(lead.cnpj_source_provider, locale)} />
           </InfoGrid>
@@ -153,7 +154,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
           ) : null}
           {cnpjApprovedManually ? (
             <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-              Aprovado manualmente.
+              {locale === "en" ? "Approved manually." : "Aprovado manualmente."}
             </p>
           ) : null}
           {cnpjSearchDiagnostics && lead.cnpj_match_status !== "matched" ? (
@@ -167,14 +168,16 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase text-neutral-500">
-                    {lead.cnpj_match_status === "needs_review" ? "Candidato em revisão" : "Melhor candidato encontrado"}
+                    {locale === "en"
+                      ? lead.cnpj_match_status === "needs_review" ? "Candidate under review" : "Best candidate found"
+                      : lead.cnpj_match_status === "needs_review" ? "Candidato em revisão" : "Melhor candidato encontrado"}
                   </p>
                   <p className="mt-1 text-sm text-neutral-700">
                     {hasMultipleReviewCandidates
-                      ? "Mais de um candidato forte encontrado. Escolha o cadastro correto."
+                      ? locale === "en" ? "More than one strong candidate was found. Choose the correct registration." : "Mais de um candidato forte encontrado. Escolha o cadastro correto."
                       : lead.cnpj_match_status === "needs_review"
-                        ? "Confira os dados encontrados antes de confirmar o CNPJ deste lead."
-                        : "A busca encontrou um candidato, mas ele ainda não foi confirmado automaticamente."}
+                        ? locale === "en" ? "Review the data before confirming this lead's CNPJ." : "Confira os dados encontrados antes de confirmar o CNPJ deste lead."
+                        : locale === "en" ? "The lookup found a candidate, but it has not been confirmed automatically." : "A busca encontrou um candidato, mas ele ainda não foi confirmado automaticamente."}
                   </p>
                 </div>
                 {canRejectCnpjCandidate ? (
@@ -189,13 +192,15 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                     disabled={rejectCnpjMutation.isPending}
                     className="inline-flex items-center justify-center rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {rejectCnpjMutation.isPending ? "Atualizando..." : "Manter sem CNPJ"}
+                    {rejectCnpjMutation.isPending
+                      ? locale === "en" ? "Updating..." : "Atualizando..."
+                      : locale === "en" ? "Keep without CNPJ" : "Manter sem CNPJ"}
                   </button>
                 ) : null}
               </div>
               <div className="mt-3">
                 <InfoGrid>
-                  <InfoItem label="Possível CNPJ" value={cnpjCandidateSummary.cnpj ?? "Não disponível"} />
+                  <InfoItem label="Possível CNPJ" value={cnpjCandidateSummary.cnpj ?? (locale === "en" ? "Not available" : "Não disponível")} />
                   <InfoItem label="Razão Social" value={cnpjCandidateSummary.legal_name} />
                   <InfoItem label="Nome Fantasia" value={cnpjCandidateSummary.trade_name} />
                   <InfoItem label="Modo da busca" value={cnpjCandidateSummary.query_mode_label} />
@@ -207,8 +212,8 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                   <InfoItem label="Telefone(s)" value={joinList(cnpjCandidateSummary.phones)} />
                   <InfoItem label="Email(s)" value={joinList(cnpjCandidateSummary.emails)} />
                   <InfoItem label="Endereço" value={cnpjCandidateSummary.address} />
-                  <InfoItem label="Confiança" value={formatConfidence(cnpjCandidateSummary.match_confidence)} />
-                  <InfoItem label="Pontuação" value={formatScore(cnpjCandidateSummary.score)} />
+                  <InfoItem label="Confiança" value={formatConfidence(cnpjCandidateSummary.match_confidence, locale)} />
+                  <InfoItem label="Pontuação" value={formatScore(cnpjCandidateSummary.score, locale)} />
                   <InfoItem label="Motivo" value={cnpjCandidateSummary.review_reason} />
                   <InfoItem label="Provedor" value={labelToken(cnpjCandidateSummary.provider)} />
                 </InfoGrid>
@@ -227,7 +232,9 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                       disabled={approveCnpjMutation.isPending}
                       className="ea-button-primary inline-flex items-center justify-center px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {approveCnpjMutation.isPending ? "Aprovando..." : "Aprovar este CNPJ"}
+                      {approveCnpjMutation.isPending
+                        ? locale === "en" ? "Approving..." : "Aprovando..."
+                        : locale === "en" ? "Approve this CNPJ" : "Aprovar este CNPJ"}
                     </button>
                   </div>
                 ) : null}
@@ -238,11 +245,11 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                 ) : null}
                 {(Object.keys(cnpjCandidateSummary.evidence).length > 0 || cnpjCandidateSummary.penalties.length > 0) ? (
                   <div className="mt-3 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
-                    <p className="text-xs font-semibold uppercase text-neutral-500">Crit?rios do match</p>
-                    <p className="mt-1">{formatEvidenceSummary(cnpjCandidateSummary.evidence)}</p>
+                    <p className="text-xs font-semibold uppercase text-neutral-500">{locale === "en" ? "Match criteria" : "Critérios do match"}</p>
+                    <p className="mt-1">{formatEvidenceSummary(cnpjCandidateSummary.evidence, locale)}</p>
                     {cnpjCandidateSummary.penalties.length > 0 ? (
                       <p className="mt-1 text-xs text-amber-700">
-                        Penalidades: {cnpjCandidateSummary.penalties.map(labelPenalty).join(", ")}
+                        {locale === "en" ? "Penalties" : "Penalidades"}: {cnpjCandidateSummary.penalties.map((penalty) => labelPenalty(penalty, locale)).join(", ")}
                       </p>
                     ) : null}
                   </div>
@@ -257,10 +264,10 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
                             <p className="text-xs font-semibold uppercase text-neutral-500">
-                              Candidato {index + 2}
+                              {locale === "en" ? "Candidate" : "Candidato"} {index + 2}
                             </p>
                             <p className="mt-1 text-sm font-medium text-neutral-950">
-                              {candidate.trade_name || candidate.legal_name || "Cadastro encontrado"}
+                              {candidate.trade_name || candidate.legal_name || (locale === "en" ? "Registration found" : "Cadastro encontrado")}
                             </p>
                           </div>
                           {lead.cnpj_match_status === "needs_review" &&
@@ -277,13 +284,15 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                               disabled={approveCnpjMutation.isPending}
                               className="ea-button-primary inline-flex items-center justify-center px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {approveCnpjMutation.isPending ? "Aprovando..." : "Aprovar este CNPJ"}
+                              {approveCnpjMutation.isPending
+                                ? locale === "en" ? "Approving..." : "Aprovando..."
+                                : locale === "en" ? "Approve this CNPJ" : "Aprovar este CNPJ"}
                             </button>
                           ) : null}
                         </div>
                         <div className="mt-3">
                           <InfoGrid>
-                            <InfoItem label="Possível CNPJ" value={candidate.cnpj ?? "Não disponível"} />
+                            <InfoItem label="Possível CNPJ" value={candidate.cnpj ?? (locale === "en" ? "Not available" : "Não disponível")} />
                             <InfoItem label="Razão Social" value={candidate.legal_name} />
                             <InfoItem label="Nome Fantasia" value={candidate.trade_name} />
                             <InfoItem label="Modo da busca" value={candidate.query_mode_label} />
@@ -292,18 +301,18 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                             <InfoItem label="Telefone(s)" value={joinList(candidate.phones)} />
                             <InfoItem label="Email(s)" value={joinList(candidate.emails)} />
                             <InfoItem label="Endereço" value={candidate.address} />
-                            <InfoItem label="Confiança" value={formatConfidence(candidate.match_confidence)} />
-                            <InfoItem label="Pontuação" value={formatScore(candidate.score)} />
+                            <InfoItem label="Confiança" value={formatConfidence(candidate.match_confidence, locale)} />
+                            <InfoItem label="Pontuação" value={formatScore(candidate.score, locale)} />
                             <InfoItem label="Motivo" value={candidate.review_reason} />
                             <InfoItem label="Provedor" value={labelToken(candidate.provider)} />
                           </InfoGrid>
                           {(Object.keys(candidate.evidence).length > 0 || candidate.penalties.length > 0) ? (
                             <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-                              <p className="text-xs font-semibold uppercase text-neutral-500">Critérios do match</p>
-                              <p className="mt-1">{formatEvidenceSummary(candidate.evidence)}</p>
+                              <p className="text-xs font-semibold uppercase text-neutral-500">{locale === "en" ? "Match criteria" : "Critérios do match"}</p>
+                              <p className="mt-1">{formatEvidenceSummary(candidate.evidence, locale)}</p>
                               {candidate.penalties.length > 0 ? (
                                 <p className="mt-1 text-xs text-amber-700">
-                                  Penalidades: {candidate.penalties.map(labelPenalty).join(", ")}
+                                  {locale === "en" ? "Penalties" : "Penalidades"}: {candidate.penalties.map((penalty) => labelPenalty(penalty, locale)).join(", ")}
                                 </p>
                               ) : null}
                             </div>
@@ -318,7 +327,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                 <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                   {formatUserFacingError(
                     approveCnpjMutation.error,
-                    "Não foi possível aprovar este CNPJ agora.",
+                    locale === "en" ? "Could not approve this CNPJ right now." : "Não foi possível aprovar este CNPJ agora.",
                   )}
                 </p>
               ) : null}
@@ -326,15 +335,12 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                 <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                   {formatUserFacingError(
                     rejectCnpjMutation.error,
-                    "NÃ£o foi possÃ­vel manter este lead sem CNPJ agora.",
+                    locale === "en" ? "Could not keep this lead without CNPJ right now." : "Não foi possível manter este lead sem CNPJ agora.",
                   )}
                 </p>
               ) : null}
             </div>
           ) : null}
-          <p className="mt-3 text-xs text-neutral-500">
-            Busca CNPJ já informado, tenta encontrar CNPJ no site da empresa e, se configurado, usa busca cadastral paga.
-          </p>
         </DetailSection>
 
         <DetailSection title="Melhores contatos">
@@ -474,13 +480,14 @@ function ContactLine({ label, value }: { label: string; value?: string | null })
 }
 
 function ContactEvidence({ contacts }: { contacts: LeadContactRead[] }) {
+  const { locale } = useI18n();
   if (!contacts.length) {
-    return <p className="mt-3 text-sm text-neutral-500">Nenhuma evidência de contato registrada.</p>;
+    return <p className="mt-3 text-sm text-neutral-500">{locale === "en" ? "No contact evidence recorded." : "Nenhuma evidência de contato registrada."}</p>;
   }
 
   return (
     <div className="mt-4">
-      <p className="text-xs font-medium uppercase text-neutral-500">Evidências</p>
+      <p className="text-xs font-medium uppercase text-neutral-500">{locale === "en" ? "Evidence" : "Evidências"}</p>
       <div className="mt-2 space-y-2">
         {contacts.slice(0, 6).map((contact) => (
           <div key={contact.id} className="rounded-md bg-neutral-50 px-3 py-2 text-sm">
@@ -488,8 +495,8 @@ function ContactEvidence({ contacts }: { contacts: LeadContactRead[] }) {
               {labelToken(contact.contact_type)}: {contact.normalized_value || contact.raw_value}
             </p>
             <p className="text-xs text-neutral-500">
-              Confiança {Math.round(contact.confidence * 100)}%
-              {contact.is_primary ? " - Principal" : ""}
+              {locale === "en" ? "Confidence" : "Confiança"} {Math.round(contact.confidence * 100)}%
+              {contact.is_primary ? locale === "en" ? " - Primary" : " - Principal" : ""}
             </p>
           </div>
         ))}
@@ -505,31 +512,33 @@ function CnpjSearchDiagnosticsPanel({
   diagnostics: LeadCnpjSearchDiagnostics;
   matchStatus: LeadDetail["cnpj_match_status"];
 }) {
-  const primaryMessage = buildCnpjDiagnosticsMessageV2(diagnostics, matchStatus);
+  const { locale } = useI18n();
+  const rawPrimaryMessage = buildCnpjDiagnosticsMessageV2(diagnostics, matchStatus);
+  const primaryMessage = rawPrimaryMessage ? translateLooseText(rawPrimaryMessage, locale) : null;
   const triedModes = diagnostics.search_attempts
     .map((attempt) => attempt.query_mode_label)
     .filter((value): value is string => Boolean(value));
   const secondaryFacts = [
     diagnostics.searched_municipality_code
-      ? `Município IBGE: ${diagnostics.searched_municipality_code}`
+      ? `${locale === "en" ? "IBGE municipality" : "Município IBGE"}: ${diagnostics.searched_municipality_code}`
       : null,
     diagnostics.searched_zip
-      ? `CEP usado: ${diagnostics.searched_zip}${diagnostics.extracted_zip_from_address ? " (extraído do endereço)" : ""}`
+      ? `${locale === "en" ? "ZIP used" : "CEP usado"}: ${diagnostics.searched_zip}${diagnostics.extracted_zip_from_address ? locale === "en" ? " (from address)" : " (extraído do endereço)" : ""}`
       : null,
-    diagnostics.searched_phone_area ? `DDD usado: ${diagnostics.searched_phone_area}` : null,
-    diagnostics.search_attempts_count ? `Tentativas: ${diagnostics.search_attempts_count}` : null,
-    diagnostics.search_mode ? `Modo: ${diagnostics.search_mode}` : null,
-    typeof diagnostics.paid_calls_made === "number" ? `Consultas pagas: ${diagnostics.paid_calls_made}` : null,
+    diagnostics.searched_phone_area ? `${locale === "en" ? "Area code used" : "DDD usado"}: ${diagnostics.searched_phone_area}` : null,
+    diagnostics.search_attempts_count ? `${locale === "en" ? "Attempts" : "Tentativas"}: ${diagnostics.search_attempts_count}` : null,
+    diagnostics.search_mode ? `${locale === "en" ? "Mode" : "Modo"}: ${diagnostics.search_mode}` : null,
+    typeof diagnostics.paid_calls_made === "number" ? `${locale === "en" ? "Paid calls" : "Consultas pagas"}: ${diagnostics.paid_calls_made}` : null,
     typeof diagnostics.paid_calls_skipped_duplicate === "number" && diagnostics.paid_calls_skipped_duplicate > 0
-      ? `Duplicadas evitadas: ${diagnostics.paid_calls_skipped_duplicate}`
+      ? `${locale === "en" ? "Duplicates avoided" : "Duplicadas evitadas"}: ${diagnostics.paid_calls_skipped_duplicate}`
       : null,
     typeof diagnostics.paid_calls_skipped_recent === "number" && diagnostics.paid_calls_skipped_recent > 0
-      ? `Puladas por cooldown: ${diagnostics.paid_calls_skipped_recent}`
+      ? `${locale === "en" ? "Skipped by cooldown" : "Puladas por cooldown"}: ${diagnostics.paid_calls_skipped_recent}`
       : null,
     typeof diagnostics.candidates_returned_count === "number"
-      ? `Candidatos retornados: ${diagnostics.candidates_returned_count}`
+      ? `${locale === "en" ? "Candidates returned" : "Candidatos retornados"}: ${diagnostics.candidates_returned_count}`
       : null,
-    triedModes.length ? `Modos: ${triedModes.join(" -> ")}` : null,
+    triedModes.length ? `${locale === "en" ? "Modes" : "Modos"}: ${triedModes.join(" -> ")}` : null,
   ].filter(Boolean);
 
   if (!primaryMessage && secondaryFacts.length === 0) {
@@ -547,10 +556,10 @@ function CnpjSearchDiagnosticsPanel({
           {diagnostics.search_attempts.slice(0, 4).map((attempt, index) => (
             <p key={`${attempt.query_mode ?? "attempt"}-${index}`}>
               {[
-                attempt.query_mode_label ?? "Tentativa",
+                attempt.query_mode_label ?? (locale === "en" ? "Attempt" : "Tentativa"),
                 attempt.searched_values.length ? attempt.searched_values.join(", ") : null,
                 typeof attempt.candidates_returned_count === "number"
-                  ? `${attempt.candidates_returned_count} candidatos`
+                  ? `${attempt.candidates_returned_count} ${locale === "en" ? "candidates" : "candidatos"}`
                   : null,
                 attempt.status ? `status: ${attempt.status}` : null,
               ]
@@ -565,8 +574,9 @@ function CnpjSearchDiagnosticsPanel({
 }
 
 function EnrichmentAudit({ audit }: { audit: EnrichmentAuditData | null }) {
+  const { locale } = useI18n();
   if (!audit) {
-    return <p className="mt-4 text-sm text-neutral-500">Nenhum histórico de enriquecimento registrado.</p>;
+    return <p className="mt-4 text-sm text-neutral-500">{locale === "en" ? "No enrichment history recorded." : "Nenhum histórico de enriquecimento registrado."}</p>;
   }
 
   return (
@@ -574,33 +584,33 @@ function EnrichmentAudit({ audit }: { audit: EnrichmentAuditData | null }) {
       <div className={`rounded-md px-3 py-2 text-sm ${audit.noEmailFound ? "border border-amber-200 bg-amber-50 text-amber-950" : "border border-emerald-200 bg-emerald-50 text-emerald-950"}`}>
         <p className="font-medium">
           {audit.noEmailFound
-            ? "A última execução terminou sem encontrar um email público."
-            : "A última execução encontrou novos sinais públicos de contato."}
+            ? locale === "en" ? "The last run found no public email." : "A última execução terminou sem encontrar um email público."
+            : locale === "en" ? "The last run found new public contact signals." : "A última execução encontrou novos sinais públicos de contato."}
         </p>
-        <p className="mt-1 text-xs opacity-80">{formatDateTime(audit.createdAt) ?? "Horário indisponível"}</p>
+        <p className="mt-1 text-xs opacity-80">{formatDateTime(audit.createdAt, locale) ?? (locale === "en" ? "Time unavailable" : "Horário indisponível")}</p>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <AuditList
-          title="Páginas verificadas"
-          emptyMessage="Nenhuma página verificada foi registrada."
+          title={locale === "en" ? "Checked pages" : "Páginas verificadas"}
+          emptyMessage={locale === "en" ? "No checked page was recorded." : "Nenhuma página verificada foi registrada."}
           items={audit.attemptedPages.map((page) => ({
             key: `${page.url}-${page.page_type ?? "page"}`,
             title: labelToken(page.page_type) ?? "Página",
             value: page.url,
             meta: compact([
-              page.fetched ? `Coletada${page.http_status ? ` (${page.http_status})` : ""}` : "Não coletada",
-              page.discovered_from_url ? `Descoberta a partir de ${page.discovered_from_url}` : null,
+              page.fetched ? `${locale === "en" ? "Fetched" : "Coletada"}${page.http_status ? ` (${page.http_status})` : ""}` : locale === "en" ? "Not fetched" : "Não coletada",
+              page.discovered_from_url ? `${locale === "en" ? "Discovered from" : "Descoberta a partir de"} ${page.discovered_from_url}` : null,
               page.note,
             ]),
           }))}
         />
         <AuditList
-          title="Páginas coletadas"
-          emptyMessage="Nenhuma página coletada foi registrada."
+          title={locale === "en" ? "Fetched pages" : "Páginas coletadas"}
+          emptyMessage={locale === "en" ? "No fetched page was recorded." : "Nenhuma página coletada foi registrada."}
           items={audit.fetchedPageUrls.map((url) => ({
             key: url,
-            title: "Coletada",
+            title: locale === "en" ? "Fetched" : "Coletada",
             value: url,
             meta: null,
           }))}
@@ -608,15 +618,15 @@ function EnrichmentAudit({ audit }: { audit: EnrichmentAuditData | null }) {
       </div>
 
       <AuditList
-        title="Contatos extraídos"
-        emptyMessage="Nenhum contato extraído foi registrado na última execução."
+        title={locale === "en" ? "Extracted contacts" : "Contatos extraídos"}
+        emptyMessage={locale === "en" ? "No extracted contact was recorded in the last run." : "Nenhum contato extraído foi registrado na última execução."}
         items={audit.extractedContacts.map((contact, index) => ({
           key: `${contact.source_url}-${contact.normalized_value ?? contact.raw_value}-${index}`,
           title: `${labelToken(contact.contact_type) ?? "Contato"}: ${contact.normalized_value || contact.raw_value}`,
           value: contact.source_url,
           meta: compact([
-            `Confiança ${Math.round(contact.confidence * 100)}%`,
-            contact.addedToLead ? "Adicionado ao lead" : "Já conhecido",
+            `${locale === "en" ? "Confidence" : "Confiança"} ${Math.round(contact.confidence * 100)}%`,
+            contact.addedToLead ? locale === "en" ? "Added to lead" : "Adicionado ao lead" : locale === "en" ? "Already known" : "Já conhecido",
             contact.note,
           ]),
         }))}
@@ -634,9 +644,10 @@ function AuditList({
   items: Array<{ key: string; title: string; value: string; meta: string | null }>;
   emptyMessage: string;
 }) {
+  const { locale } = useI18n();
   return (
     <div>
-      <p className="text-xs font-medium uppercase text-neutral-500">{title}</p>
+      <p className="text-xs font-medium uppercase text-neutral-500">{translateLooseText(title, locale)}</p>
       {items.length ? (
         <div className="mt-2 space-y-2">
           {items.slice(0, 6).map((item) => (
@@ -647,7 +658,9 @@ function AuditList({
             </div>
           ))}
           {items.length > 6 ? (
-            <p className="text-xs text-neutral-500">{items.length - 6} itens adicionais não exibidos.</p>
+            <p className="text-xs text-neutral-500">
+              {locale === "en" ? `${items.length - 6} additional items not shown.` : `${items.length - 6} itens adicionais não exibidos.`}
+            </p>
           ) : null}
         </div>
       ) : (
@@ -669,39 +682,45 @@ function labelToken(value?: string | null) {
   return formatLeadLabel(value);
 }
 
-function cnpjClientStatusLabel(lead: LeadDetail) {
+function cnpjClientStatusLabel(lead: LeadDetail, locale: "pt-BR" | "en") {
   const metadata = asRecord(lead.cnpj_metadata_json);
   const reasonCode = asNullableString(metadata?.reason_code);
   const candidateSummaries = getCnpjCandidateSummaries(lead);
 
   if (!lead.cnpj_match_status || lead.cnpj_match_status === "unknown") {
-    return "Não consultado";
+    return locale === "en" ? "Not checked" : "Não consultado";
   }
   if (lead.cnpj_match_status === "matched") {
-    return metadata?.approved_manually ? "Confirmado manualmente" : "Confirmado automaticamente";
+    return metadata?.approved_manually
+      ? locale === "en" ? "Manually confirmed" : "Confirmado manualmente"
+      : locale === "en" ? "Automatically confirmed" : "Confirmado automaticamente";
   }
   if (lead.cnpj_match_status === "needs_review") {
-    return candidateSummaries.length > 1 ? "Múltiplos candidatos encontrados" : "Candidato encontrado";
+    return candidateSummaries.length > 1
+      ? locale === "en" ? "Multiple candidates found" : "Múltiplos candidatos encontrados"
+      : locale === "en" ? "Candidate found" : "Candidato encontrado";
   }
   if (reasonCode === "company_search_rate_limited" || reasonCode === "cnpj_provider_rate_limited") {
-    return "Limite do provedor, tente novamente";
+    return locale === "en" ? "Provider limit reached" : "Limite do provedor, tente novamente";
   }
   if (lead.cnpj_match_status === "not_found") {
-    return candidateSummaries.length > 0 ? "Candidatos fracos" : "Não encontrado";
+    return candidateSummaries.length > 0
+      ? locale === "en" ? "Low-confidence candidates" : "Candidatos fracos"
+      : locale === "en" ? "Not found" : "Não encontrado";
   }
-  return labelToken(lead.cnpj_match_status) ?? "Não consultado";
+  return labelToken(lead.cnpj_match_status) ?? (locale === "en" ? "Not checked" : "Não consultado");
 }
 
-function formatConfidence(value?: number | null) {
+function formatConfidence(value?: number | null, locale: "pt-BR" | "en" = "pt-BR") {
   if (typeof value !== "number") {
-    return "Não informado";
+    return locale === "en" ? "Not provided" : "Não informado";
   }
   return `${Math.round(value * 100)}%`;
 }
 
-function formatScore(value?: number | null) {
+function formatScore(value?: number | null, locale: "pt-BR" | "en" = "pt-BR") {
   if (typeof value !== "number") {
-    return "Não informado";
+    return locale === "en" ? "Not provided" : "Não informado";
   }
   return `${Math.round(value)} / 100`;
 }
@@ -713,41 +732,43 @@ function joinList(values: string[] | null | undefined) {
   return values.join(", ");
 }
 
-function formatEvidenceSummary(evidence: Record<string, number>) {
+function formatEvidenceSummary(evidence: Record<string, number>, locale: "pt-BR" | "en" = "pt-BR") {
   const entries = Object.entries(evidence);
   if (entries.length === 0) {
-    return "Nenhum crit?rio positivo relevante foi registrado.";
+    return locale === "en" ? "No relevant positive criterion was recorded." : "Nenhum critério positivo relevante foi registrado.";
   }
   return entries
-    .map(([key, value]) => `${labelEvidence(key)} (+${value})`)
+    .map(([key, value]) => `${labelEvidence(key, locale)} (+${value})`)
     .join(", ");
 }
 
-function labelEvidence(key: string) {
-  const labels: Record<string, string> = {
-    domain: "Dom?nio",
-    phone: "Telefone",
-    alias_name: "Nome fantasia",
-    legal_name: "Raz?o social",
-    address: "Endere?o",
-    postal_code: "CEP",
-    city: "Cidade",
-    state: "UF",
-    activity: "Atividade",
+function labelEvidence(key: string, locale: "pt-BR" | "en" = "pt-BR") {
+  const labels: Record<string, { en: string; pt: string }> = {
+    domain: { en: "Domain", pt: "Domínio" },
+    phone: { en: "Phone", pt: "Telefone" },
+    alias_name: { en: "Trade name", pt: "Nome fantasia" },
+    legal_name: { en: "Legal name", pt: "Razão social" },
+    address: { en: "Address", pt: "Endereço" },
+    postal_code: { en: "Postal code", pt: "CEP" },
+    city: { en: "City", pt: "Cidade" },
+    state: { en: "State", pt: "UF" },
+    activity: { en: "Activity", pt: "Atividade" },
   };
-  return labels[key] ?? key;
+  const label = labels[key];
+  return label ? (locale === "en" ? label.en : label.pt) : key;
 }
 
-function labelPenalty(key: string) {
-  const labels: Record<string, string> = {
-    different_number: "n?mero diferente",
-    different_city: "cidade diferente",
-    different_state: "UF diferente",
+function labelPenalty(key: string, locale: "pt-BR" | "en" = "pt-BR") {
+  const labels: Record<string, { en: string; pt: string }> = {
+    different_number: { en: "different number", pt: "número diferente" },
+    different_city: { en: "different city", pt: "cidade diferente" },
+    different_state: { en: "different state", pt: "UF diferente" },
   };
-  return labels[key] ?? key;
+  const label = labels[key];
+  return label ? (locale === "en" ? label.en : label.pt) : key;
 }
 
-function formatDateTime(value?: string | null) {
+function formatDateTime(value?: string | null, locale: "pt-BR" | "en" = "pt-BR") {
   if (!value) {
     return null;
   }
@@ -755,7 +776,7 @@ function formatDateTime(value?: string | null) {
   if (Number.isNaN(date.getTime())) {
     return null;
   }
-  return new Intl.DateTimeFormat("pt-BR", {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "pt-BR", {
     month: "short",
     day: "numeric",
     year: "numeric",
