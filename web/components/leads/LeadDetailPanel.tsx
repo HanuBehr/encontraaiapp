@@ -68,9 +68,6 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
     return (
       <aside className="ea-card p-6">
         <p className="text-sm font-semibold text-brand-graphite">{t("leads.selectLead")}</p>
-        <p className="mt-1 text-sm leading-6 text-brand-muted">
-          {t("leads.selectLeadDescription")}
-        </p>
       </aside>
     );
   }

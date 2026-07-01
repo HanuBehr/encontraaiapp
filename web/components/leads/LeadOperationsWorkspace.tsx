@@ -193,7 +193,6 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
       {showEmptyWorkspaceState ? (
         <section className="ea-card border-dashed p-5">
           <p className="text-sm font-semibold text-brand-graphite">{t("leads.noSavedTitle")}</p>
-          <p className="mt-2 text-sm text-brand-muted">{t("leads.noSavedDescription")}</p>
           <Link
             href="/discovery"
             className="ea-button-primary mt-4 inline-flex px-4 py-2 text-sm font-semibold"

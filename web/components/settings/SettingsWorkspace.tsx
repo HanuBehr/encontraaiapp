@@ -37,7 +37,6 @@ export function SettingsWorkspace() {
           <EmailAccessCard
             kicker={t("settings.emailKicker")}
             title={t("settings.emailTitle")}
-            description={t("settings.emailDescription")}
             href={emailHref}
             cta={t("settings.emailAction")}
             identityLabel={t("settings.emailIdentityLabel")}
@@ -46,7 +45,6 @@ export function SettingsWorkspace() {
           <SourceAccessCard
             kicker={t("settings.githubKicker")}
             title={t("settings.githubTitle")}
-            description={t("settings.githubDescription")}
             href="https://github.com/HanuBehr/encontraaiapp"
             cta={t("settings.githubAction")}
             sourceMeta={t("settings.githubSourceMeta")}
@@ -67,7 +65,6 @@ export function SettingsWorkspace() {
 function SourceAccessCard({
   kicker,
   title,
-  description,
   href,
   cta,
   sourceMeta,
@@ -81,7 +78,6 @@ function SourceAccessCard({
 }: {
   kicker: string;
   title: string;
-  description: string;
   href: string;
   cta: string;
   sourceMeta: string;
@@ -112,8 +108,6 @@ function SourceAccessCard({
             </div>
             <h3 className="mt-3 text-lg font-bold tracking-[-0.035em] text-brand-graphite">{title}</h3>
           </div>
-
-          <p className="mt-2 max-w-xl text-sm leading-6 text-brand-muted">{description}</p>
 
           <div className="mt-4 rounded-[1rem] border border-brand-orchid/10 bg-white/[0.28] px-3.5 py-3">
             <p className="text-[0.66rem] font-bold uppercase tracking-[0.16em] text-brand-muted">{repositoryLabel}</p>
@@ -151,7 +145,6 @@ function SourceAccessCard({
 function EmailAccessCard({
   kicker,
   title,
-  description,
   href,
   cta,
   identityLabel,
@@ -159,7 +152,6 @@ function EmailAccessCard({
 }: {
   kicker: string;
   title: string;
-  description: string;
   href: string;
   cta: string;
   identityLabel: string;
@@ -171,7 +163,6 @@ function EmailAccessCard({
         <div className="min-w-0">
           <p className="ea-kicker">{kicker}</p>
           <h3 className="mt-2 text-lg font-bold tracking-[-0.035em] text-brand-graphite">{title}</h3>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-brand-muted">{description}</p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <a href={href} className="ea-button-primary inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold">
               <MailIcon className="h-4 w-4" />
