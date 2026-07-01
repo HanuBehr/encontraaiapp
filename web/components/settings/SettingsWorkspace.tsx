@@ -19,8 +19,8 @@ export function SettingsWorkspace() {
         </div>
       </div>
 
-      <div className="max-w-3xl space-y-5">
-        <section className="ea-card p-5">
+      <div className="grid max-w-5xl gap-4 lg:grid-cols-[minmax(260px,0.65fr)_minmax(0,1.35fr)]">
+        <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-4 shadow-[0_10px_28px_rgba(29,22,48,0.06),inset_0_1px_0_rgba(255,255,255,0.54)] backdrop-blur-xl">
           <div className="block max-w-sm">
             <span className="text-xs font-medium text-brand-muted">{t("settings.languageLabel")}</span>
             <GlassSelect
@@ -33,30 +33,32 @@ export function SettingsWorkspace() {
           </div>
         </section>
 
-        <EmailAccessCard
-          kicker={t("settings.emailKicker")}
-          title={t("settings.emailTitle")}
-          description={t("settings.emailDescription")}
-          href={emailHref}
-          cta={t("settings.emailAction")}
-          identityLabel={t("settings.emailIdentityLabel")}
-          identityMeta={t("settings.emailIdentityMeta")}
-        />
-        <SourceAccessCard
-          kicker={t("settings.githubKicker")}
-          title={t("settings.githubTitle")}
-          description={t("settings.githubDescription")}
-          href="https://github.com/HanuBehr/encontraaiapp"
-          cta={t("settings.githubAction")}
-          sourceMeta={t("settings.githubSourceMeta")}
-          repositoryLabel={t("settings.sourceRepositoryLabel")}
-          frontendLabel={t("settings.sourceFrontendLabel")}
-          frontendValue={t("settings.sourceFrontendValue")}
-          backendLabel={t("settings.sourceBackendLabel")}
-          backendValue={t("settings.sourceBackendValue")}
-          productLabel={t("settings.sourceProductLabel")}
-          productValue={t("settings.sourceProductValue")}
-        />
+        <div className="space-y-4">
+          <EmailAccessCard
+            kicker={t("settings.emailKicker")}
+            title={t("settings.emailTitle")}
+            description={t("settings.emailDescription")}
+            href={emailHref}
+            cta={t("settings.emailAction")}
+            identityLabel={t("settings.emailIdentityLabel")}
+            identityMeta={t("settings.emailIdentityMeta")}
+          />
+          <SourceAccessCard
+            kicker={t("settings.githubKicker")}
+            title={t("settings.githubTitle")}
+            description={t("settings.githubDescription")}
+            href="https://github.com/HanuBehr/encontraaiapp"
+            cta={t("settings.githubAction")}
+            sourceMeta={t("settings.githubSourceMeta")}
+            repositoryLabel={t("settings.sourceRepositoryLabel")}
+            frontendLabel={t("settings.sourceFrontendLabel")}
+            frontendValue={t("settings.sourceFrontendValue")}
+            backendLabel={t("settings.sourceBackendLabel")}
+            backendValue={t("settings.sourceBackendValue")}
+            productLabel={t("settings.sourceProductLabel")}
+            productValue={t("settings.sourceProductValue")}
+          />
+        </div>
       </div>
     </div>
   );
@@ -98,24 +100,24 @@ function SourceAccessCard({
   ];
 
   return (
-    <section className="relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#17131f] p-5 text-white shadow-[0_18px_44px_rgba(23,19,31,0.18),inset_0_1px_0_rgba(255,255,255,0.06)]">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+    <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-4 shadow-[0_10px_28px_rgba(29,22,48,0.06),inset_0_1px_0_rgba(255,255,255,0.54)] backdrop-blur-xl">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
         <div>
           <div>
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.9rem] border border-white/10 bg-white/[0.07] text-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.9rem] border border-brand-orchid/10 bg-brand-orchid/[0.06] text-brand-orchid">
                 <GitHubIcon className="h-5 w-5" />
               </div>
-              <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-300">{kicker}</p>
+              <p className="ea-kicker">{kicker}</p>
             </div>
-            <h3 className="mt-4 text-xl font-bold tracking-[-0.035em] text-white">{title}</h3>
+            <h3 className="mt-3 text-lg font-bold tracking-[-0.035em] text-brand-graphite">{title}</h3>
           </div>
 
-          <p className="mt-2 max-w-xl text-sm leading-6 text-white/[0.62]">{description}</p>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-brand-muted">{description}</p>
 
-          <div className="mt-5 rounded-[1rem] border border-white/10 bg-white/[0.045] px-3.5 py-3">
-            <p className="text-[0.66rem] font-bold uppercase tracking-[0.16em] text-white/[0.38]">{repositoryLabel}</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-white/[0.82]">HanuBehr/encontraaiapp</p>
+          <div className="mt-4 rounded-[1rem] border border-brand-orchid/10 bg-white/[0.28] px-3.5 py-3">
+            <p className="text-[0.66rem] font-bold uppercase tracking-[0.16em] text-brand-muted">{repositoryLabel}</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-brand-graphite">HanuBehr/encontraaiapp</p>
           </div>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -123,20 +125,20 @@ function SourceAccessCard({
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center justify-center rounded-[0.85rem] border border-white/[0.14] bg-white/[0.075] px-4 py-2.5 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-white/[0.11] motion-reduce:transition-none"
+              className="ea-button-secondary inline-flex items-center justify-center px-4 py-2.5 text-sm font-bold"
             >
               {cta}
             </a>
-            <span className="font-mono text-[0.72rem] font-semibold text-white/[0.42]">{sourceMeta}</span>
+            <span className="font-mono text-[0.72rem] font-semibold text-brand-muted">{sourceMeta}</span>
           </div>
         </div>
 
-        <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.045] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          <div className="divide-y divide-white/[0.08]">
+        <div className="rounded-[1.1rem] border border-brand-orchid/10 bg-white/[0.28] p-3">
+          <div className="divide-y divide-brand-orchid/10">
             {architectureRows.map((row) => (
               <div key={row.label} className="grid gap-1 py-2 first:pt-0 last:pb-0 sm:grid-cols-[86px_minmax(0,1fr)]">
-                <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-white/[0.38]">{row.label}</span>
-                <span className="text-sm font-semibold leading-5 text-white/[0.76]">{row.value}</span>
+                <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-brand-muted">{row.label}</span>
+                <span className="text-sm font-semibold leading-5 text-brand-graphite">{row.value}</span>
               </div>
             ))}
           </div>
@@ -164,13 +166,13 @@ function EmailAccessCard({
   identityMeta: string;
 }) {
   return (
-    <section className="ea-card relative overflow-hidden p-5">
-      <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+    <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-4 shadow-[0_10px_28px_rgba(29,22,48,0.06),inset_0_1px_0_rgba(255,255,255,0.54)] backdrop-blur-xl">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
         <div className="min-w-0">
           <p className="ea-kicker">{kicker}</p>
-          <h3 className="mt-3 text-xl font-bold tracking-[-0.035em] text-brand-graphite">{title}</h3>
+          <h3 className="mt-2 text-lg font-bold tracking-[-0.035em] text-brand-graphite">{title}</h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-brand-muted">{description}</p>
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <a href={href} className="ea-button-primary inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold">
               <MailIcon className="h-4 w-4" />
               {cta}
@@ -178,7 +180,7 @@ function EmailAccessCard({
           </div>
         </div>
 
-        <div className="rounded-[1.1rem] border border-brand-orchid/10 bg-white/[0.38] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.56)] backdrop-blur-xl">
+        <div className="rounded-[1.1rem] border border-brand-orchid/10 bg-white/[0.28] p-3">
           <p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-brand-muted">{identityLabel}</p>
           <p className="mt-1 text-base font-bold text-brand-graphite">Hanu Behr</p>
           <p className="mt-1 text-xs font-semibold leading-5 text-brand-muted">{identityMeta}</p>

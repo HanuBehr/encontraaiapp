@@ -9,6 +9,7 @@ import {
   listLeads,
   rejectLeadCnpjCandidate,
 } from "@/lib/api/leads";
+import { useI18n } from "@/lib/i18n/client";
 import type {
   LeadBatchApproveCNPJCandidatesResponse,
   LeadCnpjCandidateSummary,
@@ -28,6 +29,7 @@ export function LeadCnpjReviewQueue({
   onActivateLead,
   activeLeadId,
 }: LeadCnpjReviewQueueProps) {
+  const { locale } = useI18n();
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [lastBulkSummary, setLastBulkSummary] = useState<LeadBatchApproveCNPJCandidatesResponse["summary"] | null>(
@@ -110,11 +112,13 @@ export function LeadCnpjReviewQueue({
       <div className="flex flex-col gap-3 border-b border-brand-mist/80 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="ea-kicker">CNPJ</p>
-          <h2 className="mt-2 text-base font-semibold text-brand-graphite">Candidatos CNPJ para revisão</h2>
+          <h2 className="mt-2 text-base font-semibold text-brand-graphite">
+            {locale === "en" ? "CNPJ candidates" : "Candidatos CNPJ"}
+          </h2>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="rounded-full border border-brand-orchid/10 bg-brand-orchid/[0.055] px-3 py-2 text-sm font-semibold text-brand-muted">
-            {reviewItems.length.toLocaleString()} lead(s) na fila
+            {locale === "en" ? `${reviewItems.length.toLocaleString()} in review` : `${reviewItems.length.toLocaleString()} na fila`}
           </div>
           <button
             type="button"
@@ -122,18 +126,20 @@ export function LeadCnpjReviewQueue({
             onClick={() => bulkApproveMutation.mutate(selectedIds)}
             className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
           >
-            {bulkApproveMutation.isPending ? "Aprovando..." : "Aprovar selecionados"}
+            {bulkApproveMutation.isPending
+              ? locale === "en" ? "Approving..." : "Aprovando..."
+              : locale === "en" ? "Approve selected" : "Aprovar selecionados"}
           </button>
         </div>
       </div>
 
       {reviewQuery.isLoading ? (
-        <p className="px-4 py-4 text-sm text-neutral-500">Carregando fila de revisão...</p>
+        <p className="px-4 py-4 text-sm text-neutral-500">{locale === "en" ? "Loading review queue..." : "Carregando fila de revisão..."}</p>
       ) : null}
 
       {reviewQuery.isError ? (
         <p className="px-4 py-4 text-sm text-rose-800">
-          {formatUserFacingError(reviewQuery.error, "Não foi possível carregar a fila de revisão agora.")}
+          {formatUserFacingError(reviewQuery.error, locale === "en" ? "Could not load the review queue right now." : "Não foi possível carregar a fila de revisão agora.")}
         </p>
       ) : null}
 
@@ -141,20 +147,20 @@ export function LeadCnpjReviewQueue({
         <p className="mx-4 mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {formatUserFacingError(
             bulkApproveMutation.error,
-            "Não foi possível aprovar os CNPJs selecionados agora.",
+            locale === "en" ? "Could not approve the selected CNPJs right now." : "Não foi possível aprovar os CNPJs selecionados agora.",
           )}
         </p>
       ) : null}
 
       {lastBulkSummary ? (
         <div className="mx-4 mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-          {buildBulkApprovalNarrative(lastBulkSummary)}
+          {buildBulkApprovalNarrative(lastBulkSummary, locale)}
         </div>
       ) : null}
 
       {!reviewQuery.isLoading && !reviewQuery.isError && reviewItems.length === 0 ? (
         <p className="px-4 py-4 text-sm text-neutral-500">
-          Nenhum candidato CNPJ pendente de revisão com os filtros atuais.
+          {locale === "en" ? "No CNPJ candidates pending review with the current filters." : "Nenhum candidato CNPJ pendente de revisão com os filtros atuais."}
         </p>
       ) : null}
 
@@ -163,12 +169,12 @@ export function LeadCnpjReviewQueue({
           <table className="min-w-[1180px] border-separate border-spacing-0 text-left text-sm 2xl:min-w-full">
             <thead className="bg-white/[0.34] text-xs font-semibold uppercase tracking-wide text-brand-muted">
               <tr>
-                <th className="border-b border-neutral-200 px-3 py-3">Seleção</th>
+                <th className="border-b border-neutral-200 px-3 py-3">{locale === "en" ? "Select" : "Seleção"}</th>
                 <th className="border-b border-neutral-200 px-3 py-3">Lead</th>
-                <th className="border-b border-neutral-200 px-3 py-3">Endereço atual</th>
-                <th className="border-b border-neutral-200 px-3 py-3">Candidato(s)</th>
+                <th className="border-b border-neutral-200 px-3 py-3">{locale === "en" ? "Current address" : "Endereço atual"}</th>
+                <th className="border-b border-neutral-200 px-3 py-3">{locale === "en" ? "Candidate(s)" : "Candidato(s)"}</th>
                 <th className="border-b border-neutral-200 px-3 py-3">Status</th>
-                <th className="border-b border-neutral-200 px-3 py-3">Ações</th>
+                <th className="border-b border-neutral-200 px-3 py-3">{locale === "en" ? "Actions" : "Ações"}</th>
               </tr>
             </thead>
             <tbody>
@@ -176,13 +182,13 @@ export function LeadCnpjReviewQueue({
                 const candidates = getCandidateSummaries(lead);
                 const bulkApprovable = isSingleBulkApprovableLead(lead);
                 const checked = selectedIds.includes(lead.id);
-                const diagnostics = getLeadReviewStatusLabel(lead, candidates);
+                const diagnostics = getLeadReviewStatusLabel(lead, candidates, locale);
                 return (
                   <tr key={lead.id} className={lead.id === activeLeadId ? "bg-brand-olive/10" : "bg-white/[0.16]"}>
                     <td className="border-b border-neutral-100 px-3 py-3 align-top">
                       <input
                         type="checkbox"
-                        aria-label={`Selecionar ${lead.business_name}`}
+                        aria-label={`${locale === "en" ? "Select" : "Selecionar"} ${lead.business_name}`}
                         checked={checked}
                         disabled={!bulkApprovable}
                         onChange={(event) => {
@@ -203,12 +209,12 @@ export function LeadCnpjReviewQueue({
                       >
                         <p className="font-medium text-neutral-950">{lead.business_name}</p>
                         <p className="mt-1 text-xs text-neutral-500">
-                          {[lead.city, lead.state].filter(Boolean).join("/") || "Local não informado"}
+                          {[lead.city, lead.state].filter(Boolean).join("/") || (locale === "en" ? "Location missing" : "Local não informado")}
                         </p>
                       </button>
                     </td>
                     <td className="border-b border-neutral-100 px-3 py-3 align-top text-neutral-700">
-                      {compact([lead.address, lead.neighborhood, lead.postal_code]) || "Não informado"}
+                      {compact([lead.address, lead.neighborhood, lead.postal_code]) || (locale === "en" ? "Not informed" : "Não informado")}
                     </td>
                     <td className="border-b border-neutral-100 px-3 py-3 align-top">
                       <div className="space-y-2">
@@ -222,27 +228,27 @@ export function LeadCnpjReviewQueue({
                               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                                 <div className="space-y-1">
                                   <p className="font-medium text-neutral-950">
-                                    {candidate.trade_name || candidate.legal_name || "Candidato"}
-                                    {isPrimary ? " · principal" : ""}
+                                    {candidate.trade_name || candidate.legal_name || (locale === "en" ? "Candidate" : "Candidato")}
+                                    {isPrimary ? (locale === "en" ? " · primary" : " · principal") : ""}
                                   </p>
                                   <p className="text-xs text-neutral-600">
-                                    CNPJ: {candidate.cnpj || "Não disponível"}
+                                    CNPJ: {candidate.cnpj || (locale === "en" ? "Unavailable" : "Não disponível")}
                                   </p>
                                   <p className="text-xs text-neutral-600">
-                                    Razão social: {candidate.legal_name || "Não informada"}
+                                    {locale === "en" ? "Legal name" : "Razão social"}: {candidate.legal_name || (locale === "en" ? "Not informed" : "Não informada")}
                                   </p>
                                   {candidate.trade_name ? (
-                                    <p className="text-xs text-neutral-600">Nome fantasia: {candidate.trade_name}</p>
+                                    <p className="text-xs text-neutral-600">{locale === "en" ? "Trade name" : "Nome fantasia"}: {candidate.trade_name}</p>
                                   ) : null}
                                   <p className="text-xs text-neutral-600">
-                                    {[candidate.city, candidate.state].filter(Boolean).join("/") || "Cidade/UF não informadas"}
+                                    {[candidate.city, candidate.state].filter(Boolean).join("/") || (locale === "en" ? "City/state missing" : "Cidade/UF não informadas")}
                                   </p>
-                                  <p className="text-xs text-neutral-600">{candidate.address || "Endereço não informado"}</p>
+                                  <p className="text-xs text-neutral-600">{candidate.address || (locale === "en" ? "Address missing" : "Endereço não informado")}</p>
                                   <p className="text-xs text-neutral-600">
-                                    Confiança: {formatConfidence(candidate.match_confidence)} · Pontuação: {formatScore(candidate.score)}
+                                    {locale === "en" ? "Confidence" : "Confiança"}: {formatConfidence(candidate.match_confidence, locale)} · {locale === "en" ? "Score" : "Pontuação"}: {formatScore(candidate.score, locale)}
                                   </p>
                                   <p className="text-xs text-neutral-500">
-                                    {candidate.query_mode_label || "Busca cadastral"} · {candidate.provider || "Provedor não informado"}
+                                    {candidate.query_mode_label || (locale === "en" ? "Company registry search" : "Busca cadastral")} · {candidate.provider || (locale === "en" ? "Provider missing" : "Provedor não informado")}
                                   </p>
                                 </div>
                                 {candidate.manual_review_approvable ? (
@@ -257,7 +263,7 @@ export function LeadCnpjReviewQueue({
                                     disabled={approveMutation.isPending}
                                      className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
                                   >
-                                    Aprovar este CNPJ
+                                    {locale === "en" ? "Approve this CNPJ" : "Aprovar este CNPJ"}
                                   </button>
                                 ) : null}
                               </div>
@@ -282,7 +288,7 @@ export function LeadCnpjReviewQueue({
                         disabled={rejectMutation.isPending}
                         className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Manter sem CNPJ
+                        {locale === "en" ? "Keep without CNPJ" : "Manter sem CNPJ"}
                       </button>
                     </td>
                   </tr>
@@ -352,56 +358,57 @@ function isSingleBulkApprovableLead(lead: Pick<LeadSummary, "cnpj_metadata_json"
 function getLeadReviewStatusLabel(
   lead: Pick<LeadSummary, "cnpj_match_status" | "cnpj_metadata_json">,
   candidates: LeadCnpjCandidateSummary[],
+  locale: "pt-BR" | "en",
 ) {
   const metadata = asRecord(lead.cnpj_metadata_json);
   const reasonCode = asNullableString(metadata?.reason_code);
   if (reasonCode === "company_search_rate_limited" || reasonCode === "cnpj_provider_rate_limited") {
     return {
-      label: "Limite do provedor, tente novamente",
-      reason: "A consulta foi limitada pelo provedor e pode ser tentada novamente depois.",
+      label: locale === "en" ? "Provider limit reached" : "Limite do provedor, tente novamente",
+      reason: locale === "en" ? "The provider limited this lookup. Try again later." : "A consulta foi limitada pelo provedor e pode ser tentada novamente depois.",
     };
   }
   if (lead.cnpj_match_status === "needs_review" && candidates.length > 1) {
     return {
-      label: "Múltiplos candidatos encontrados",
-      reason: "Mais de um candidato forte encontrado. Escolha o cadastro correto.",
+      label: locale === "en" ? "Multiple candidates found" : "Múltiplos candidatos encontrados",
+      reason: locale === "en" ? "More than one strong candidate was found. Choose the correct registration." : "Mais de um candidato forte encontrado. Escolha o cadastro correto.",
     };
   }
   if (lead.cnpj_match_status === "needs_review") {
     return {
-      label: "Candidato encontrado",
-      reason: candidates[0]?.review_reason || "A busca encontrou um candidato, mas precisa de revisão manual.",
+      label: locale === "en" ? "Candidate found" : "Candidato encontrado",
+      reason: candidates[0]?.review_reason || (locale === "en" ? "The lookup found a candidate that needs manual review." : "A busca encontrou um candidato, mas precisa de revisão manual."),
     };
   }
   if (reasonCode === "company_search_low_confidence" && candidates.length > 0) {
     return {
-      label: "Candidatos fracos",
-      reason: "Os candidatos encontrados não atingiram confiança suficiente para confirmação automática.",
+      label: locale === "en" ? "Low-confidence candidates" : "Candidatos fracos",
+      reason: locale === "en" ? "The candidates found were not confident enough for automatic confirmation." : "Os candidatos encontrados não atingiram confiança suficiente para confirmação automática.",
     };
   }
   return {
-    label: "Não encontrado",
-    reason: "Nenhum candidato revisável ficou disponível para aprovação.",
+    label: locale === "en" ? "Not found" : "Não encontrado",
+    reason: locale === "en" ? "No reviewable candidate is available for approval." : "Nenhum candidato revisável ficou disponível para aprovação.",
   };
 }
 
-function buildBulkApprovalNarrative(summary: LeadBatchApproveCNPJCandidatesResponse["summary"]) {
+function buildBulkApprovalNarrative(summary: LeadBatchApproveCNPJCandidatesResponse["summary"], locale: "pt-BR" | "en") {
   const parts = [
-    `${summary.approved_count.toLocaleString()} aprovado(s)`,
+    locale === "en" ? `${summary.approved_count.toLocaleString()} approved` : `${summary.approved_count.toLocaleString()} aprovado(s)`,
     summary.skipped_ambiguous_count
-      ? `${summary.skipped_ambiguous_count.toLocaleString()} ambíguo(s) pulado(s)`
+      ? locale === "en" ? `${summary.skipped_ambiguous_count.toLocaleString()} ambiguous skipped` : `${summary.skipped_ambiguous_count.toLocaleString()} ambíguo(s) pulado(s)`
       : null,
     summary.skipped_no_candidate_count
-      ? `${summary.skipped_no_candidate_count.toLocaleString()} sem candidato pulado(s)`
+      ? locale === "en" ? `${summary.skipped_no_candidate_count.toLocaleString()} without candidate skipped` : `${summary.skipped_no_candidate_count.toLocaleString()} sem candidato pulado(s)`
       : null,
     summary.skipped_low_confidence_count
-      ? `${summary.skipped_low_confidence_count.toLocaleString()} abaixo do mínimo pulado(s)`
+      ? locale === "en" ? `${summary.skipped_low_confidence_count.toLocaleString()} below threshold skipped` : `${summary.skipped_low_confidence_count.toLocaleString()} abaixo do mínimo pulado(s)`
       : null,
     summary.skipped_already_matched_count
-      ? `${summary.skipped_already_matched_count.toLocaleString()} já confirmado(s)`
+      ? locale === "en" ? `${summary.skipped_already_matched_count.toLocaleString()} already confirmed` : `${summary.skipped_already_matched_count.toLocaleString()} já confirmado(s)`
       : null,
   ].filter(Boolean);
-  return `Aprovação em lote concluída: ${parts.join(", ")}.`;
+  return locale === "en" ? `Bulk approval complete: ${parts.join(", ")}.` : `Aprovação em lote concluída: ${parts.join(", ")}.`;
 }
 
 function currentScopeFilters(filters: LeadListParams): LeadListParams {
@@ -414,16 +421,16 @@ function compact(values: Array<string | null | undefined>) {
   return parts.length ? parts.join(" · ") : null;
 }
 
-function formatConfidence(value?: number | null) {
+function formatConfidence(value?: number | null, locale: "pt-BR" | "en" = "pt-BR") {
   if (typeof value !== "number") {
-    return "Não informado";
+    return locale === "en" ? "Not informed" : "Não informado";
   }
   return `${Math.round(value * 100)}%`;
 }
 
-function formatScore(value?: number | null) {
+function formatScore(value?: number | null, locale: "pt-BR" | "en" = "pt-BR") {
   if (typeof value !== "number") {
-    return "Não informado";
+    return locale === "en" ? "Not informed" : "Não informado";
   }
   return `${Math.round(value)} / 100`;
 }
