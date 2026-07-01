@@ -805,7 +805,7 @@ export function DiscoveryWorkspace() {
             ) : null}
           </div>
 
-          <div className="ea-card relative z-30 overflow-visible p-3 lg:p-3.5">
+          <div className="relative z-30 overflow-visible rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-3 shadow-[0_12px_34px_rgba(29,22,48,0.07),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-xl lg:p-3.5">
             <div className="space-y-2.5">
               <div className="grid gap-3 xl:grid-cols-[minmax(220px,0.72fr)_minmax(280px,1.15fr)_minmax(240px,0.9fr)_150px_180px] xl:items-end">
                 <div className="block">
@@ -881,7 +881,7 @@ export function DiscoveryWorkspace() {
                 />
               ) : null}
 
-              <div className="flex flex-col gap-3 border-t border-brand-mist/60 pt-2.5 lg:flex-row lg:items-start">
+              <div className="flex flex-col gap-3 border-t border-brand-orchid/10 pt-2.5 lg:flex-row lg:items-start">
                 <div className="relative min-w-0 flex-1">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <AdvancedPanelTrigger
@@ -954,40 +954,22 @@ export function DiscoveryWorkspace() {
         {formError ? <InlineMessage tone="danger">{formError}</InlineMessage> : null}
         {previewError ? <InlineMessage tone="danger">{errorMessage(previewError, locale)}</InlineMessage> : null}
 
-        <div className="ea-card relative z-10 p-3.5 lg:p-4">
+        <div className="relative z-10 rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.50] p-3.5 shadow-[0_12px_34px_rgba(29,22,48,0.07),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-xl lg:p-4">
           {hasSearchActivity ? (
             <div>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <p className="text-base font-semibold text-brand-graphite">{t("discovery.previewTitle")}</p>
-                  {preview ? (
-                    <p className="mt-1 text-sm leading-6 text-brand-muted">
-                      {t("discovery.previewResultsSummary", {
-                        count: formatNumber(previewCount, locale),
-                        websiteCount: formatNumber(websiteReadyCount, locale),
-                        savedCount: formatNumber(existingPreviewCount, locale),
-                        selectedCount: formatNumber(selectedClientResultIds.length, locale),
-                      })}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-sm leading-6 text-brand-muted">{t("discovery.previewWaiting")}</p>
-                  )}
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-semibold text-brand-graphite">{t("discovery.previewTitle")}</p>
+                    {preview ? <StatusPill label={locale === "en" ? "Results" : "Resultados"} value={formatNumber(previewCount, locale)} /> : null}
+                    {preview && websiteReadyCount > 0 ? <StatusPill label={locale === "en" ? "With website" : "Com site"} value={formatNumber(websiteReadyCount, locale)} /> : null}
+                    {preview && existingPreviewCount > 0 ? <StatusPill label={locale === "en" ? "Already saved" : "Já salvos"} value={formatNumber(existingPreviewCount, locale)} /> : null}
+                  </div>
+                  {!preview ? <p className="mt-1 text-sm leading-6 text-brand-muted">{t("discovery.previewWaiting")}</p> : null}
                 </div>
-                <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-end">
-                  {preview && selectedClientResultIds.length > 0 ? (
-                    <div className="flex flex-col gap-2 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-3 py-2 sm:flex-row sm:items-center">
-                      <span className="text-sm font-semibold text-brand-graphite">{t("discovery.selectedCount", { count: formatNumber(selectedClientResultIds.length, locale) })}</span>
-                      <button
-                        type="button"
-                        disabled={importMutation.isPending}
-                        onClick={saveSelected}
-                        className="ea-button-primary px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {importMutation.isPending ? t("discovery.savingPending") : t("discovery.importSelected")}
-                      </button>
-                    </div>
-                  ) : null}
-                  <label className="ea-card-flat flex items-center gap-2 px-3 py-2 text-sm text-brand-graphite">
+
+                <div className="grid w-full gap-2 md:grid-cols-2 xl:w-auto xl:min-w-[520px] xl:grid-cols-[minmax(170px,0.9fr)_minmax(150px,0.8fr)_minmax(150px,0.8fr)] xl:items-end">
+                  <label className="flex h-10 items-center gap-2 rounded-[0.95rem] border border-brand-orchid/10 bg-white/[0.32] px-3 text-sm text-brand-graphite">
                     <input
                       type="checkbox"
                       checked={hideExistingLeads}
@@ -996,7 +978,7 @@ export function DiscoveryWorkspace() {
                     />
                     <span>{t("discovery.hideAlreadySaved")}</span>
                   </label>
-                  <div className="block w-full lg:w-48">
+                  <div className="block">
                     <span className="text-xs font-medium text-brand-muted">{t("discovery.blocking")}</span>
                     <GlassSelect
                       value={blockedFilter}
@@ -1006,7 +988,7 @@ export function DiscoveryWorkspace() {
                       onChange={(value) => setBlockedFilter(value as LeadBlockedFilter)}
                     />
                   </div>
-                  <div className="block w-full lg:w-48">
+                  <div className="block md:col-span-2 xl:col-span-1">
                     <span className="text-xs font-medium text-brand-muted">{t("discovery.websitePresence")}</span>
                     <GlassSelect
                       value={websiteFilter}
@@ -1019,32 +1001,52 @@ export function DiscoveryWorkspace() {
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={!preview || selectedNoWebsiteClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
-                  onClick={recoverSelected}
-                  className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {recoverMutation.isPending ? t("discovery.recoveryPending") : t("discovery.recoverWebsites")}
-                </button>
-                <button
-                  type="button"
-                  disabled={!preview || selectedEnrichableClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
-                  onClick={enrichSelected}
-                  className="ea-button-primary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {enrichMutation.isPending ? t("discovery.enrichmentPending") : t("discovery.enrichSelected")}
-                </button>
-                <button
-                  type="button"
-                  disabled={!preview || visibleEnrichableIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
-                  onClick={enrichVisible}
-                  className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {t("discovery.enrichVisible")}
-                </button>
-              </div>
+              {preview ? (
+                <div className="mt-3 flex flex-col gap-3 border-t border-brand-orchid/10 pt-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-wrap gap-2 text-xs text-brand-muted">
+                    {selectedClientResultIds.length > 0 ? <StatusPill label={locale === "en" ? "Selected" : "Selecionados"} value={formatNumber(selectedClientResultIds.length, locale)} /> : null}
+                    {selectedEnrichableClientResultIds.length > 0 ? <StatusPill label={locale === "en" ? "Ready to enrich" : "Prontas para enriquecer"} value={formatNumber(selectedEnrichableClientResultIds.length, locale)} /> : null}
+                    {selectedRecoverableClientResultIds.length > 0 ? <StatusPill label={locale === "en" ? "Website lookup" : "Busca de site"} value={formatNumber(selectedRecoverableClientResultIds.length, locale)} /> : null}
+                    {blockedCount > 0 ? <StatusPill label={locale === "en" ? "Blocked" : "Bloqueadas"} value={formatNumber(blockedCount, locale)} /> : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {selectedClientResultIds.length > 0 ? (
+                      <button
+                        type="button"
+                        disabled={importMutation.isPending}
+                        onClick={saveSelected}
+                        className="ea-button-primary px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {importMutation.isPending ? t("discovery.savingPending") : t("discovery.importSelected")}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={selectedNoWebsiteClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
+                      onClick={recoverSelected}
+                      className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {recoverMutation.isPending ? t("discovery.recoveryPending") : t("discovery.recoverWebsites")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={selectedEnrichableClientResultIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
+                      onClick={enrichSelected}
+                      className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {enrichMutation.isPending ? t("discovery.enrichmentPending") : t("discovery.enrichSelected")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={visibleEnrichableIds.length === 0 || enrichMutation.isPending || recoverMutation.isPending}
+                      onClick={enrichVisible}
+                      className="ea-button-secondary px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {t("discovery.enrichVisible")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               {lastImport ? (
                 <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-brand-olive/20 bg-brand-olive/10 px-3 py-2 text-sm lg:flex-row lg:items-center lg:justify-between">
@@ -1056,7 +1058,7 @@ export function DiscoveryWorkspace() {
                       ? `${lastImport.created_count} created, ${lastImport.skipped_existing_count} already existed, ${lastImport.skipped_blocked} skipped.`
                       : `${lastImport.created_count} criado(s), ${lastImport.skipped_existing_count} já existiam e ${lastImport.skipped_blocked} ignorado(s).`}
                   </p>
-                  <Link href={`/leads?import_batch_id=${lastImport.batch_id}`} className="text-sm font-bold text-brand-signal hover:text-brand-core">
+                  <Link href={`/leads?import_batch_id=${lastImport.batch_id}`} className="ea-button-primary inline-flex items-center justify-center px-3 py-2 text-sm font-bold">
                     {locale === "en" ? "Open saved batch" : "Abrir lote salvo"}
                   </Link>
                 </div>
@@ -1067,14 +1069,6 @@ export function DiscoveryWorkspace() {
               {enrichMutation.isError ? <InlineMessage tone="danger">{errorMessage(enrichMutation.error, locale)}</InlineMessage> : null}
               {blockMutation.isError ? <InlineMessage tone="danger">{errorMessage(blockMutation.error, locale)}</InlineMessage> : null}
               {importMutation.isError ? <InlineMessage tone="danger">{errorMessage(importMutation.error, locale)}</InlineMessage> : null}
-              {preview && (selectedEnrichableClientResultIds.length > 0 || selectedRecoverableClientResultIds.length > 0 || blockedCount > 0) ? (
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-brand-muted">
-                  {selectedEnrichableClientResultIds.length > 0 ? <StatusPill label={locale === "en" ? "Ready to enrich" : "Prontas para enriquecer"} value={formatNumber(selectedEnrichableClientResultIds.length, locale)} /> : null}
-                  {selectedRecoverableClientResultIds.length > 0 ? <StatusPill label={locale === "en" ? "Website lookup" : "Busca de site"} value={formatNumber(selectedRecoverableClientResultIds.length, locale)} /> : null}
-                  {blockedCount > 0 ? <StatusPill label={locale === "en" ? "Blocked" : "Bloqueadas"} value={formatNumber(blockedCount, locale)} /> : null}
-                </div>
-              ) : null}
-
               {isPreviewPending ? (
                 <PreviewSkeleton />
               ) : preview ? (
