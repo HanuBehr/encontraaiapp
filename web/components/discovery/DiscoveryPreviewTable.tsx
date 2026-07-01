@@ -146,7 +146,7 @@ export function DiscoveryPreviewTable({
                       <div>
                         <p className="font-medium text-amber-900">{t("common.saved")}</p>
                         <p className="mt-1 max-w-xs text-xs text-amber-800">
-                          {locale === "en" ? "Found before and kept out of this save." : "Encontrado antes e mantido fora do save."} {locale === "en" ? "Match by" : "Match por"} {existingLeadMatchLabel(item.matched_existing_by, locale)}.
+                          {locale === "en" ? "Found before and kept out of this save." : "Encontrado antes e mantido fora deste salvamento."}
                         </p>
                       </div>
                     ) : (
@@ -249,25 +249,4 @@ function domainForCandidate(candidate: DiscoveryLeadCandidate) {
 function firstExtractedContactUrl(item: DiscoveryPreviewItem, contactType: string) {
   const contact = item.enrichment?.extracted_contacts.find((entry) => entry.contact_type === contactType);
   return contact?.normalized_value ?? contact?.raw_value ?? null;
-}
-
-function existingLeadMatchLabel(matchedExistingBy: string | null, locale: "pt-BR" | "en") {
-  switch (matchedExistingBy) {
-    case "google_place_id":
-      return locale === "en" ? "Google place id" : "place id do Google";
-    case "google_maps_url":
-      return "Google Maps";
-    case "domain":
-      return locale === "en" ? "domain" : "domínio";
-    case "phone":
-      return locale === "en" ? "phone" : "telefone";
-    case "name_address":
-      return locale === "en" ? "name + address" : "nome + endereço";
-    case "name_neighborhood_city":
-      return locale === "en" ? "name + neighborhood + city" : "nome + bairro + cidade";
-    case "name_city":
-      return locale === "en" ? "name + city" : "nome + cidade";
-    default:
-      return locale === "en" ? "company data" : "dados da empresa";
-  }
 }

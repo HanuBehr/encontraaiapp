@@ -30,28 +30,28 @@ export function LeadQueueFilters({
   }
 
   return (
-    <div className={open ? "rounded-[1.2rem] border border-brand-orchid/10 bg-white/[0.24] p-3" : "rounded-[1.2rem]"}>
+    <div className="relative z-30">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
           aria-expanded={open}
-          className="group flex min-w-0 flex-1 items-center gap-3 rounded-[1.05rem] text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25"
+          className={`group flex h-11 min-w-0 flex-1 items-center gap-3 rounded-[1.05rem] border px-3 text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25 ${
+            open ? "border-brand-orchid/24 bg-brand-orchid/[0.055]" : "border-brand-orchid/10 bg-white/[0.30] hover:border-brand-orchid/18"
+          }`}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.9rem] border border-brand-orchid/12 bg-brand-orchid/[0.06] text-brand-orchid">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-brand-orchid/12 bg-brand-orchid/[0.06] text-brand-orchid">
             <FilterIcon className="h-4 w-4" />
           </span>
-          <span className="min-w-0 py-1">
-            <span className="flex flex-wrap items-center gap-2 text-base font-bold text-brand-graphite">
-              {t("leads.filtersTitle")}
-              {activeFilterCount > 0 ? (
-                <span className="rounded-full bg-brand-orchid/10 px-2 py-0.5 text-xs font-bold text-brand-orchid">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </span>
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-base font-bold text-brand-graphite">
+            {t("leads.filtersTitle")}
+            {activeFilterCount > 0 ? (
+              <span className="rounded-full bg-brand-orchid/10 px-2 py-0.5 text-xs font-bold text-brand-orchid">
+                {activeFilterCount}
+              </span>
+            ) : null}
           </span>
-          <span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.9rem] border border-brand-orchid/12 bg-white/[0.28] text-brand-muted transition group-hover:text-brand-orchid">
+          <span className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-brand-orchid/12 bg-white/[0.28] text-brand-muted transition group-hover:text-brand-orchid">
             <ChevronIcon className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
           </span>
         </button>
@@ -67,102 +67,110 @@ export function LeadQueueFilters({
         ) : null}
       </div>
 
-      {open ? <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-        <SelectField
-          label={t("leads.blockStatus")}
-          value={filters.blocked}
-          onChange={(value) => updateFilter("blocked", value as QueueFilters["blocked"])}
-          options={blockedOptions(t)}
-          emptyLabel={null}
-        />
-        <SelectField
-          label={t("leads.city")}
-          value={filters.city}
-          onChange={(value) => updateFilter("city", value)}
-          options={(options?.cities ?? []).map((value) => ({ value, label: value }))}
-        />
-        <SelectField
-          label={t("leads.state")}
-          value={filters.state}
-          onChange={(value) => updateFilter("state", value)}
-          options={(options?.states ?? []).map((value) => ({ value, label: value }))}
-        />
-        <SelectField
-          label="Status"
-          value={filters.status}
-          onChange={(value) => updateFilter("status", value as QueueFilters["status"])}
-          options={(options?.statuses ?? []).map((value) => ({ value, label: formatLeadLabel(value, locale) ?? value }))}
-        />
-        <SelectField
-          label={t("leads.assignee")}
-          value={filters.assignedSalesRepId}
-          onChange={(value) => updateFilter("assignedSalesRepId", value)}
-          options={(options?.assigned_reps ?? []).map((rep) => ({ value: String(rep.id), label: rep.name }))}
-        />
-        <SelectField
-          label={t("leads.region")}
-          value={filters.salesRegionId}
-          onChange={(value) => updateFilter("salesRegionId", value)}
-          options={(options?.sales_regions ?? []).map((region) => ({ value: String(region.id), label: region.name }))}
-        />
-        <SelectField
-          label={t("leads.segment")}
-          value={filters.marketSegmentId}
-          onChange={(value) => updateFilter("marketSegmentId", value)}
-          options={(options?.market_segments ?? []).map((segment) => ({ value: String(segment.id), label: segment.name }))}
-        />
-        <SelectField
-          label={t("leads.subsegment")}
-          value={filters.marketSubsegmentId}
-          onChange={(value) => updateFilter("marketSubsegmentId", value)}
-          options={(options?.market_subsegments ?? []).map((subsegment) => ({
-            value: String(subsegment.id),
-            label: subsegment.name,
-          }))}
-        />
-        <SelectField
-          label={t("common.profile")}
-          value={filters.companySizeFit}
-          onChange={(value) => updateFilter("companySizeFit", value as QueueFilters["companySizeFit"])}
-          options={(options?.target_fit_values ?? []).map((value) => ({
-            value,
-            label: formatLeadLabel(value, locale) ?? value,
-          }))}
-        />
-        <SelectField
-          label={t("leads.operation")}
-          value={filters.tradeType}
-          onChange={(value) => updateFilter("tradeType", value as QueueFilters["tradeType"])}
-          options={(options?.trade_type_values ?? []).map((value) => ({
-            value,
-            label: formatLeadLabel(value, locale) ?? value,
-          }))}
-        />
-        <SelectField
-          label={t("leads.withAssignee")}
-          value={filters.hasAssignment}
-          onChange={(value) => updateFilter("hasAssignment", value as QueueFilters["hasAssignment"])}
-          options={booleanOptions(t)}
-        />
-        <SelectField
-          label={t("leads.withEmail")}
-          value={filters.hasEmail}
-          onChange={(value) => updateFilter("hasEmail", value as QueueFilters["hasEmail"])}
-          options={booleanOptions(t)}
-        />
-        <SelectField
-          label={t("leads.withWhatsapp")}
-          value={filters.hasWhatsapp}
-          onChange={(value) => updateFilter("hasWhatsapp", value as QueueFilters["hasWhatsapp"])}
-          options={booleanOptions(t)}
-        />
-        <SelectField
-          label={t("leads.withInstagram")}
-          value={filters.hasInstagram}
-          onChange={(value) => updateFilter("hasInstagram", value as QueueFilters["hasInstagram"])}
-          options={booleanOptions(t)}
-        />
-      </div> : null}
+      <div
+        className={`absolute inset-x-0 top-[calc(100%+1.5rem)] z-30 px-0.5 transition-[opacity,transform] duration-200 ease-out sm:px-1 ${
+          open ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"
+        }`}
+      >
+        <div className="ea-card ea-scroll-panel isolate max-h-[min(31rem,48vh)] overflow-y-auto overscroll-contain rounded-[1.25rem] bg-white/[0.72] p-3.5 shadow-[0_16px_42px_rgba(47,38,61,0.10),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-[20px]">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <SelectField
+              label={t("leads.blockStatus")}
+              value={filters.blocked}
+              onChange={(value) => updateFilter("blocked", value as QueueFilters["blocked"])}
+              options={blockedOptions(t)}
+              emptyLabel={null}
+            />
+            <SelectField
+              label={t("leads.city")}
+              value={filters.city}
+              onChange={(value) => updateFilter("city", value)}
+              options={(options?.cities ?? []).map((value) => ({ value, label: value }))}
+            />
+            <SelectField
+              label={t("leads.state")}
+              value={filters.state}
+              onChange={(value) => updateFilter("state", value)}
+              options={(options?.states ?? []).map((value) => ({ value, label: value }))}
+            />
+            <SelectField
+              label="Status"
+              value={filters.status}
+              onChange={(value) => updateFilter("status", value as QueueFilters["status"])}
+              options={(options?.statuses ?? []).map((value) => ({ value, label: formatLeadLabel(value, locale) ?? value }))}
+            />
+            <SelectField
+              label={t("leads.assignee")}
+              value={filters.assignedSalesRepId}
+              onChange={(value) => updateFilter("assignedSalesRepId", value)}
+              options={(options?.assigned_reps ?? []).map((rep) => ({ value: String(rep.id), label: rep.name }))}
+            />
+            <SelectField
+              label={t("leads.region")}
+              value={filters.salesRegionId}
+              onChange={(value) => updateFilter("salesRegionId", value)}
+              options={(options?.sales_regions ?? []).map((region) => ({ value: String(region.id), label: region.name }))}
+            />
+            <SelectField
+              label={t("leads.segment")}
+              value={filters.marketSegmentId}
+              onChange={(value) => updateFilter("marketSegmentId", value)}
+              options={(options?.market_segments ?? []).map((segment) => ({ value: String(segment.id), label: segment.name }))}
+            />
+            <SelectField
+              label={t("leads.subsegment")}
+              value={filters.marketSubsegmentId}
+              onChange={(value) => updateFilter("marketSubsegmentId", value)}
+              options={(options?.market_subsegments ?? []).map((subsegment) => ({
+                value: String(subsegment.id),
+                label: subsegment.name,
+              }))}
+            />
+            <SelectField
+              label={t("common.profile")}
+              value={filters.companySizeFit}
+              onChange={(value) => updateFilter("companySizeFit", value as QueueFilters["companySizeFit"])}
+              options={(options?.target_fit_values ?? []).map((value) => ({
+                value,
+                label: formatLeadLabel(value, locale) ?? value,
+              }))}
+            />
+            <SelectField
+              label={t("leads.operation")}
+              value={filters.tradeType}
+              onChange={(value) => updateFilter("tradeType", value as QueueFilters["tradeType"])}
+              options={(options?.trade_type_values ?? []).map((value) => ({
+                value,
+                label: formatLeadLabel(value, locale) ?? value,
+              }))}
+            />
+            <SelectField
+              label={t("leads.withAssignee")}
+              value={filters.hasAssignment}
+              onChange={(value) => updateFilter("hasAssignment", value as QueueFilters["hasAssignment"])}
+              options={booleanOptions(t)}
+            />
+            <SelectField
+              label={t("leads.withEmail")}
+              value={filters.hasEmail}
+              onChange={(value) => updateFilter("hasEmail", value as QueueFilters["hasEmail"])}
+              options={booleanOptions(t)}
+            />
+            <SelectField
+              label={t("leads.withWhatsapp")}
+              value={filters.hasWhatsapp}
+              onChange={(value) => updateFilter("hasWhatsapp", value as QueueFilters["hasWhatsapp"])}
+              options={booleanOptions(t)}
+            />
+            <SelectField
+              label={t("leads.withInstagram")}
+              value={filters.hasInstagram}
+              onChange={(value) => updateFilter("hasInstagram", value as QueueFilters["hasInstagram"])}
+              options={booleanOptions(t)}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
