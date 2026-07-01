@@ -30,15 +30,15 @@ export function LeadQueueFilters({
   }
 
   return (
-    <section className={`rounded-[1.35rem] border border-brand-orchid/10 bg-white/[0.38] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl ${open ? "p-4" : "p-3"}`}>
+    <div className={open ? "rounded-[1.2rem] border border-brand-orchid/10 bg-white/[0.24] p-3" : "rounded-[1.2rem]"}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
           aria-expanded={open}
-          className="group flex min-w-0 flex-1 items-center gap-3 rounded-[1.15rem] text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25"
+          className="group flex min-w-0 flex-1 items-center gap-3 rounded-[1.05rem] text-left transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/25"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-brand-orchid/12 bg-brand-orchid/[0.06] text-brand-orchid">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.9rem] border border-brand-orchid/12 bg-brand-orchid/[0.06] text-brand-orchid">
             <FilterIcon className="h-4 w-4" />
           </span>
           <span className="min-w-0 py-1">
@@ -51,7 +51,7 @@ export function LeadQueueFilters({
               ) : null}
             </span>
           </span>
-          <span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-brand-orchid/12 bg-brand-orchid/[0.055] text-brand-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.52)] backdrop-blur-xl transition group-hover:text-brand-orchid">
+          <span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.9rem] border border-brand-orchid/12 bg-white/[0.28] text-brand-muted transition group-hover:text-brand-orchid">
             <ChevronIcon className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
           </span>
         </button>
@@ -163,7 +163,7 @@ export function LeadQueueFilters({
           options={booleanOptions(t)}
         />
       </div> : null}
-    </section>
+    </div>
   );
 }
 

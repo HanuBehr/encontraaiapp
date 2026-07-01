@@ -152,7 +152,6 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         <section className="flex flex-col gap-3 rounded-3xl border border-brand-olive/70 bg-brand-olive/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-brand-graphite">{t("leads.viewingBatch", { id: importBatchId })}</p>
-            <p className="mt-1 text-sm text-brand-muted">{t("leads.batchDescription")}</p>
           </div>
           <Link
             href="/leads"
@@ -163,17 +162,21 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
         </section>
       ) : null}
 
-      <LeadQueueSearch
-        value={search}
-        onChange={updateSearch}
-      />
+      <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-3 shadow-[0_12px_34px_rgba(29,22,48,0.07),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-xl">
+        <div className="grid gap-3 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.1fr)] xl:items-start">
+          <LeadQueueSearch
+            value={search}
+            onChange={updateSearch}
+          />
 
-      <LeadQueueFilters
-        filters={filters}
-        options={optionsQuery.data}
-        onFiltersChange={updateFilters}
-        onReset={resetFilters}
-      />
+          <LeadQueueFilters
+            filters={filters}
+            options={optionsQuery.data}
+            onFiltersChange={updateFilters}
+            onReset={resetFilters}
+          />
+        </div>
+      </section>
 
       {optionsQuery.isError ? (
         <p className="rounded-2xl border border-rose-300/30 bg-rose-950/35 p-3 text-sm text-rose-100">
@@ -256,24 +259,17 @@ function LeadQueueSearch({
 }) {
   const { t } = useI18n();
   return (
-    <section className="ea-card p-4">
-      <div className="max-w-3xl">
-        <label className="block" htmlFor="lead-search">
-          <span className="text-sm font-semibold text-brand-graphite">{t("leads.quickSearch")}</span>
-          <input
-            id="lead-search"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={t("leads.searchPlaceholder")}
-            autoComplete="off"
-            className="ea-input mt-2 w-full px-3 py-2 text-sm"
-          />
-        </label>
-      </div>
-      <p className="mt-2 text-xs text-brand-muted">
-        {t("leads.searchHelp")}
-      </p>
-    </section>
+    <label className="block" htmlFor="lead-search">
+      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-muted">{t("leads.quickSearch")}</span>
+      <input
+        id="lead-search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={t("leads.searchPlaceholder")}
+        autoComplete="off"
+        className="ea-input mt-1.5 h-11 w-full px-3 py-2 text-sm"
+      />
+    </label>
   );
 }
 

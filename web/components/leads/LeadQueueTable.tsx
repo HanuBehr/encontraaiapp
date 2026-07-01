@@ -171,7 +171,7 @@ export function LeadQueueTable({
   });
 
   return (
-    <section className="ea-card overflow-hidden">
+    <section className="overflow-hidden rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.58] shadow-[0_14px_38px_rgba(29,22,48,0.08),inset_0_1px_0_rgba(255,255,255,0.62)] backdrop-blur-xl">
       <div className="flex flex-col gap-3 border-b border-brand-mist/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-brand-graphite">{t("leads.listTitle")}</h2>

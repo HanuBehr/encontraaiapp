@@ -215,14 +215,14 @@ export function LeadBatchActions({
   ];
 
   return (
-    <section className="ea-card p-4">
+    <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.36] p-3 shadow-[0_10px_28px_rgba(29,22,48,0.06),inset_0_1px_0_rgba(255,255,255,0.50)] backdrop-blur-xl">
       <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-end 2xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="ea-kicker">{t("batch.kicker")}</p>
             {searchActive ? <ToolbarPill>{t("batch.quickSearchScope")}</ToolbarPill> : null}
           </div>
-          <h2 className="mt-1 text-base font-semibold text-brand-graphite">{t("batch.title")}</h2>
+          <h2 className="mt-1 text-sm font-semibold text-brand-graphite">{t("batch.title")}</h2>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(220px,0.9fr)_100px_minmax(360px,1.45fr)] lg:items-end 2xl:min-w-[760px]">
@@ -240,7 +240,7 @@ export function LeadBatchActions({
             />
           </div>
 
-          <div className="rounded-[0.95rem] border border-brand-orchid/10 bg-brand-orchid/[0.045] px-3 py-2">
+          <div className="rounded-[0.95rem] border border-brand-orchid/10 bg-white/[0.28] px-3 py-2">
             <p className="text-[0.68rem] font-bold uppercase tracking-[0.12em] text-brand-muted">{t("batch.count")}</p>
             <p className="text-lg font-semibold text-brand-graphite">
               {actionCount === null ? "..." : formatNumber(actionCount, locale)}
@@ -267,7 +267,7 @@ export function LeadBatchActions({
       </div>
 
       {cnpjEnabled ? (
-        <div className="mt-3 flex flex-col gap-2 border-t border-brand-mist/60 pt-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="mt-3 flex flex-col gap-2 border-t border-brand-orchid/10 pt-3 sm:flex-row sm:flex-wrap sm:items-center">
           <label className="flex items-start gap-2 text-xs text-brand-muted">
             <input
               type="checkbox"
@@ -383,7 +383,7 @@ function ActionButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="ea-button-primary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed"
+      className="ea-button-secondary px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>
