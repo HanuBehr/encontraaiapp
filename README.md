@@ -2,7 +2,7 @@
 
 B2B prospecting is not slow because sales teams cannot sell. It is slow because the lead list is usually garbage.
 
-Encontra.ai turns a market idea like `dentists in Sao Paulo` or `restaurants in Barcelona` into a reviewed lead list ready for outreach. It handles discovery, duplicate prevention, contact enrichment, CNPJ evidence scoring, manual review, and spreadsheet export.
+Encontra.ai turns a market idea like `dental clinics in Lisbon` or `restaurants in Barcelona` into a reviewed lead list ready for outreach. It handles discovery, duplicate prevention, contact enrichment, company-record evidence scoring, manual review, and spreadsheet export.
 
 - Live demo: [https://encontraaiapp.vercel.app](https://encontraaiapp.vercel.app)
 - No login required
@@ -17,7 +17,7 @@ The expensive part of outbound sales often happens before the first call:
 - copying companies into spreadsheets
 - cleaning duplicate records
 - checking whether a company has a usable website or contact channel
-- guessing whether a CNPJ belongs to the right business
+- guessing whether a company record belongs to the right business
 - exporting a list that still needs another cleanup pass
 
 Encontra.ai is the lead preparation layer before outreach. The goal is simple: spend less time building the list and more time talking to customers.
@@ -25,14 +25,14 @@ Encontra.ai is the lead preparation layer before outreach. The goal is simple: s
 ## Workflow
 
 ```text
-Market search -> Discovery preview -> Dedupe -> Enrichment -> CNPJ review -> Export
+Market search -> Discovery preview -> Dedupe -> Enrichment -> Company review -> Export
 ```
 
 1. Search for companies by niche and location.
 2. Preview provider results before saving anything.
 3. Keep duplicates and already-saved companies out of the import.
 4. Enrich saved leads with websites, domains, emails, phones, WhatsApp, Instagram, and quality signals.
-5. Score and review uncertain CNPJ matches instead of silently assigning the wrong company record.
+5. Score and review uncertain company-record matches instead of silently assigning the wrong business entity.
 6. Filter, assign, review, and export the final lead list.
 
 ## What Makes It Useful
@@ -40,17 +40,17 @@ Market search -> Discovery preview -> Dedupe -> Enrichment -> CNPJ review -> Exp
 - Preview-first discovery keeps bad provider results out of the workspace.
 - Dedupe runs before import, so the lead list does not rot immediately.
 - Enrichment is batch-oriented because manually checking websites does not scale.
-- CNPJ matching uses evidence across name, location, address, phone, domain, email, and category signals.
-- Ambiguous CNPJ matches go to review instead of being treated as truth.
+- Company-record matching uses evidence across name, location, address, phone, domain, email, and category signals.
+- Ambiguous company matches go to review instead of being treated as truth.
 - Export rules prefer confirmed or approved company records.
 - Demo mode runs without secrets, backend infrastructure, or paid provider calls.
 
 ## Engineering Decisions
 
-- **FastAPI owns provider work.** Discovery, enrichment, CNPJ lookup, scoring, and exports run server-side where secrets and long-running work belong.
-- **Next.js owns the workspace.** The frontend is a workflow-heavy product surface with discovery, saved leads, review queues, filters, and bilingual UI.
+- **FastAPI owns provider work.** Discovery, enrichment, registry lookup, scoring, and exports run server-side where secrets and long-running work belong.
+- **Next.js owns the workspace.** The frontend is a workflow-heavy product surface with discovery, saved leads, review queues, filters, and localized UI.
 - **The API proxy keeps secrets out of the browser.** Provider keys stay on the backend, not in `NEXT_PUBLIC_*` variables.
-- **Provider integrations are adapters.** Google Places, geocoding, and optional CNPJ providers are isolated behind service/provider modules.
+- **Provider integrations are adapters.** Google Places, geocoding, and optional registry providers are isolated behind service/provider modules.
 - **Demo mode is deliberate.** The hosted demo swaps real backend calls for browser-local fixtures so the product can be reviewed instantly.
 - **SQLite is intentional for local and pilot use.** The app is easy to run locally and inspect. Larger deployments should add managed database storage and migrations.
 - **Docker is included for repeatable local deployment.** The app can run as a Dockerized frontend/backend pair with persistent local data.
@@ -62,11 +62,11 @@ Browser workspace
   -> Next.js app and API proxy
   -> FastAPI backend
   -> SQLAlchemy / SQLite
-  -> Discovery, enrichment, scoring, CNPJ review, export services
-  -> Google Places / optional CNPJ providers
+  -> Discovery, enrichment, scoring, company review, export services
+  -> Google Places / optional registry providers
 ```
 
-The frontend owns interaction and stateful review flows. The backend owns provider calls, persistence, evidence scoring, enrichment, CNPJ workflows, and Excel export generation.
+The frontend owns interaction and stateful review flows. The backend owns provider calls, persistence, evidence scoring, enrichment, company-review workflows, and Excel export generation.
 
 ## Demo Vs Backend
 
@@ -97,7 +97,7 @@ Frontend:
 Integrations and deployment:
 
 - Google Places discovery and geocoding
-- Optional CNPJ provider adapters
+- Optional company-registry provider adapters
 - Excel export pipeline
 - Docker and Docker Compose
 - Vercel frontend demo path
@@ -263,7 +263,7 @@ Current focus:
 - discovery
 - enrichment
 - duplicate control
-- CNPJ review
+- company review
 - lead operations
 - export
 
