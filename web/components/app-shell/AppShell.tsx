@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { useI18n } from "@/lib/i18n/client";
 import { isDemoMode } from "@/lib/demo/mode";
-import type { TranslationKey } from "@/lib/i18n/translations";
+import type { Locale, TranslationKey } from "@/lib/i18n/translations";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -47,6 +47,21 @@ function HomeIcon({ className }: { className?: string }) {
       <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
       <path d="M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
     </svg>
+  );
+}
+
+function DesktopPromptIcon() {
+  return (
+    <div className="relative mx-auto h-28 w-44" aria-hidden="true">
+      <div className="absolute left-3 top-8 h-16 w-9 rotate-[-7deg] rounded-[1.1rem] border border-brand-orchid/16 bg-white/70 shadow-[0_16px_38px_rgba(47,38,61,0.10),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl">
+        <div className="mx-auto mt-2 h-1 w-3 rounded-full bg-brand-orchid/18" />
+      </div>
+      <div className="absolute right-0 top-2 h-[5.9rem] w-36 rounded-[1.3rem] border border-brand-orchid/14 bg-[linear-gradient(135deg,rgba(255,255,255,0.86),rgba(244,241,255,0.70))] p-2 shadow-[0_24px_60px_rgba(47,38,61,0.13),inset_0_1px_0_rgba(255,255,255,0.78)] backdrop-blur-3xl">
+        <div className="h-full rounded-[0.95rem] bg-[radial-gradient(circle_at_20%_18%,rgba(139,92,246,0.24),transparent_42%),linear-gradient(135deg,#faf7ff,#ebe5ff)]" />
+      </div>
+      <div className="absolute bottom-2 right-11 h-2 w-16 rounded-full bg-brand-orchid/12" />
+      <div className="absolute bottom-0 right-4 h-2 w-28 rounded-full bg-brand-graphite/8 blur-md" />
+    </div>
   );
 }
 
@@ -134,14 +149,8 @@ function NavItem({ item, active, expanded }: { item: NavItemConfig; active: bool
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { t } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const expanded = false;
-  const navItems = navItemConfigs.map((item) => ({
-    href: item.href,
-    label: t(item.labelKey),
-    description: t(item.descriptionKey),
-    Icon: item.Icon,
-  }));
   const desktopNavItems = desktopNavItemConfigs.map((item) => ({
     href: item.href,
     label: t(item.labelKey),
@@ -163,8 +172,9 @@ export function AppShell({ children }: AppShellProps) {
     <div className="relative min-h-screen overflow-x-hidden bg-brand-canvas text-brand-graphite">
       <div className="ea-ambient-noise pointer-events-none fixed inset-0 z-0 opacity-50" />
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_78%_10%,rgba(139,92,246,0.16),transparent_28rem),radial-gradient(circle_at_18%_82%,rgba(96,165,250,0.12),transparent_30rem)]" />
+      <MobileDesktopPrompt locale={locale} setLocale={setLocale} />
       {isDemoMode() ? (
-        <div className="fixed bottom-20 right-4 z-50 rounded-full border border-brand-orchid/20 bg-white/65 px-2.5 py-1 text-[11px] font-bold text-brand-muted shadow-[0_10px_28px_rgba(47,38,61,0.08)] backdrop-blur-xl lg:bottom-5 lg:right-6">
+        <div className="fixed bottom-20 right-4 z-50 hidden rounded-full border border-brand-orchid/20 bg-white/65 px-2.5 py-1 text-[11px] font-bold text-brand-muted shadow-[0_10px_28px_rgba(47,38,61,0.08)] backdrop-blur-xl lg:bottom-5 lg:right-6 lg:block">
           {t("app.demoBadge")}
         </div>
       ) : null}
@@ -191,32 +201,109 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-white/[0.12] bg-[#554A64]/[0.94] px-4 py-2 backdrop-blur-xl lg:hidden">
-        {navItems.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={
-                active
-                  ? "flex flex-col items-center gap-0.5 rounded-[16px] px-5 py-2 text-[10px] font-semibold text-white/96"
-                  : "flex flex-col items-center gap-0.5 rounded-[16px] px-5 py-2 text-[10px] font-medium text-white/62 transition hover:text-white/88 motion-reduce:transition-none"
-              }
-            >
-              <item.Icon className="mb-0.5 h-5 w-5" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
       {/* Main */}
-      <main className="relative z-10 w-full px-4 py-5 pb-16 sm:px-6 lg:pl-[78px] lg:pr-7 lg:py-7 lg:pb-7">
+      <main className="relative z-10 hidden w-full px-4 py-5 pb-16 sm:px-6 lg:block lg:pl-[78px] lg:pr-7 lg:py-7 lg:pb-7">
         <div className="mx-auto w-full max-w-[2200px]">{children}</div>
       </main>
     </div>
   );
 }
+
+function MobileDesktopPrompt({ locale, setLocale }: { locale: Locale; setLocale: (locale: Locale) => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = mobileDesktopCopy[locale];
+
+  async function copyLink() {
+    const url = window.location.href;
+    try {
+      await window.navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <section className="relative z-20 flex min-h-screen px-4 py-5 lg:hidden">
+      <div className="pointer-events-none absolute left-[-9rem] top-[-7rem] h-72 w-72 rounded-full bg-brand-orchid/12 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-[-8rem] right-[-8rem] h-72 w-72 rounded-full bg-brand-olive/18 blur-3xl" />
+
+      <div className="relative mx-auto flex w-full max-w-md flex-col justify-between gap-8">
+        <header className="flex items-center justify-between gap-3">
+          <Link href="/" className="text-lg font-extrabold tracking-[-0.03em] text-brand-graphite" aria-label="Encontra.ai">
+            Encontra.ai
+          </Link>
+          <div className="inline-flex rounded-full border border-brand-orchid/14 bg-white/58 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.70)] backdrop-blur-2xl">
+            {mobileLocales.map((option) => {
+              const active = option.locale === locale;
+              return (
+                <button
+                  key={option.locale}
+                  type="button"
+                  onClick={() => setLocale(option.locale)}
+                  aria-pressed={active}
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-brand-orchid/30 motion-reduce:transition-none ${
+                    active ? "bg-brand-orchid text-white shadow-[0_8px_20px_rgba(109,40,217,0.20)]" : "text-brand-muted hover:bg-brand-orchid/[0.07] hover:text-brand-graphite"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </header>
+
+        <div className="rounded-[2rem] border border-white/30 bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.48),transparent_42%),linear-gradient(145deg,rgba(255,255,255,0.28),rgba(238,232,255,0.16))] p-5 text-center shadow-[0_28px_78px_rgba(47,38,61,0.08),inset_0_1px_0_rgba(255,255,255,0.48),inset_0_-1px_0_rgba(109,40,217,0.05)] backdrop-blur-[48px]">
+          <DesktopPromptIcon />
+          <p className="ea-kicker mt-4">{copy.badge}</p>
+          <h1 className="mt-3 text-4xl font-extrabold leading-[0.98] tracking-[-0.055em] text-brand-graphite">
+            {copy.title}
+          </h1>
+          <p className="mx-auto mt-4 max-w-[20rem] text-base leading-7 text-brand-muted">
+            {copy.description}
+          </p>
+
+          <div className="mt-6 grid gap-3">
+            <button type="button" onClick={copyLink} className="ea-button-primary inline-flex items-center justify-center px-5 py-3 text-sm font-bold">
+              {copied ? copy.copiedAction : copy.copyAction}
+            </button>
+            <p className="text-xs font-semibold leading-5 text-brand-muted">
+              {copy.hint}
+            </p>
+          </div>
+        </div>
+
+        <footer className="pb-2 text-center text-xs font-semibold leading-5 text-brand-muted">
+          {copy.footer}
+        </footer>
+      </div>
+    </section>
+  );
+}
+
+const mobileLocales = [
+  { locale: "pt-BR", label: "PT" },
+  { locale: "en", label: "EN" },
+] as const;
+
+const mobileDesktopCopy = {
+  "pt-BR": {
+    badge: "Experiência desktop",
+    title: "Abra no desktop",
+    description: "O Encontra.ai foi pensado como uma área de trabalho para descoberta, revisão e exportação de leads.",
+    copyAction: "Copiar link",
+    copiedAction: "Link copiado",
+    hint: "Envie este link para seu notebook ou computador para continuar com a experiência completa.",
+    footer: "Funciona melhor em telas maiores, com tabelas, filtros e revisão lado a lado.",
+  },
+  en: {
+    badge: "Desktop experience",
+    title: "Open on desktop",
+    description: "Encontra.ai is designed as a workspace for lead discovery, review, and export.",
+    copyAction: "Copy link",
+    copiedAction: "Link copied",
+    hint: "Send this link to your laptop or computer to continue with the full experience.",
+    footer: "Best on larger screens with tables, filters, and side-by-side review.",
+  },
+} as const;
