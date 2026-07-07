@@ -36,6 +36,7 @@ function Invoke-RobocopyCopy {
         "/XF",
         ".env",
         "app.db",
+        "raw logo*.png",
         "*.tsbuildinfo",
         "*.pyc",
         "*.pyo"

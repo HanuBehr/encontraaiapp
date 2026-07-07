@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!deploy/client/.env.client.example
 web/.env.*
 !web/.env.example
 
@@ -36,6 +37,7 @@ web/node_modules/
 web/.next/
 web/out/
 web/*.tsbuildinfo
+web/public/raw logo*.png
 exports/
 backups/
 dist/

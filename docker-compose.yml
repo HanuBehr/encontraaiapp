@@ -9,6 +9,7 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+      # Kept for local environments that still set EXPORT_DIR=/app/exports.
       - ./exports:/app/exports
       - ./backups:/app/backups
     healthcheck:
@@ -39,4 +40,3 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
-

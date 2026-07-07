@@ -5,3 +5,4 @@ out
 .env.*
 !.env.example
 *.tsbuildinfo
+public/raw logo*.png

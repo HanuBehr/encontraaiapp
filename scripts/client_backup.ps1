@@ -5,7 +5,10 @@ Set-Location $projectRoot
 
 $backupDir = Join-Path $projectRoot "backups"
 $dataDir = Join-Path $projectRoot "data"
-$exportsDir = Join-Path $projectRoot "exports"
+$exportsDirs = @(
+    (Join-Path $dataDir "exports"),
+    (Join-Path $projectRoot "exports")
+)
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
 if (-not (Test-Path -LiteralPath $backupDir)) {
@@ -21,10 +24,16 @@ if (Test-Path -LiteralPath $databasePath) {
     Write-Warning "Database file not found at data/app.db."
 }
 
-if (Test-Path -LiteralPath $exportsDir) {
+foreach ($exportsDir in $exportsDirs) {
+    if (-not (Test-Path -LiteralPath $exportsDir)) {
+        continue
+    }
+
     $exportFiles = Get-ChildItem -LiteralPath $exportsDir -Force -Recurse -File -ErrorAction SilentlyContinue
     if ($exportFiles) {
-        $exportsArchivePath = Join-Path $backupDir "exports-$timestamp.zip"
+        $parentName = Split-Path -Leaf (Split-Path -Parent $exportsDir)
+        $archivePrefix = if ($parentName -eq "data") { "data-exports" } else { "exports" }
+        $exportsArchivePath = Join-Path $backupDir "$archivePrefix-$timestamp.zip"
         if (Test-Path -LiteralPath $exportsArchivePath) {
             Remove-Item -LiteralPath $exportsArchivePath -Force
         }
@@ -34,4 +43,3 @@ if (Test-Path -LiteralPath $exportsDir) {
         Write-Host "No export files found to archive." -ForegroundColor Yellow
     }
 }
-

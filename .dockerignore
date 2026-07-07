@@ -19,3 +19,4 @@ dist
 .env.*
 !.env.example
 *.log
+web/public/raw logo*.png
