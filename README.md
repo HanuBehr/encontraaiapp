@@ -1,28 +1,81 @@
 # Encontra.ai
 
-Full-stack B2B lead discovery, enrichment, review, and export workspace.
+B2B prospecting is not slow because sales teams cannot sell. It is slow because the lead list is usually garbage.
 
-Encontra.ai turns niche-and-location business searches into structured lead lists. It includes discovery previews, duplicate prevention, lead import, contact enrichment, CNPJ matching, manual review for uncertain matches, and spreadsheet export.
+Encontra.ai turns a market idea like `dentists in Sao Paulo` or `restaurants in Barcelona` into a reviewed lead list ready for outreach. It handles discovery, duplicate prevention, contact enrichment, CNPJ evidence scoring, manual review, and spreadsheet export.
 
-## Live Demo
+- Live demo: [https://encontraaiapp.vercel.app](https://encontraaiapp.vercel.app)
+- No login required
+- No API keys required for the demo
+- Fictional sample data in demo mode
 
-- Demo: [https://encontraaiapp.vercel.app](https://encontraaiapp.vercel.app)
-- Mode: frontend-only Vercel deployment
-- Data: fictional sample companies and browser-local saved leads
-- Requirements: no login, backend, or API keys
+## Why This Exists
 
-The hosted demo is intentionally scoped to curated search scenarios so the workflow can be reviewed without paid provider access. The backend-backed app in this repository supports real provider discovery when configured with private API keys.
+The expensive part of outbound sales often happens before the first call:
 
-## Highlights
+- searching Google manually
+- copying companies into spreadsheets
+- cleaning duplicate records
+- checking whether a company has a usable website or contact channel
+- guessing whether a CNPJ belongs to the right business
+- exporting a list that still needs another cleanup pass
 
-- Search companies by niche, city, region, or coordinates
-- Preview results before saving leads
-- Prevent duplicates and detect already-saved companies
-- Enrich leads with contacts, domains, profiles, and quality signals
-- Resolve CNPJ candidates with scoring and manual review
-- Filter, assign, review, and export lead lists
-- Run as a hosted demo, local Docker deployment, or backend-backed app
-- Bilingual interface: Portuguese and English
+Encontra.ai is the lead preparation layer before outreach. The goal is simple: spend less time building the list and more time talking to customers.
+
+## Workflow
+
+```text
+Market search -> Discovery preview -> Dedupe -> Enrichment -> CNPJ review -> Export
+```
+
+1. Search for companies by niche and location.
+2. Preview provider results before saving anything.
+3. Keep duplicates and already-saved companies out of the import.
+4. Enrich saved leads with websites, domains, emails, phones, WhatsApp, Instagram, and quality signals.
+5. Score and review uncertain CNPJ matches instead of silently assigning the wrong company record.
+6. Filter, assign, review, and export the final lead list.
+
+## What Makes It Useful
+
+- Preview-first discovery keeps bad provider results out of the workspace.
+- Dedupe runs before import, so the lead list does not rot immediately.
+- Enrichment is batch-oriented because manually checking websites does not scale.
+- CNPJ matching uses evidence across name, location, address, phone, domain, email, and category signals.
+- Ambiguous CNPJ matches go to review instead of being treated as truth.
+- Export rules prefer confirmed or approved company records.
+- Demo mode runs without secrets, backend infrastructure, or paid provider calls.
+
+## Engineering Decisions
+
+- **FastAPI owns provider work.** Discovery, enrichment, CNPJ lookup, scoring, and exports run server-side where secrets and long-running work belong.
+- **Next.js owns the workspace.** The frontend is a workflow-heavy product surface with discovery, saved leads, review queues, filters, and bilingual UI.
+- **The API proxy keeps secrets out of the browser.** Provider keys stay on the backend, not in `NEXT_PUBLIC_*` variables.
+- **Provider integrations are adapters.** Google Places, geocoding, and optional CNPJ providers are isolated behind service/provider modules.
+- **Demo mode is deliberate.** The hosted demo swaps real backend calls for browser-local fixtures so the product can be reviewed instantly.
+- **SQLite is intentional for local and pilot use.** The app is easy to run locally and inspect. Larger deployments should add managed database storage and migrations.
+- **Docker is included for repeatable local deployment.** The app can run as a Dockerized frontend/backend pair with persistent local data.
+
+## Architecture
+
+```text
+Browser workspace
+  -> Next.js app and API proxy
+  -> FastAPI backend
+  -> SQLAlchemy / SQLite
+  -> Discovery, enrichment, scoring, CNPJ review, export services
+  -> Google Places / optional CNPJ providers
+```
+
+The frontend owns interaction and stateful review flows. The backend owns provider calls, persistence, evidence scoring, enrichment, CNPJ workflows, and Excel export generation.
+
+## Demo Vs Backend
+
+| Mode | Purpose | Backend | API keys | Data |
+| --- | --- | --- | --- | --- |
+| Hosted demo | Public product review | No | No | Fictional browser-local fixtures |
+| Local development | Full-stack development | FastAPI local process | Google key for real discovery | Local SQLite |
+| Local Docker | Repeatable local deployment | Docker Compose | Google key for real discovery | Persistent `./data` |
+| Backend-backed deployment | Real provider flow | Separate backend host | Backend secret manager | Persistent backend disk |
 
 ## Tech Stack
 
@@ -51,72 +104,77 @@ Integrations and deployment:
 - Render backend blueprint
 - Windows local deployment scripts
 
-## Architecture
+## Repository Structure
 
 ```text
-Next.js frontend
-  -> API proxy
-  -> FastAPI backend
-  -> SQLite + enrichment services + export service
-  -> Google Places / optional CNPJ providers
+app/       FastAPI backend, models, services, providers, exports
+web/       Next.js frontend, demo mode, API proxy, UI components
+scripts/   Local operations, setup, diagnostics, and packaging helpers
+tests/     Backend regression and service tests
+docs/      Demo, deployment, installation, and operations guides
+deploy/    Deployment-specific environment templates
 ```
 
-The frontend owns the product workspace and user interactions. The backend owns provider calls, persistence, scoring, enrichment, CNPJ workflows, and export generation. Demo mode swaps backend API calls for browser-local fixtures.
+Runtime folders such as `data/`, `exports/`, `backups/`, `dist/`, `.venv/`, `.next/`, and `node_modules/` are intentionally ignored.
 
-## Product Workflow
+## Verification
 
-1. Search for businesses by segment and location.
-2. Review the discovery preview before importing anything.
-3. Save selected companies into the leads workspace.
-4. Enrich and score leads using available public/provider data.
-5. Review uncertain CNPJ matches before approval.
-6. Filter, assign, and export clean lead lists.
+The current codebase has backend service/API regression coverage and frontend build checks.
 
-## CNPJ Resolution
+Backend:
 
-CNPJ matching is designed to reduce bad assignments rather than silently guessing.
+```powershell
+pytest
+```
 
-The workflow can combine:
+Frontend:
 
-- CNPJ extraction from company websites
-- public CNPJ validation
-- optional commercial provider search
-- evidence scoring across names, city/state, CEP, address, phone, domain/email, and category signals
-- manual review for ambiguous candidates
-- export rules that prefer confirmed or approved CNPJs
+```powershell
+cd web
+npm run typecheck
+npm test
+npm run build
+```
 
-## Prerequisites
+Demo build:
 
-Local development:
+```powershell
+cd web
+cmd.exe /c "set NEXT_PUBLIC_DEMO_MODE=true&& npm run build"
+```
 
-- Python 3.12 or newer
-- Node.js 20 or newer
-- npm 10 or newer
+## Run The Demo Locally
 
-Docker deployment:
+The hosted demo does not require a backend. To run the frontend in demo mode locally:
 
-- Docker Desktop or Docker Engine with Compose support
+```powershell
+cd web
+npm install
+Copy-Item .env.example .env.local
+```
 
-Provider-backed discovery:
-
-- `GOOGLE_API_KEY` for Google Places and Geocoding
-- CNPJ provider keys only when optional CNPJ enrichment/search is enabled
-
-## Getting Started
-
-### Hosted Demo Frontend
-
-Use Vercel with the project root set to `web` and this environment variable:
+Set this in `web/.env.local`:
 
 ```env
 NEXT_PUBLIC_DEMO_MODE=true
 ```
 
-Do not set `BACKEND_URL` or provider API keys for the hosted demo.
+Then run:
 
-See [`docs/deployment/VERCEL_DEMO.md`](docs/deployment/VERCEL_DEMO.md).
+```powershell
+npm run dev
+```
 
-### Local Development
+Open [http://localhost:3000](http://localhost:3000).
+
+## Run The Full Stack Locally
+
+Prerequisites:
+
+- Python 3.12 or newer
+- Node.js 20 or newer
+- npm 10 or newer
+- `GOOGLE_API_KEY` for real Google Places discovery
 
 Backend:
 
@@ -147,9 +205,7 @@ Open:
 - [http://localhost:3000](http://localhost:3000)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-Real discovery requires `GOOGLE_API_KEY` in `.env`. Without it, use hosted demo mode or frontend demo mode.
-
-### Local Docker Deployment
+## Local Docker Deployment
 
 For a local Windows Docker installation:
 
@@ -188,19 +244,6 @@ Common variables:
 
 Secrets must stay in local environment files or deployment secret managers. They should not be committed.
 
-## Repository Structure
-
-```text
-app/       FastAPI backend, models, services, providers, exports
-web/       Next.js frontend, demo mode, API proxy, UI components
-scripts/   Local operations, setup, diagnostics, and packaging helpers
-tests/     Backend regression and service tests
-docs/      Demo, deployment, installation, and operations guides
-deploy/    Deployment-specific environment templates
-```
-
-Runtime folders such as `data/`, `exports/`, `backups/`, `dist/`, `.venv/`, `.next/`, and `node_modules/` are intentionally ignored.
-
 ## Documentation
 
 - [`docs/README.md`](docs/README.md)
@@ -211,32 +254,25 @@ Runtime folders such as `data/`, `exports/`, `backups/`, `dist/`, `.venv/`, `.ne
 - [`docs/client-install/README.md`](docs/client-install/README.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
-## Verification
-
-Backend tests:
-
-```powershell
-pytest
-```
-
-Frontend checks:
-
-```powershell
-cd web
-npm run typecheck
-npm test
-npm run build
-```
-
-Demo build:
-
-```powershell
-cd web
-cmd.exe /c "set NEXT_PUBLIC_DEMO_MODE=true&& npm run build"
-```
-
 ## Current Scope
 
-Encontra.ai is focused on discovery, enrichment, CNPJ review, lead operations, and export. It does not currently include authentication, billing, campaign automation, or multi-tenant account management.
+This is not a CRM and it is not campaign automation. It is the lead preparation layer before outreach.
+
+Current focus:
+
+- discovery
+- enrichment
+- duplicate control
+- CNPJ review
+- lead operations
+- export
+
+Not included yet:
+
+- authentication
+- billing
+- campaign automation
+- multi-tenant account management
+- managed production database migrations
 
 The backend uses SQLite for local deployment and small single-tenant/pilot deployments. Larger production environments should add managed database storage, migrations, authentication, and operational monitoring before broad rollout.
