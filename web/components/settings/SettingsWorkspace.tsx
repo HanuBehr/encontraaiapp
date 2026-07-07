@@ -6,7 +6,6 @@ import { LOCALE_LABELS, LOCALES, type Locale } from "@/lib/i18n/translations";
 
 export function SettingsWorkspace() {
   const { locale, setLocale, t } = useI18n();
-  const emailHref = "mailto:hanu.behr@gmail.com?subject=Encontra.ai%20full%20workflow&body=Hi%20Hanu%2C%20I%27d%20like%20to%20see%20the%20full%20Encontra.ai%20workflow.";
 
   return (
     <div className="space-y-5">
@@ -34,14 +33,6 @@ export function SettingsWorkspace() {
         </section>
 
         <div className="space-y-4">
-          <EmailAccessCard
-            kicker={t("settings.emailKicker")}
-            title={t("settings.emailTitle")}
-            href={emailHref}
-            cta={t("settings.emailAction")}
-            identityLabel={t("settings.emailIdentityLabel")}
-            identityMeta={t("settings.emailIdentityMeta")}
-          />
           <SourceAccessCard
             kicker={t("settings.githubKicker")}
             title={t("settings.githubTitle")}
@@ -142,60 +133,10 @@ function SourceAccessCard({
   );
 }
 
-function EmailAccessCard({
-  kicker,
-  title,
-  href,
-  cta,
-  identityLabel,
-  identityMeta,
-}: {
-  kicker: string;
-  title: string;
-  href: string;
-  cta: string;
-  identityLabel: string;
-  identityMeta: string;
-}) {
-  return (
-    <section className="rounded-[1.5rem] border border-brand-orchid/10 bg-white/[0.44] p-4 shadow-[0_10px_28px_rgba(29,22,48,0.06),inset_0_1px_0_rgba(255,255,255,0.54)] backdrop-blur-xl">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
-        <div className="min-w-0">
-          <p className="ea-kicker">{kicker}</p>
-          <h3 className="mt-2 text-lg font-bold tracking-[-0.035em] text-brand-graphite">{title}</h3>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <a href={href} className="ea-button-primary inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold">
-              <MailIcon className="h-4 w-4" />
-              {cta}
-            </a>
-          </div>
-        </div>
-
-        <div className="rounded-[1.1rem] border border-brand-orchid/10 bg-white/[0.28] p-3">
-          <p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-brand-muted">{identityLabel}</p>
-          <p className="mt-1 text-base font-bold text-brand-graphite">Hanu Behr</p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-brand-muted">{identityMeta}</p>
-          <p className="mt-4 break-all text-sm font-bold text-brand-graphite">hanu.behr@gmail.com</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function GitHubIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
       <path d="M12 .5A11.5 11.5 0 0 0 8.36 22.9c.58.1.8-.25.8-.56v-2.03c-3.25.7-3.94-1.38-3.94-1.38-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.77 2.73 1.26 3.4.96.1-.75.4-1.26.73-1.55-2.6-.29-5.33-1.3-5.33-5.75 0-1.27.45-2.31 1.2-3.13-.12-.29-.52-1.48.11-3.09 0 0 .98-.31 3.19 1.2A11.1 11.1 0 0 1 12 5.98c.99 0 1.98.13 2.91.39 2.2-1.51 3.18-1.2 3.18-1.2.63 1.61.23 2.8.11 3.09.75.82 1.2 1.86 1.2 3.13 0 4.46-2.73 5.45-5.34 5.74.42.36.8 1.08.8 2.17v3.04c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z" />
-    </svg>
-  );
-}
-
-function MailIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path fill="currentColor" d="M4.5 7.1A2.6 2.6 0 0 1 7.1 4.5h9.8a2.6 2.6 0 0 1 2.6 2.6v9.8a2.6 2.6 0 0 1-2.6 2.6H7.1a2.6 2.6 0 0 1-2.6-2.6V7.1Z" opacity="0.16" />
-      <path fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" d="M5.5 7.5h13v9h-13z" />
-      <path fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" d="m6.2 8.2 5.8 4.4 5.8-4.4" />
     </svg>
   );
 }
