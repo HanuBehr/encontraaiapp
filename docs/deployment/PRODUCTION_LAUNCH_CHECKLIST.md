@@ -2,11 +2,11 @@
 
 Use this checklist for the first hosted production deployment.
 
-## 1. Rotate And Restrict Google Key
+## 1. Create And Restrict Google Key
 
-Do this in Google Cloud before deploying with the current key.
+Do this in Google Cloud before deploying provider-backed discovery.
 
-- Create a new API key or rotate the existing exposed key.
+- Create a dedicated production API key, or rotate an existing key before launch.
 - Enable only the APIs the app uses: `Places API (New)` and `Geocoding API`.
 - Set application restrictions when the backend host has a stable egress IP. If the host does not provide one, keep strict API restrictions and low quota limits until a stable backend network is available.
 - Set daily quota and billing alerts for Places and Geocoding.
@@ -86,5 +86,5 @@ If production fails after deploy:
 
 - Roll Vercel back to the previous deployment.
 - Roll the backend host back to the previous image/release.
-- Keep the persistent disk mounted; do not delete `/app/data` or `/app/exports`.
+- Keep the persistent disk mounted; do not delete `/app/data`.
 - Check backend logs before retrying discovery because Google quota/errors can look like frontend failures.

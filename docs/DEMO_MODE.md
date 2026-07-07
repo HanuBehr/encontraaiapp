@@ -1,6 +1,6 @@
 # Demo Mode
 
-The hosted demo can run as a frontend-only Vercel app with no backend, no API keys, and no paid infrastructure.
+The hosted demo can run as a frontend-only Vercel app with no backend or API keys.
 
 ## Purpose
 
@@ -18,7 +18,7 @@ The data is fictional sample data. It is not scraped from providers and does not
 
 ## Guided Searches
 
-Demo mode intentionally supports curated searches instead of pretending every possible live search is available.
+Demo mode supports curated searches instead of open-ended live provider queries.
 
 Portuguese / Brazil examples:
 
@@ -34,7 +34,7 @@ English / Europe examples:
 - `aesthetic clinics in London`
 - `solar installers in Berlin`
 
-Unsupported searches show a guided message instead of unrelated fake results. This keeps the demo honest while still letting reviewers explore the workflow.
+Unsupported searches show a guided message instead of unrelated sample results.
 
 ## Enable Demo Mode
 
@@ -55,15 +55,15 @@ Demo interactions are stored in browser `localStorage`:
 
 This is intentional for the hosted demo. Each reviewer can interact with the app without changing shared backend data.
 
-## Full Project Still Included
+## Backend-Backed App
 
-The repository still contains the full production-capable project:
+The repository also includes the backend-backed app:
 
 - FastAPI backend
 - Google Places discovery integration
 - SQLite persistence
 - CNPJ enrichment and review workflows
 - backend export pipeline
-- Docker/client deployment scripts
+- Docker deployment scripts
 
-API keys are intentionally excluded and must be supplied through environment variables for real production mode.
+API keys are intentionally excluded and must be supplied through environment variables for provider-backed discovery.

@@ -1,16 +1,16 @@
-# Client Install Checklist
+# Local Windows Docker Checklist
 
-## Before going to the client
+## Before Setup
 
 - Repo pushed and ready
 - Docker Desktop installer ready
 - Git installer ready
 - Google API key available
 - CNPJA API key available only if CNPJ enrichment will be used
-- Client machine has internet access
-- Client machine allows admin actions if Docker Desktop requires them
+- Machine has internet access
+- Machine allows admin actions if Docker Desktop requires them
 
-## On the client machine
+## Setup Steps
 
 1. Install Docker Desktop
 2. Install Git

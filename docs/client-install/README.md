@@ -1,10 +1,10 @@
-# Encontra.ai Client Installation Guide
+# Encontra.ai Local Windows Docker Guide
 
 This guide explains how to install and run Encontra.ai on a Windows machine using Docker Desktop.
 
 ## What This Installs
 
-- A local Encontra.ai environment for the client
+- A local Encontra.ai environment
 - A Dockerized FastAPI backend
 - A Dockerized Next.js frontend
 - Local persistence for the SQLite database
@@ -15,7 +15,7 @@ After installation, the application is available in the browser at [http://local
 ## What Is Stored Locally
 
 - Application data: `./data/app.db`
-- Exported files: `./exports`
+- Exported files: `./data/exports`
 - Manual backups: `./backups`
 
 Nothing in this guide requires the client to install Python, Node.js, npm, or a virtual environment manually.
@@ -95,7 +95,7 @@ Always back up before updating.
 
 ## Build Validation Note
 
-- Validate `docker compose build` and the first container startup on the client or deployment machine.
+- Validate `docker compose build` and the first container startup on the deployment machine.
 
 ## Useful URLs
 

@@ -1,8 +1,17 @@
 # Encontra.ai
 
-Full-stack B2B lead discovery, enrichment, review, and export platform.
+Full-stack B2B lead discovery, enrichment, review, and export workspace.
 
-Encontra.ai turns niche-and-location business searches into structured lead lists. It supports discovery previews, duplicate prevention, lead import, contact enrichment, CNPJ matching, human review for uncertain matches, and spreadsheet export.
+Encontra.ai turns niche-and-location business searches into structured lead lists. It includes discovery previews, duplicate prevention, lead import, contact enrichment, CNPJ matching, manual review for uncertain matches, and spreadsheet export.
+
+## Live Demo
+
+- Demo: [https://encontraaiapp.vercel.app](https://encontraaiapp.vercel.app)
+- Mode: frontend-only Vercel deployment
+- Data: fictional sample companies and browser-local saved leads
+- Requirements: no login, backend, or API keys
+
+The hosted demo is intentionally scoped to curated search scenarios so the workflow can be reviewed without paid provider access. The backend-backed app in this repository supports real provider discovery when configured with private API keys.
 
 ## Highlights
 
@@ -12,26 +21,8 @@ Encontra.ai turns niche-and-location business searches into structured lead list
 - Enrich leads with contacts, domains, profiles, and quality signals
 - Resolve CNPJ candidates with scoring and manual review
 - Filter, assign, review, and export lead lists
-- Run as a hosted demo, local Docker deployment, or full backend-backed app
+- Run as a hosted demo, local Docker deployment, or backend-backed app
 - Bilingual interface: Portuguese and English
-
-## Live Demo Mode
-
-The frontend supports a hosted demo mode designed for safe public review:
-
-- no backend required
-- no API keys required
-- fictional sample data
-- curated Brazil and Europe search scenarios
-- browser-local saved leads and exports
-
-Enable it with:
-
-```env
-NEXT_PUBLIC_DEMO_MODE=true
-```
-
-Demo mode is intentionally guided. It does not pretend that every arbitrary provider search is available. The full backend implementation remains in this repository and supports real provider-backed discovery when configured with private API keys.
 
 ## Tech Stack
 
@@ -50,14 +41,11 @@ Frontend:
 - TypeScript
 - Tailwind CSS
 
-Integrations:
+Integrations and deployment:
 
 - Google Places discovery and geocoding
 - Optional CNPJ provider adapters
 - Excel export pipeline
-
-Deployment:
-
 - Docker and Docker Compose
 - Vercel frontend demo path
 - Render backend blueprint
@@ -73,7 +61,7 @@ Next.js frontend
   -> Google Places / optional CNPJ providers
 ```
 
-The frontend owns the product workspace and user interactions. The backend owns provider calls, persistence, scoring, enrichment, CNPJ workflows, and export generation. Demo mode swaps backend API calls for browser-local fixtures so the product can be reviewed without secrets or paid infrastructure.
+The frontend owns the product workspace and user interactions. The backend owns provider calls, persistence, scoring, enrichment, CNPJ workflows, and export generation. Demo mode swaps backend API calls for browser-local fixtures.
 
 ## Product Workflow
 
@@ -97,6 +85,23 @@ The workflow can combine:
 - manual review for ambiguous candidates
 - export rules that prefer confirmed or approved CNPJs
 
+## Prerequisites
+
+Local development:
+
+- Python 3.12 or newer
+- Node.js 20 or newer
+- npm 10 or newer
+
+Docker deployment:
+
+- Docker Desktop or Docker Engine with Compose support
+
+Provider-backed discovery:
+
+- `GOOGLE_API_KEY` for Google Places and Geocoding
+- CNPJ provider keys only when optional CNPJ enrichment/search is enabled
+
 ## Getting Started
 
 ### Hosted Demo Frontend
@@ -106,6 +111,8 @@ Use Vercel with the project root set to `web` and this environment variable:
 ```env
 NEXT_PUBLIC_DEMO_MODE=true
 ```
+
+Do not set `BACKEND_URL` or provider API keys for the hosted demo.
 
 See [`docs/deployment/VERCEL_DEMO.md`](docs/deployment/VERCEL_DEMO.md).
 
@@ -123,7 +130,7 @@ python -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 $env:PYTHONPATH = (Get-Location).Path
 python .\scripts\init_local_db.py
-uvicorn app.api.main:app --host 127.0.0.1 --port 8000 --log-level debug
+uvicorn app.api.main:app --host 127.0.0.1 --port 8000 --log-level info
 ```
 
 Frontend:
@@ -140,9 +147,11 @@ Open:
 - [http://localhost:3000](http://localhost:3000)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-### Docker Deployment
+Real discovery requires `GOOGLE_API_KEY` in `.env`. Without it, use hosted demo mode or frontend demo mode.
 
-For a local Docker installation:
+### Local Docker Deployment
+
+For a local Windows Docker installation:
 
 ```powershell
 git clone https://github.com/HanuBehr/encontraaiapp.git
@@ -165,7 +174,7 @@ Templates:
 - [`web/.env.example`](web/.env.example)
 - [`deploy/client/.env.client.example`](deploy/client/.env.client.example)
 
-Important variables:
+Common variables:
 
 - `GOOGLE_API_KEY`
 - `DATABASE_URL`
@@ -184,7 +193,7 @@ Secrets must stay in local environment files or deployment secret managers. They
 ```text
 app/       FastAPI backend, models, services, providers, exports
 web/       Next.js frontend, demo mode, API proxy, UI components
-scripts/   Local operations, setup, debug, and packaging helpers
+scripts/   Local operations, setup, diagnostics, and packaging helpers
 tests/     Backend regression and service tests
 docs/      Demo, deployment, installation, and operations guides
 deploy/    Deployment-specific environment templates
@@ -229,3 +238,5 @@ cmd.exe /c "set NEXT_PUBLIC_DEMO_MODE=true&& npm run build"
 ## Current Scope
 
 Encontra.ai is focused on discovery, enrichment, CNPJ review, lead operations, and export. It does not currently include authentication, billing, campaign automation, or multi-tenant account management.
+
+The backend uses SQLite for local deployment and small single-tenant/pilot deployments. Larger production environments should add managed database storage, migrations, authentication, and operational monitoring before broad rollout.

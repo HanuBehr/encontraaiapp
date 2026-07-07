@@ -1,6 +1,6 @@
 # Contributing
 
-This project is maintained as a professional full-stack product repository. Keep changes small, reviewable, and easy to verify.
+Keep changes small, reviewable, and easy to verify.
 
 ## Commit Style
 

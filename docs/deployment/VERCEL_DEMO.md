@@ -1,6 +1,6 @@
 # Vercel Demo Deployment
 
-Use this for the free hosted demo.
+Use this for the hosted frontend demo.
 
 ## 1. Import Project
 
@@ -62,4 +62,4 @@ Demo mode: sample data
 
 This deployment intentionally does not run the FastAPI backend. It is a frontend-only product demo using fictional browser-local data.
 
-The demo supports curated fictional searches only. The full repository includes the backend implementation for real provider-backed searches when private API keys are configured.
+The demo supports curated fictional searches only. The repository also includes the backend implementation for real provider-backed searches when private API keys are configured.

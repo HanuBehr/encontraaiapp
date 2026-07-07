@@ -11,11 +11,11 @@ Use Vercel for the Next.js frontend and a separate backend host for FastAPI with
 - SQLite and export files require persistent storage.
 - Vercel serverless storage is ephemeral and should not hold `app.db` or generated exports.
 
-## Recommended First Production Shape
+## Recommended Backend-Backed Shape
 
 - Frontend: Vercel project rooted at `web/`
 - Backend: Render, Fly.io, Railway, or a VPS running Docker
-- Database: SQLite on persistent disk for first production pass
+- Database: SQLite on persistent disk for a small single-tenant pilot
 - Exports: persistent disk on the backend host
 
 ## Frontend Environment
@@ -41,7 +41,7 @@ APP_ENV=production
 GOOGLE_API_KEY=
 CNPJ_COMPANY_SEARCH_ENABLED=false
 DATABASE_URL=sqlite:////app/data/app.db
-EXPORT_DIR=/app/exports
+EXPORT_DIR=/app/data/exports
 SQLITE_JOURNAL_MODE=TRUNCATE
 ```
 
