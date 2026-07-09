@@ -449,7 +449,7 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
         <ResultMetric label={batchCopy(locale).duplicateCallsSkipped} value={result.summary.paid_calls_skipped_duplicate} />
         <ResultMetric label={batchCopy(locale).errors} value={result.summary.error_count} />
         {hasErrors ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
+          <div className="basis-full rounded-[1rem] border border-amber-200/70 bg-amber-50/70 px-3 py-2">
             <p className="text-xs font-semibold uppercase text-amber-900">{batchCopy(locale).batchErrors}</p>
             <ul className="mt-2 space-y-1 text-sm text-amber-900">
               {result.summary.errors.slice(0, 3).map((message) => (
@@ -477,7 +477,7 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
     <ResultBox title={`${batchCopy(locale).spreadsheetDownloaded} - ${formatScopeLabel(result.scopeLabel, locale)}`}>
       <ResultNarrative text={batchCopy(locale).exportReady} />
       <ResultMetric label="Leads" value={result.requested} />
-      <div className="rounded-md border border-neutral-200 bg-white px-3 py-2">
+      <div className="basis-full rounded-[1rem] border border-brand-orchid/10 bg-white/[0.30] px-3 py-2 sm:basis-auto sm:flex-1">
         <p className="text-xs font-medium text-neutral-500">{batchCopy(locale).file}</p>
         <p className="mt-1 break-all text-sm font-semibold text-neutral-950">{result.filename}</p>
       </div>
@@ -487,10 +487,28 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
 
 function ResultBox({ title, children }: { title: string; children: React.ReactNode }) {
   const { locale } = useI18n();
+  const translatedTitle = translateLooseText(title, locale);
+  const [heading, ...scopeParts] = translatedTitle.split(" - ");
+  const scope = scopeParts.join(" - ");
   return (
-    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
-      <p className="text-sm font-semibold text-emerald-900">{translateLooseText(title, locale)}</p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+    <div className="mt-3 overflow-hidden rounded-[1.35rem] border border-brand-orchid/10 bg-[radial-gradient(circle_at_3%_0%,rgba(132,204,22,0.13),transparent_18rem),linear-gradient(135deg,rgba(255,255,255,0.42),rgba(244,241,255,0.25))] p-3 shadow-[0_12px_34px_rgba(29,22,48,0.07),inset_0_1px_0_rgba(255,255,255,0.58)] backdrop-blur-xl">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-olive/20 bg-brand-olive/12 text-[0.65rem] font-black uppercase tracking-[-0.02em] text-brand-graphite shadow-[inset_0_1px_0_rgba(255,255,255,0.60)]">
+            OK
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-brand-graphite">{heading}</p>
+            {scope ? <p className="mt-0.5 truncate text-xs font-semibold text-brand-muted">{scope}</p> : null}
+          </div>
+        </div>
+        {scope ? (
+          <span className="hidden shrink-0 rounded-full border border-brand-orchid/10 bg-white/[0.34] px-2.5 py-1 text-xs font-semibold text-brand-muted sm:inline-flex">
+            {scope}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">{children}</div>
     </div>
   );
 }
@@ -498,25 +516,25 @@ function ResultBox({ title, children }: { title: string; children: React.ReactNo
 function ResultNarrative({ text }: { text: string }) {
   const { locale } = useI18n();
   return (
-    <div className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm text-neutral-800 sm:col-span-2 lg:col-span-4">
+    <p className="basis-full rounded-[1rem] border border-brand-orchid/10 bg-white/[0.28] px-3 py-2 text-sm leading-6 text-brand-graphite">
       {translateLooseText(text, locale)}
-    </div>
+    </p>
   );
 }
 
 function ResultMetric({ label, value }: { label: string; value: number }) {
   const { locale } = useI18n();
   return (
-    <div className="rounded-md border border-emerald-100 bg-white px-3 py-2">
-      <p className="text-xs font-medium text-neutral-500">{translateLooseText(label, locale)}</p>
-      <p className="mt-1 text-base font-semibold text-neutral-950">{formatNumber(value, locale)}</p>
+    <div className="min-w-[7.75rem] flex-1 rounded-[1rem] border border-brand-orchid/10 bg-white/[0.30] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.46)] sm:flex-none">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.10em] text-brand-muted">{translateLooseText(label, locale)}</p>
+      <p className="mt-1 text-base font-bold text-brand-graphite">{formatNumber(value, locale)}</p>
     </div>
   );
 }
 
 function FailedLeadSummary({ summary, locale }: { summary: LeadBatchEnrichmentResponse["summary"]; locale: Locale }) {
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
+    <div className="basis-full rounded-[1rem] border border-amber-200/70 bg-amber-50/70 px-3 py-2">
       <p className="text-xs font-semibold uppercase text-amber-900">{batchCopy(locale).failedLeads}</p>
       <p className="mt-1 text-sm text-amber-950">
         {summary.failed_lead_ids.length
