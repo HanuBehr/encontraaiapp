@@ -11,7 +11,6 @@ import type {
   LeadScopeResolveResponse,
 } from "@/lib/api/types";
 import {
-  demoInitialImportBatch,
   demoMarketSegments,
   demoMarketSubsegments,
   demoSalesRegions,
@@ -54,7 +53,7 @@ export async function getDemoLeadDetail(leadId: number): Promise<LeadDetail> {
 }
 
 export async function getDemoLatestImportBatch(): Promise<LeadImportBatchResponse> {
-  return getDemoImportBatches()[0] ?? demoInitialImportBatch;
+  return getDemoImportBatches()[0] ?? emptyImportBatch();
 }
 
 export async function resolveDemoLeadScope(scope: LeadScopeRequest): Promise<LeadScopeResolveResponse> {
@@ -297,6 +296,25 @@ function sortDemoLeads(leads: LeadDetail[], params: LeadListParams) {
     const comparison = String(left ?? "").localeCompare(String(right ?? ""), undefined, { numeric: true });
     return dir === "asc" ? comparison : -comparison;
   });
+}
+
+function emptyImportBatch(): LeadImportBatchResponse {
+  const now = new Date().toISOString();
+  return {
+    id: 0,
+    batch_type: "demo_empty",
+    status: "completed",
+    source_provider: "demo",
+    source_query: "No saved import yet",
+    location_label: "Demo workspace",
+    record_count: 0,
+    lead_count: 0,
+    lead_ids: [],
+    started_at: now,
+    completed_at: now,
+    created_at: now,
+    updated_at: now,
+  };
 }
 
 function unique(values: string[]) {

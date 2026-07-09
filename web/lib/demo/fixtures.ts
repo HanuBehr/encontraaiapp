@@ -1,4 +1,4 @@
-import type { LeadDetail, LeadImportBatchResponse } from "@/lib/api/types";
+import type { LeadDetail } from "@/lib/api/types";
 
 export const demoSalesReps = [
   { id: 1, name: "Marina Costa", email: "marina@example.com" },
@@ -30,43 +30,6 @@ export const demoMarketSubsegments = [
 ];
 
 const now = "2026-06-01T12:00:00.000Z";
-
-export const demoSeedLeads: LeadDetail[] = [
-  lead({ id: 101, business_name: "Golden Gate Dental Studio", category: "Dental clinic", city: "San Francisco", state: "CA", website: "https://goldengatedental.example", domain: "goldengatedental.example", email: "hello@goldengatedental.example", phone: "+1 415 555 1001", instagram: "https://instagram.com/goldengatedental", status: "approved", lead_score: 88, assigned_sales_rep_id: 1, sales_region_id: 1, market_segment_id: 1, market_subsegment_id: 1, company_size_fit: "ideal_sme", trade_type: "varejo", cnpj_match_status: "matched", cnpj_match_confidence: 0.94 }),
-  lead({ id: 102, business_name: "Mission Bay Ortho", category: "Orthodontics", city: "San Francisco", state: "CA", website: "https://missionbayortho.example", domain: "missionbayortho.example", email: "care@missionbayortho.example", phone: "+1 415 555 1002", status: "reviewed", lead_score: 81, assigned_sales_rep_id: 1, sales_region_id: 1, market_segment_id: 1, market_subsegment_id: 1, company_size_fit: "ideal_sme", trade_type: "varejo", cnpj_match_status: "needs_review", cnpj_match_confidence: 0.72 }),
-  lead({ id: 103, business_name: "Hayes Valley Implant Care", category: "Dental implants", city: "San Francisco", state: "CA", website: "https://hayesimplants.example", domain: "hayesimplants.example", email: "appointments@hayesimplants.example", phone: "+1 415 555 1003", status: "new", lead_score: 75, sales_region_id: 1, market_segment_id: 1, market_subsegment_id: 1, company_size_fit: "possible_sme", trade_type: "varejo" }),
-  lead({ id: 104, business_name: "Hudson Table House", category: "Restaurant", city: "New York", state: "NY", website: "https://hudsontable.example", domain: "hudsontable.example", email: "events@hudsontable.example", phone: "+1 212 555 2001", instagram: "https://instagram.com/hudsontable", status: "contacted", lead_score: 83, assigned_sales_rep_id: 2, sales_region_id: 2, market_segment_id: 2, market_subsegment_id: 2, company_size_fit: "ideal_sme", trade_type: "varejo", cnpj_match_status: "matched", cnpj_match_confidence: 0.91 }),
-  lead({ id: 105, business_name: "Canal Street Trattoria", category: "Italian restaurant", city: "New York", state: "NY", website: "https://canaltrattoria.example", domain: "canaltrattoria.example", phone: "+1 212 555 2002", instagram: "https://instagram.com/canaltrattoria", status: "interested", lead_score: 79, assigned_sales_rep_id: 2, sales_region_id: 2, market_segment_id: 2, market_subsegment_id: 2, company_size_fit: "possible_sme", trade_type: "varejo" }),
-  lead({ id: 106, business_name: "Brooklyn Market Cafe", category: "Cafe", city: "New York", state: "NY", website: null, domain: null, phone: "+1 212 555 2003", status: "new", lead_score: 64, sales_region_id: 2, market_segment_id: 2, market_subsegment_id: 2, company_size_fit: "possible_sme", trade_type: "varejo" }),
-  lead({ id: 107, business_name: "Mayfair Skin Lab", category: "Aesthetic clinic", city: "London", state: "England", website: "https://mayfairskin.example", domain: "mayfairskin.example", email: "bookings@mayfairskin.example", phone: "+44 20 0000 301", instagram: "https://instagram.com/mayfairskin", status: "replied", lead_score: 86, assigned_sales_rep_id: 3, sales_region_id: 3, market_segment_id: 3, market_subsegment_id: 3, company_size_fit: "ideal_sme", trade_type: "varejo", cnpj_match_status: "matched", cnpj_match_confidence: 0.89 }),
-  lead({ id: 108, business_name: "Shoreditch Aesthetic Care", category: "Skin care clinic", city: "London", state: "England", website: "https://shoreditchaesthetic.example", domain: "shoreditchaesthetic.example", email: "studio@shoreditchaesthetic.example", phone: "+44 20 0000 302", status: "approved", lead_score: 82, assigned_sales_rep_id: 3, sales_region_id: 3, market_segment_id: 3, market_subsegment_id: 3, company_size_fit: "ideal_sme", trade_type: "varejo", cnpj_match_status: "needs_review", cnpj_match_confidence: 0.68 }),
-  lead({ id: 109, business_name: "Chelsea Wellness Room", category: "Beauty clinic", city: "London", state: "England", website: null, domain: null, phone: "+44 20 0000 303", instagram: "https://instagram.com/chelseawellness", status: "new", lead_score: 70, sales_region_id: 3, market_segment_id: 3, market_subsegment_id: 3, company_size_fit: "possible_sme", trade_type: "varejo" }),
-  lead({ id: 110, business_name: "Spree Solar Technik", category: "Solar installer", city: "Berlin", state: "Berlin", website: "https://spreesolar.example", domain: "spreesolar.example", email: "sales@spreesolar.example", phone: "+49 30 0000 401", status: "approved", lead_score: 84, assigned_sales_rep_id: 4, sales_region_id: 4, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "ideal_sme", trade_type: "distribuidora" }),
-  lead({ id: 111, business_name: "Kreuzberg Energy Works", category: "Solar installer", city: "Berlin", state: "Berlin", website: "https://kreuzbergenergy.example", domain: "kreuzbergenergy.example", phone: "+49 30 0000 402", status: "reviewed", lead_score: 76, assigned_sales_rep_id: 4, sales_region_id: 4, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "possible_sme", trade_type: "distribuidora" }),
-  lead({ id: 112, business_name: "Canal Freight Partners", category: "Logistics provider", city: "Amsterdam", state: "North Holland", website: "https://canalfreight.example", domain: "canalfreight.example", email: "ops@canalfreight.example", phone: "+31 20 000 8101", status: "approved", lead_score: 82, assigned_sales_rep_id: 4, sales_region_id: 4, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "ideal_sme", trade_type: "distribuidora" }),
-  lead({ id: 113, business_name: "Dockside Fulfillment", category: "Fulfillment operator", city: "Amsterdam", state: "North Holland", website: "https://docksidefulfillment.example", domain: "docksidefulfillment.example", phone: "+31 20 000 8102", instagram: "https://instagram.com/docksidefulfillment", status: "new", lead_score: 73, sales_region_id: 4, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "possible_sme", trade_type: "distribuidora" }),
-  lead({ id: 114, business_name: "Laneway Dental Care", category: "Dental clinic", city: "Melbourne", state: "VIC", website: "https://lanewaydental.example", domain: "lanewaydental.example", email: "hello@lanewaydental.example", phone: "+61 3 0000 0101", instagram: "https://instagram.com/lanewaydental", status: "approved", lead_score: 87, assigned_sales_rep_id: 4, sales_region_id: 5, market_segment_id: 1, market_subsegment_id: 1, company_size_fit: "ideal_sme", trade_type: "varejo" }),
-  lead({ id: 115, business_name: "Queen Street Growth", category: "Marketing agency", city: "Toronto", state: "ON", website: "https://queenstreetgrowth.example", domain: "queenstreetgrowth.example", email: "hello@queenstreetgrowth.example", phone: "+1 416 555 9201", instagram: "https://instagram.com/queenstreetgrowth", status: "contacted", lead_score: 84, assigned_sales_rep_id: 2, sales_region_id: 2, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "ideal_sme", trade_type: "unknown" }),
-  lead({ id: 116, business_name: "Docklands Fitness Studio", category: "Fitness studio", city: "Dublin", state: "Dublin", website: "https://docklandsfitness.example", domain: "docklandsfitness.example", email: "train@docklandsfitness.example", phone: "+353 1 000 0301", instagram: "https://instagram.com/docklandsfitness", status: "replied", lead_score: 86, assigned_sales_rep_id: 4, sales_region_id: 4, market_segment_id: 3, market_subsegment_id: 3, company_size_fit: "ideal_sme", trade_type: "varejo" }),
-  lead({ id: 117, business_name: "Yarra Boutique Hotel", category: "Boutique hotel", city: "Melbourne", state: "VIC", website: "https://yarrahotel.example", domain: "yarrahotel.example", email: "stay@yarrahotel.example", phone: "+61 3 0000 0401", status: "interested", lead_score: 83, assigned_sales_rep_id: 4, sales_region_id: 5, market_segment_id: 2, market_subsegment_id: 2, company_size_fit: "ideal_sme", trade_type: "varejo" }),
-  lead({ id: 118, business_name: "Blocked Demo Supplier", category: "Supplier", city: "San Francisco", state: "CA", website: "https://blocked-demo.example", domain: "blocked-demo.example", phone: "+1 415 555 9999", status: "do_not_contact", lead_score: 20, sales_region_id: 1, market_segment_id: 4, market_subsegment_id: 4, company_size_fit: "unknown", trade_type: "unknown", is_blocked: true, blocked_reason: "Demo exclusion rule: competitor / do not contact." }),
-];
-
-export const demoInitialImportBatch: LeadImportBatchResponse = {
-  id: 1,
-  batch_type: "demo_seed",
-  status: "completed",
-  source_provider: "demo",
-  source_query: "Demo seed leads",
-  location_label: "Demo workspace",
-  record_count: demoSeedLeads.length,
-  lead_count: demoSeedLeads.length,
-  lead_ids: demoSeedLeads.map((lead) => lead.id),
-  started_at: now,
-  completed_at: now,
-  created_at: now,
-  updated_at: now,
-};
 
 type LeadOverrides = Partial<LeadDetail> & Pick<LeadDetail, "id" | "business_name" | "city" | "state">;
 

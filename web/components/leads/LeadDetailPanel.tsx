@@ -29,7 +29,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const detailQuery = useQuery({
-    queryKey: ["lead-detail", leadId],
+    queryKey: ["lead-detail", locale, leadId],
     queryFn: () => getLeadDetail(leadId as number),
     enabled: leadId !== null,
   });
@@ -42,8 +42,8 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
       candidateCnpj?: string | null;
     }) => approveLeadCnpjCandidateByValue(currentLeadId, candidateCnpj),
     onSuccess: (updatedLead) => {
-      queryClient.setQueryData(["lead-detail", updatedLead.id], updatedLead);
-      void queryClient.invalidateQueries({ queryKey: ["lead-detail", updatedLead.id] });
+      queryClient.setQueryData(["lead-detail", locale, updatedLead.id], updatedLead);
+      void queryClient.invalidateQueries({ queryKey: ["lead-detail", locale, updatedLead.id] });
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
       void queryClient.invalidateQueries({ queryKey: ["leads-cnpj-review"] });
     },
@@ -57,8 +57,8 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
       candidateCnpj?: string | null;
     }) => rejectLeadCnpjCandidate(currentLeadId, candidateCnpj),
     onSuccess: (updatedLead) => {
-      queryClient.setQueryData(["lead-detail", updatedLead.id], updatedLead);
-      void queryClient.invalidateQueries({ queryKey: ["lead-detail", updatedLead.id] });
+      queryClient.setQueryData(["lead-detail", locale, updatedLead.id], updatedLead);
+      void queryClient.invalidateQueries({ queryKey: ["lead-detail", locale, updatedLead.id] });
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
       void queryClient.invalidateQueries({ queryKey: ["leads-cnpj-review"] });
     },

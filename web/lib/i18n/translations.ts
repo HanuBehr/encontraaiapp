@@ -2,7 +2,7 @@ export const LOCALES = ["pt-BR", "en"] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
-export const DEFAULT_LOCALE: Locale = "pt-BR";
+export const DEFAULT_LOCALE: Locale = "en";
 
 export const LOCALE_LABELS: Record<Locale, string> = {
   "pt-BR": "Português (Brasil)",

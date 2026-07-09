@@ -8,7 +8,7 @@ Demo mode lets reviewers explore the product experience safely:
 
 - guided discovery preview
 - selecting and saving leads
-- saved leads workspace
+- saved leads workspace that starts empty
 - filters and search
 - detail panel
 - local export
@@ -56,12 +56,13 @@ When enabled, frontend API clients use `web/lib/demo/*` instead of the real back
 
 ## Persistence
 
-Demo interactions are stored in browser `localStorage`:
+Demo interactions are stored in browser `sessionStorage`:
 
 - saved demo leads
 - demo import batches
+- language choice for the current tab/session
 
-This is intentional for the hosted demo. Each reviewer can interact with the app without changing shared backend data.
+This is intentional for the hosted demo. Each new visit starts in English with an empty saved-leads workspace, while the current tab keeps saved leads and language choice as reviewers move between pages. English and Portuguese demo workspaces are stored separately so saved leads do not cross languages.
 
 ## Backend-Backed App
 

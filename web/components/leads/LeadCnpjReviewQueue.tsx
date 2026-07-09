@@ -46,7 +46,7 @@ export function LeadCnpjReviewQueue({
   );
 
   const reviewQuery = useQuery({
-    queryKey: ["leads-cnpj-review", reviewParams],
+    queryKey: ["leads-cnpj-review", locale, reviewParams],
     queryFn: () => listLeads(reviewParams),
   });
 

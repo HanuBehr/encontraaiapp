@@ -6,7 +6,7 @@ This folder contains the operational documentation for Encontra.ai.
 
 | Goal | Doc | Backend | API keys | Persistence |
 | --- | --- | --- | --- | --- |
-| Public hosted demo | [`deployment/VERCEL_DEMO.md`](deployment/VERCEL_DEMO.md) | No | No | Browser `localStorage` |
+| Public hosted demo | [`deployment/VERCEL_DEMO.md`](deployment/VERCEL_DEMO.md) | No | No | Browser `sessionStorage` |
 | Local development | [`../README.md`](../README.md#getting-started) | FastAPI local process | Google key for real discovery | `./data` |
 | Local Windows Docker | [`client-install/README.md`](client-install/README.md) | Docker Compose | Google key for real discovery | `./data` |
 | Backend-backed deployment | [`deployment/VERCEL_BACKEND.md`](deployment/VERCEL_BACKEND.md) | Separate backend host | Backend secret manager | Persistent backend disk |

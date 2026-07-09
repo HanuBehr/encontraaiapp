@@ -1,23 +1,22 @@
 import type { LeadDetail, LeadImportBatchResponse } from "@/lib/api/types";
-import { demoInitialImportBatch, demoSeedLeads } from "@/lib/demo/fixtures";
+import { getActiveLocale } from "@/lib/i18n/locale-session";
 
-const LEADS_KEY = "encontraai.demo.v2.leads";
-const BATCHES_KEY = "encontraai.demo.v2.importBatches";
+const STORAGE_PREFIX = "encontraai.demo.v3";
 
 export function getDemoLeads(): LeadDetail[] {
-  return readJson<LeadDetail[]>(LEADS_KEY, demoSeedLeads);
+  return readJson<LeadDetail[]>(storageKey("leads"), []);
 }
 
 export function saveDemoLeads(leads: LeadDetail[]) {
-  writeJson(LEADS_KEY, leads);
+  writeJson(storageKey("leads"), leads);
 }
 
 export function getDemoImportBatches(): LeadImportBatchResponse[] {
-  return readJson<LeadImportBatchResponse[]>(BATCHES_KEY, [demoInitialImportBatch]);
+  return readJson<LeadImportBatchResponse[]>(storageKey("importBatches"), []);
 }
 
 export function addDemoImportBatch(batch: LeadImportBatchResponse) {
-  writeJson(BATCHES_KEY, [batch, ...getDemoImportBatches()]);
+  writeJson(storageKey("importBatches"), [batch, ...getDemoImportBatches()]);
 }
 
 export function nextDemoLeadId() {
@@ -32,15 +31,13 @@ function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") {
     return fallback;
   }
-  const rawValue = window.localStorage.getItem(key);
+  const rawValue = window.sessionStorage.getItem(key);
   if (!rawValue) {
-    writeJson(key, fallback);
     return fallback;
   }
   try {
     return JSON.parse(rawValue) as T;
   } catch {
-    writeJson(key, fallback);
     return fallback;
   }
 }
@@ -49,5 +46,9 @@ function writeJson(key: string, value: unknown) {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(key, JSON.stringify(value));
+  window.sessionStorage.setItem(key, JSON.stringify(value));
+}
+
+function storageKey(kind: "leads" | "importBatches") {
+  return `${STORAGE_PREFIX}.${getActiveLocale()}.${kind}`;
 }

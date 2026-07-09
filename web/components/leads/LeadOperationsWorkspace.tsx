@@ -5,7 +5,7 @@ import type { RowSelectionState, SortingState } from "@tanstack/react-table";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { LeadQueueFilters } from "@/components/leads/LeadQueueFilters";
 import { LeadQueueTable } from "@/components/leads/LeadQueueTable";
@@ -53,7 +53,7 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
   const deferredSearch = useDeferredValue(search);
 
   const optionsQuery = useQuery({
-    queryKey: ["lead-options"],
+    queryKey: ["lead-options", locale],
     queryFn: getLeadOptions,
   });
   const settingsQuery = useQuery({
@@ -92,7 +92,7 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
   }, [deferredSearch, filters, importBatchId, pageIndex, pageSize, sorting]);
 
   const leadsQuery = useQuery({
-    queryKey: ["leads", queryParams],
+    queryKey: ["leads", locale, queryParams],
     queryFn: () => listLeads(queryParams),
     placeholderData: (previousData) => previousData,
   });
@@ -112,6 +112,12 @@ export function LeadOperationsWorkspace({ initialImportBatchId = null }: LeadOpe
     currentFilteredTotal === 0 &&
     !hasActiveQueueFilters(filters);
   const cnpjEnabled = Boolean(settingsQuery.data?.providers.cnpj_company_search_configured);
+
+  useEffect(() => {
+    setRowSelection({});
+    setActiveLeadId(null);
+    setPageIndex(0);
+  }, [locale]);
 
   function updateFilters(nextFilters: QueueFilters) {
     setFilters(nextFilters);

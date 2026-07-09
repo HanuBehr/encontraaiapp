@@ -7,9 +7,9 @@ import {
   type Locale,
   type TranslationKey,
   interpolate,
-  isLocale,
   translations,
 } from "@/lib/i18n/translations";
+import { getActiveLocale, setActiveLocale } from "@/lib/i18n/locale-session";
 
 type I18nContextValue = {
   locale: Locale;
@@ -17,18 +17,13 @@ type I18nContextValue = {
   t: (key: TranslationKey, values?: Record<string, string | number>) => string;
 };
 
-const STORAGE_KEY = "encontraai.locale";
-
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
 
   useEffect(() => {
-    const storedLocale = window.localStorage.getItem(STORAGE_KEY);
-    if (isLocale(storedLocale)) {
-      setLocaleState(storedLocale);
-    }
+    setLocaleState(getActiveLocale());
   }, []);
 
   useEffect(() => {
@@ -37,7 +32,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   function setLocale(nextLocale: Locale) {
     setLocaleState(nextLocale);
-    window.localStorage.setItem(STORAGE_KEY, nextLocale);
+    setActiveLocale(nextLocale);
   }
 
   function t(key: TranslationKey, values?: Record<string, string | number>) {

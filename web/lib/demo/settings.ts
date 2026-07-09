@@ -3,7 +3,7 @@ import type { SettingsSummary } from "@/lib/api/types";
 export async function getDemoSettingsSummary(): Promise<SettingsSummary> {
   return {
     app_env: "demo",
-    database_url_redacted: "browser localStorage demo",
+    database_url_redacted: "browser sessionStorage demo",
     export_dir: "browser download",
     sending_enabled: false,
     email_sending_enabled: false,

@@ -103,7 +103,7 @@ export function LeadBatchActions({
   }, [scope, selectedLeadIds.length, currentTotal]);
 
   const latestBatchQuery = useQuery({
-    queryKey: ["latest-import-batch"],
+    queryKey: ["latest-import-batch", locale],
     queryFn: getLatestImportBatch,
     enabled: scope === "latest",
     retry: 1,
@@ -202,7 +202,7 @@ export function LeadBatchActions({
 
   const selectedDisabled = scope === "selected" && selectedLeadIds.length === 0;
   const currentDisabled = scope === "current" && currentTotal === 0;
-  const latestDisabled = scope === "latest" && (latestBatchQuery.isLoading || latestBatchQuery.isError);
+  const latestDisabled = scope === "latest" && (latestBatchQuery.isLoading || latestBatchQuery.isError || (latestBatchQuery.data?.lead_count ?? 0) === 0);
   const assignDisabled = actionMutation.isPending || selectedDisabled || currentDisabled || latestDisabled || scope === "latest";
   const scopedActionDisabled = actionMutation.isPending || selectedDisabled || currentDisabled || latestDisabled;
   const scopeOptions = [
