@@ -88,7 +88,7 @@ export function LeadQueueTable({
             <p className="text-xs text-neutral-500">{row.original.category ?? t("common.noCategory")}</p>
             {row.original.is_blocked ? (
               <p className="mt-1 line-clamp-2 text-xs text-rose-700">
-                Motivo: {row.original.blocked_reason ?? "Corresponde a uma regra de exclusão ativa."}
+                {locale === "en" ? "Reason" : "Motivo"}: {row.original.blocked_reason ?? (locale === "en" ? "Matches an active exclusion rule." : "Corresponde a uma regra de exclusão ativa.")}
               </p>
             ) : null}
           </div>

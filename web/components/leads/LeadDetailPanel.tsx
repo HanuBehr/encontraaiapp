@@ -197,22 +197,22 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
               </div>
               <div className="mt-3">
                 <InfoGrid>
-                  <InfoItem label="Possível CNPJ" value={cnpjCandidateSummary.cnpj ?? (locale === "en" ? "Not available" : "Não disponível")} />
-                  <InfoItem label="Razão Social" value={cnpjCandidateSummary.legal_name} />
-                  <InfoItem label="Nome Fantasia" value={cnpjCandidateSummary.trade_name} />
-                  <InfoItem label="Modo da busca" value={cnpjCandidateSummary.query_mode_label} />
+                  <InfoItem label={detailCopy(locale).possibleCnpj} value={cnpjCandidateSummary.cnpj ?? (locale === "en" ? "Not available" : "Não disponível")} />
+                  <InfoItem label={detailCopy(locale).legalName} value={cnpjCandidateSummary.legal_name} />
+                  <InfoItem label={detailCopy(locale).tradeName} value={cnpjCandidateSummary.trade_name} />
+                  <InfoItem label={detailCopy(locale).searchMode} value={cnpjCandidateSummary.query_mode_label} />
                   <InfoItem
-                    label="Cidade/UF"
+                    label={detailCopy(locale).cityState}
                     value={compact([cnpjCandidateSummary.city, cnpjCandidateSummary.state])}
                   />
-                  <InfoItem label="Atividade/CNAE" value={cnpjCandidateSummary.primary_activity} />
-                  <InfoItem label="Telefone(s)" value={joinList(cnpjCandidateSummary.phones)} />
+                  <InfoItem label={detailCopy(locale).activity} value={cnpjCandidateSummary.primary_activity} />
+                  <InfoItem label={detailCopy(locale).phones} value={joinList(cnpjCandidateSummary.phones)} />
                   <InfoItem label="Email(s)" value={joinList(cnpjCandidateSummary.emails)} />
-                  <InfoItem label="Endereço" value={cnpjCandidateSummary.address} />
-                  <InfoItem label="Confiança" value={formatConfidence(cnpjCandidateSummary.match_confidence, locale)} />
-                  <InfoItem label="Pontuação" value={formatScore(cnpjCandidateSummary.score, locale)} />
-                  <InfoItem label="Motivo" value={cnpjCandidateSummary.review_reason} />
-                  <InfoItem label="Provedor" value={labelToken(cnpjCandidateSummary.provider)} />
+                  <InfoItem label={detailCopy(locale).address} value={cnpjCandidateSummary.address} />
+                  <InfoItem label={detailCopy(locale).confidence} value={formatConfidence(cnpjCandidateSummary.match_confidence, locale)} />
+                  <InfoItem label={detailCopy(locale).score} value={formatScore(cnpjCandidateSummary.score, locale)} />
+                  <InfoItem label={detailCopy(locale).reason} value={cnpjCandidateSummary.review_reason} />
+                  <InfoItem label={detailCopy(locale).provider} value={labelToken(cnpjCandidateSummary.provider)} />
                 </InfoGrid>
                 {lead.cnpj_match_status === "needs_review" &&
                 hasFullCnpj(cnpjCandidateSummary.cnpj) &&
@@ -289,19 +289,19 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                         </div>
                         <div className="mt-3">
                           <InfoGrid>
-                            <InfoItem label="Possível CNPJ" value={candidate.cnpj ?? (locale === "en" ? "Not available" : "Não disponível")} />
-                            <InfoItem label="Razão Social" value={candidate.legal_name} />
-                            <InfoItem label="Nome Fantasia" value={candidate.trade_name} />
-                            <InfoItem label="Modo da busca" value={candidate.query_mode_label} />
-                            <InfoItem label="Cidade/UF" value={compact([candidate.city, candidate.state])} />
-                            <InfoItem label="Atividade/CNAE" value={candidate.primary_activity} />
-                            <InfoItem label="Telefone(s)" value={joinList(candidate.phones)} />
+                            <InfoItem label={detailCopy(locale).possibleCnpj} value={candidate.cnpj ?? (locale === "en" ? "Not available" : "Não disponível")} />
+                            <InfoItem label={detailCopy(locale).legalName} value={candidate.legal_name} />
+                            <InfoItem label={detailCopy(locale).tradeName} value={candidate.trade_name} />
+                            <InfoItem label={detailCopy(locale).searchMode} value={candidate.query_mode_label} />
+                            <InfoItem label={detailCopy(locale).cityState} value={compact([candidate.city, candidate.state])} />
+                            <InfoItem label={detailCopy(locale).activity} value={candidate.primary_activity} />
+                            <InfoItem label={detailCopy(locale).phones} value={joinList(candidate.phones)} />
                             <InfoItem label="Email(s)" value={joinList(candidate.emails)} />
-                            <InfoItem label="Endereço" value={candidate.address} />
-                            <InfoItem label="Confiança" value={formatConfidence(candidate.match_confidence, locale)} />
-                            <InfoItem label="Pontuação" value={formatScore(candidate.score, locale)} />
-                            <InfoItem label="Motivo" value={candidate.review_reason} />
-                            <InfoItem label="Provedor" value={labelToken(candidate.provider)} />
+                            <InfoItem label={detailCopy(locale).address} value={candidate.address} />
+                            <InfoItem label={detailCopy(locale).confidence} value={formatConfidence(candidate.match_confidence, locale)} />
+                            <InfoItem label={detailCopy(locale).score} value={formatScore(candidate.score, locale)} />
+                            <InfoItem label={detailCopy(locale).reason} value={candidate.review_reason} />
+                            <InfoItem label={detailCopy(locale).provider} value={labelToken(candidate.provider)} />
                           </InfoGrid>
                           {(Object.keys(candidate.evidence).length > 0 || candidate.penalties.length > 0) ? (
                             <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
@@ -325,6 +325,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                   {formatUserFacingError(
                     approveCnpjMutation.error,
                     locale === "en" ? "Could not approve this CNPJ right now." : "Não foi possível aprovar este CNPJ agora.",
+                    locale,
                   )}
                 </p>
               ) : null}
@@ -333,6 +334,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
                   {formatUserFacingError(
                     rejectCnpjMutation.error,
                     locale === "en" ? "Could not keep this lead without CNPJ right now." : "Não foi possível manter este lead sem CNPJ agora.",
+                    locale,
                   )}
                 </p>
               ) : null}
@@ -340,49 +342,49 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
           ) : null}
         </DetailSection>
 
-        <DetailSection title="Melhores contatos">
+        <DetailSection title={detailCopy(locale).bestContacts}>
           <div className="grid gap-2">
             <ContactLine label="Email" value={lead.email} />
             <ContactLine label="WhatsApp" value={lead.whatsapp} />
-            <ContactLine label="Telefone" value={lead.phone} />
+            <ContactLine label={detailCopy(locale).phone} value={lead.phone} />
             <ContactLine label="Instagram" value={lead.instagram} />
           </div>
           <ContactEvidence contacts={lead.contacts} />
         </DetailSection>
 
-        <DetailSection title="Responsável e classificação">
+        <DetailSection title={detailCopy(locale).assignmentAndClassification}>
           <InfoGrid>
-            <InfoItem label="Responsável" value={lead.assigned_sales_rep?.name} />
-            <InfoItem label="Região" value={lead.sales_region?.name} />
-            <InfoItem label="Segmento" value={lead.market_segment?.name} />
-            <InfoItem label="Subsegmento" value={lead.market_subsegment?.name} />
-            <InfoItem label="Regra de atribuição" value={lead.assignment_rule?.name} />
-            <InfoItem label="Atribuído em" value={formatDateTime(lead.assigned_at)} />
+            <InfoItem label={detailCopy(locale).owner} value={lead.assigned_sales_rep?.name} />
+            <InfoItem label={detailCopy(locale).region} value={lead.sales_region?.name} />
+            <InfoItem label={detailCopy(locale).segment} value={lead.market_segment?.name} />
+            <InfoItem label={detailCopy(locale).subsegment} value={lead.market_subsegment?.name} />
+            <InfoItem label={detailCopy(locale).assignmentRule} value={lead.assignment_rule?.name} />
+            <InfoItem label={detailCopy(locale).assignedAt} value={formatDateTime(lead.assigned_at)} />
           </InfoGrid>
           {lead.assignment_explanation ? (
             <p className="mt-3 rounded-md bg-neutral-50 p-3 text-sm text-neutral-700">{lead.assignment_explanation}</p>
           ) : null}
         </DetailSection>
 
-        <DetailSection title="Qualidade do lead">
+        <DetailSection title={detailCopy(locale).leadQuality}>
           <InfoGrid>
-            <InfoItem label="Perfil" value={labelToken(lead.company_size_fit)} />
-            <InfoItem label="Operação" value={labelToken(lead.trade_type)} />
-            <InfoItem label="Classificado em" value={formatDateTime(lead.quality_classified_at)} />
+            <InfoItem label={detailCopy(locale).profile} value={labelToken(lead.company_size_fit)} />
+            <InfoItem label={detailCopy(locale).operation} value={labelToken(lead.trade_type)} />
+            <InfoItem label={detailCopy(locale).classifiedAt} value={formatDateTime(lead.quality_classified_at)} />
           </InfoGrid>
           <div className="mt-3 grid gap-2 text-sm text-neutral-700">
-            <p>{lead.company_size_fit_explanation ?? "Ainda não há uma explicação de perfil."}</p>
-            <p>{lead.trade_type_explanation ?? "Ainda não há uma explicação de operação."}</p>
+            <p>{lead.company_size_fit_explanation ?? detailCopy(locale).noProfileExplanation}</p>
+            <p>{lead.trade_type_explanation ?? detailCopy(locale).noOperationExplanation}</p>
           </div>
         </DetailSection>
 
-        <DetailSection title="Enriquecimento">
+        <DetailSection title={detailCopy(locale).enrichment}>
           <InfoGrid>
-            <InfoItem label="Último enriquecimento" value={formatDateTime(lead.last_enriched_at)} />
-            <InfoItem label="Registros" value={String(lead.enrichments.length)} />
-            <InfoItem label="Última página" value={labelToken(latestEnrichment?.page_type)} />
+            <InfoItem label={detailCopy(locale).lastEnrichment} value={formatDateTime(lead.last_enriched_at)} />
+            <InfoItem label={detailCopy(locale).records} value={String(lead.enrichments.length)} />
+            <InfoItem label={detailCopy(locale).lastPage} value={labelToken(latestEnrichment?.page_type)} />
             <InfoItem
-              label="Último status"
+              label={detailCopy(locale).lastStatus}
               value={latestEnrichment?.http_status ? String(latestEnrichment.http_status) : null}
             />
           </InfoGrid>
@@ -392,8 +394,8 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
           <EnrichmentAudit audit={latestEnrichmentAudit} />
         </DetailSection>
 
-        <DetailSection title="Notas">
-          <p className="whitespace-pre-wrap text-sm text-neutral-700">{lead.notes || "Nenhuma nota registrada."}</p>
+        <DetailSection title={detailCopy(locale).notes}>
+          <p className="whitespace-pre-wrap text-sm text-neutral-700">{lead.notes || detailCopy(locale).noNotes}</p>
           {lead.tags.length ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {lead.tags.map((tag) => (
@@ -405,15 +407,15 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
           ) : null}
         </DetailSection>
 
-        <DetailSection title="Duplicidade">
+        <DetailSection title={detailCopy(locale).duplicates}>
           <InfoGrid>
-            <InfoItem label="Duplicado" value={lead.is_duplicate ? "Sim" : "Não"} />
-            <InfoItem label="Duplicado de" value={lead.duplicate_of_lead_id ? String(lead.duplicate_of_lead_id) : null} />
+            <InfoItem label={detailCopy(locale).duplicate} value={lead.is_duplicate ? detailCopy(locale).yes : detailCopy(locale).no} />
+            <InfoItem label={detailCopy(locale).duplicateOf} value={lead.duplicate_of_lead_id ? String(lead.duplicate_of_lead_id) : null} />
           </InfoGrid>
-          <p className="mt-3 text-sm text-neutral-700">{lead.duplicate_reason ?? "Nenhum motivo de duplicidade registrado."}</p>
+          <p className="mt-3 text-sm text-neutral-700">{lead.duplicate_reason ?? detailCopy(locale).noDuplicateReason}</p>
         </DetailSection>
 
-        <DetailSection title="Histórico">
+        <DetailSection title={detailCopy(locale).history}>
           {lead.activity_logs.length ? (
             <ol className="space-y-3">
               {lead.activity_logs.slice(0, 8).map((activity) => (
@@ -425,7 +427,7 @@ export function LeadDetailPanel({ leadId }: LeadDetailPanelProps) {
               ))}
             </ol>
           ) : (
-            <p className="text-sm text-neutral-500">Nenhuma atividade registrada.</p>
+            <p className="text-sm text-neutral-500">{detailCopy(locale).noActivity}</p>
           )}
         </DetailSection>
       </div>
@@ -727,6 +729,98 @@ function joinList(values: string[] | null | undefined) {
     return null;
   }
   return values.join(", ");
+}
+
+function detailCopy(locale: "pt-BR" | "en") {
+  return locale === "en"
+    ? {
+        possibleCnpj: "Possible CNPJ",
+        legalName: "Legal name",
+        tradeName: "Trade name",
+        searchMode: "Search mode",
+        cityState: "City/state",
+        activity: "Activity/CNAE",
+        phones: "Phone(s)",
+        address: "Address",
+        confidence: "Confidence",
+        score: "Score",
+        reason: "Reason",
+        provider: "Provider",
+        bestContacts: "Best contacts",
+        phone: "Phone",
+        assignmentAndClassification: "Owner and classification",
+        owner: "Owner",
+        region: "Region",
+        segment: "Segment",
+        subsegment: "Subsegment",
+        assignmentRule: "Assignment rule",
+        assignedAt: "Assigned at",
+        leadQuality: "Lead quality",
+        profile: "Profile",
+        operation: "Operation",
+        classifiedAt: "Classified at",
+        noProfileExplanation: "No profile explanation yet.",
+        noOperationExplanation: "No operation explanation yet.",
+        enrichment: "Enrichment",
+        lastEnrichment: "Last enrichment",
+        records: "Records",
+        lastPage: "Last page",
+        lastStatus: "Last status",
+        notes: "Notes",
+        noNotes: "No notes recorded.",
+        duplicates: "Duplicates",
+        duplicate: "Duplicate",
+        duplicateOf: "Duplicate of",
+        noDuplicateReason: "No duplicate reason recorded.",
+        noActivity: "No activity recorded.",
+        yes: "Yes",
+        no: "No",
+        history: "History",
+      }
+    : {
+        possibleCnpj: "Possível CNPJ",
+        legalName: "Razão Social",
+        tradeName: "Nome Fantasia",
+        searchMode: "Modo da busca",
+        cityState: "Cidade/UF",
+        activity: "Atividade/CNAE",
+        phones: "Telefone(s)",
+        address: "Endereço",
+        confidence: "Confiança",
+        score: "Pontuação",
+        reason: "Motivo",
+        provider: "Provedor",
+        bestContacts: "Melhores contatos",
+        phone: "Telefone",
+        assignmentAndClassification: "Responsável e classificação",
+        owner: "Responsável",
+        region: "Região",
+        segment: "Segmento",
+        subsegment: "Subsegmento",
+        assignmentRule: "Regra de atribuição",
+        assignedAt: "Atribuído em",
+        leadQuality: "Qualidade do lead",
+        profile: "Perfil",
+        operation: "Operação",
+        classifiedAt: "Classificado em",
+        noProfileExplanation: "Ainda não há uma explicação de perfil.",
+        noOperationExplanation: "Ainda não há uma explicação de operação.",
+        enrichment: "Enriquecimento",
+        lastEnrichment: "Último enriquecimento",
+        records: "Registros",
+        lastPage: "Última página",
+        lastStatus: "Último status",
+        notes: "Notas",
+        noNotes: "Nenhuma nota registrada.",
+        duplicates: "Duplicidade",
+        duplicate: "Duplicado",
+        duplicateOf: "Duplicado de",
+        noDuplicateReason: "Nenhum motivo de duplicidade registrado.",
+        noActivity: "Nenhuma atividade registrada.",
+        yes: "Sim",
+        no: "Não",
+        history: "Histórico",
+      };
 }
 
 function formatEvidenceSummary(evidence: Record<string, number>, locale: "pt-BR" | "en" = "pt-BR") {

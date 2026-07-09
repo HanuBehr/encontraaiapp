@@ -139,7 +139,7 @@ export function LeadCnpjReviewQueue({
 
       {reviewQuery.isError ? (
         <p className="px-4 py-4 text-sm text-rose-800">
-          {formatUserFacingError(reviewQuery.error, locale === "en" ? "Could not load the review queue right now." : "Não foi possível carregar a fila de revisão agora.")}
+          {formatUserFacingError(reviewQuery.error, locale === "en" ? "Could not load the review queue right now." : "Não foi possível carregar a fila de revisão agora.", locale)}
         </p>
       ) : null}
 
@@ -148,6 +148,7 @@ export function LeadCnpjReviewQueue({
           {formatUserFacingError(
             bulkApproveMutation.error,
             locale === "en" ? "Could not approve the selected CNPJs right now." : "Não foi possível aprovar os CNPJs selecionados agora.",
+            locale,
           )}
         </p>
       ) : null}

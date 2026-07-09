@@ -275,10 +275,11 @@ function leadFromCandidate(id: number, candidateValue: DiscoveryLeadCandidate, n
 }
 
 function regionIdForCandidate(candidateValue: DiscoveryLeadCandidate) {
-  if (candidateValue.city === "Campinas") return 2;
-  if (candidateValue.state === "RJ") return 3;
-  if (candidateValue.state === "MG") return 4;
-  if (["Lisbon", "Catalonia", "England", "Berlin"].includes(candidateValue.state ?? "")) return 5;
+  if (["San Francisco", "Melbourne"].includes(candidateValue.city ?? "")) return candidateValue.city === "Melbourne" ? 5 : 1;
+  if (["New York", "Toronto"].includes(candidateValue.city ?? "")) return 2;
+  if (candidateValue.city === "London") return 3;
+  if (["Berlin", "Amsterdam", "Dublin"].includes(candidateValue.city ?? "")) return 4;
+  if (["Campinas", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Porto Alegre"].includes(candidateValue.city ?? "")) return 4;
   return 1;
 }
 

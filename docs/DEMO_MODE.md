@@ -20,19 +20,27 @@ The data is fictional sample data. It is not scraped from providers and does not
 
 Demo mode supports curated searches instead of open-ended live provider queries.
 
-Portuguese / Brazil examples:
+Each guided search returns 20 fictional candidates with mixed website, email, phone, WhatsApp, and Instagram coverage.
 
-- `dentistas em São Paulo`
+Portuguese examples are Brazil-only:
+
+- `clínicas odontológicas em São Paulo`
 - `restaurantes em Campinas`
 - `clínicas de estética no Rio de Janeiro`
-- `materiais de construção em Belo Horizonte`
+- `empresas de logística em Belo Horizonte`
+- `materiais de construção em Curitiba`
+- `academias em Porto Alegre`
 
-English / Europe examples:
+English examples use major international cities:
 
-- `dental clinics in Lisbon`
-- `restaurants in Barcelona`
+- `dental clinics in San Francisco`
+- `restaurants in New York`
 - `aesthetic clinics in London`
 - `solar installers in Berlin`
+- `logistics companies in Amsterdam`
+- `boutique hotels in Melbourne`
+- `marketing agencies in Toronto`
+- `fitness studios in Dublin`
 
 Unsupported searches show a guided message instead of unrelated sample results.
 

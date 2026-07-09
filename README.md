@@ -2,7 +2,7 @@
 
 B2B prospecting is not slow because sales teams cannot sell. It is slow because the lead list is usually garbage.
 
-Encontra.ai turns a market idea like `dental clinics in Lisbon` or `restaurants in Barcelona` into a reviewed lead list ready for outreach. It handles discovery, duplicate prevention, contact enrichment, company-record evidence scoring, manual review, and spreadsheet export.
+Encontra.ai turns a market idea like `dental clinics in San Francisco` or `restaurants in New York` into a reviewed lead list ready for outreach. It handles discovery, duplicate prevention, contact enrichment, company-record evidence scoring, manual review, and spreadsheet export.
 
 - Live demo: [https://encontraaiapp.vercel.app](https://encontraaiapp.vercel.app)
 - No login required

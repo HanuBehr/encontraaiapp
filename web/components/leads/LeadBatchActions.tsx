@@ -399,6 +399,8 @@ function ToolbarPill({ children }: { children: React.ReactNode }) {
 }
 
 function ActionResultSummary({ result }: { result: ActionResult }) {
+  const { locale } = useI18n();
+
   if (result.kind === "enrich") {
     const hasErrors = result.summary.errors > 0;
     const newPublicChannelCount =
@@ -408,21 +410,21 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
       result.summary.contact_forms_found;
     return (
       <ResultBox
-        title={`${hasErrors ? "Enriquecimento concluído com alertas" : "Enriquecimento concluído"} - ${formatScopeLabel(result.scopeLabel)}`}
+        title={`${hasErrors ? batchCopy(locale).enrichDoneWithWarnings : batchCopy(locale).enrichDone} - ${formatScopeLabel(result.scopeLabel, locale)}`}
       >
-        <ResultNarrative text={buildEnrichmentNarrative(result.summary)} />
-        <ResultMetric label="Solicitados" value={result.requested} />
-        <ResultMetric label="Processados" value={result.summary.processed} />
-        <ResultMetric label="Concluídos" value={result.summary.success_count} />
-        <ResultMetric label="Novos contatos" value={result.summary.contacts_added} />
-        <ResultMetric label="Canais públicos" value={newPublicChannelCount} />
+        <ResultNarrative text={buildEnrichmentNarrative(result.summary, locale)} />
+        <ResultMetric label={batchCopy(locale).requested} value={result.requested} />
+        <ResultMetric label={batchCopy(locale).processed} value={result.summary.processed} />
+        <ResultMetric label={batchCopy(locale).completed} value={result.summary.success_count} />
+        <ResultMetric label={batchCopy(locale).newContacts} value={result.summary.contacts_added} />
+        <ResultMetric label={batchCopy(locale).publicChannels} value={newPublicChannelCount} />
         <ResultMetric label="Emails" value={result.summary.emails_found} />
         <ResultMetric label="Instagrams" value={result.summary.instagrams_found} />
         <ResultMetric label="WhatsApps" value={result.summary.whatsapps_found} />
-        <ResultMetric label="Formulários" value={result.summary.contact_forms_found} />
-        <ResultMetric label="Ignorados" value={result.summary.skipped} />
-        <ResultMetric label="Erros" value={result.summary.errors} />
-        {hasErrors ? <FailedLeadSummary summary={result.summary} /> : null}
+        <ResultMetric label={batchCopy(locale).forms} value={result.summary.contact_forms_found} />
+        <ResultMetric label={batchCopy(locale).skipped} value={result.summary.skipped} />
+        <ResultMetric label={batchCopy(locale).errors} value={result.summary.errors} />
+        {hasErrors ? <FailedLeadSummary summary={result.summary} locale={locale} /> : null}
       </ResultBox>
     );
   }
@@ -431,27 +433,27 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
     const hasErrors = result.summary.error_count > 0;
     return (
       <ResultBox
-        title={`${hasErrors ? "Enriquecimento CNPJ concluído com alertas" : "Enriquecimento CNPJ concluído"} - ${formatScopeLabel(result.scopeLabel)}`}
+        title={`${hasErrors ? batchCopy(locale).cnpjDoneWithWarnings : batchCopy(locale).cnpjDone} - ${formatScopeLabel(result.scopeLabel, locale)}`}
       >
-        <ResultNarrative text={buildCnpjNarrativeV2(result.summary)} />
-        <ResultMetric label="Solicitados" value={result.requested} />
-        <ResultMetric label="Processados" value={result.summary.processed} />
-        <ResultMetric label="Preenchidos" value={result.summary.matched_count} />
-        <ResultMetric label="Precisam revisão" value={result.summary.needs_review_count} />
-        <ResultMetric label="Sem correspondência" value={result.summary.not_found_count} />
-        <ResultMetric label="Já tinham CNPJ" value={result.summary.skipped_known_count} />
-        <ResultMetric label="Aguardando revisão" value={result.summary.skipped_review_candidate_count} />
-        <ResultMetric label="Busca paga recente" value={result.summary.paid_search_recently_attempted_count} />
-        <ResultMetric label="Consultados agora" value={result.summary.company_search_consulted_now_count} />
-        <ResultMetric label="Consultas pagas" value={result.summary.paid_calls_made} />
-        <ResultMetric label="Duplicadas evitadas" value={result.summary.paid_calls_skipped_duplicate} />
-        <ResultMetric label="Erros" value={result.summary.error_count} />
+        <ResultNarrative text={buildCnpjNarrativeV2(result.summary, locale)} />
+        <ResultMetric label={batchCopy(locale).requested} value={result.requested} />
+        <ResultMetric label={batchCopy(locale).processed} value={result.summary.processed} />
+        <ResultMetric label={batchCopy(locale).filled} value={result.summary.matched_count} />
+        <ResultMetric label={batchCopy(locale).needsReview} value={result.summary.needs_review_count} />
+        <ResultMetric label={batchCopy(locale).notFound} value={result.summary.not_found_count} />
+        <ResultMetric label={batchCopy(locale).alreadyHadCnpj} value={result.summary.skipped_known_count} />
+        <ResultMetric label={batchCopy(locale).waitingReview} value={result.summary.skipped_review_candidate_count} />
+        <ResultMetric label={batchCopy(locale).recentPaidSearch} value={result.summary.paid_search_recently_attempted_count} />
+        <ResultMetric label={batchCopy(locale).checkedNow} value={result.summary.company_search_consulted_now_count} />
+        <ResultMetric label={batchCopy(locale).paidCalls} value={result.summary.paid_calls_made} />
+        <ResultMetric label={batchCopy(locale).duplicateCallsSkipped} value={result.summary.paid_calls_skipped_duplicate} />
+        <ResultMetric label={batchCopy(locale).errors} value={result.summary.error_count} />
         {hasErrors ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
-            <p className="text-xs font-semibold uppercase text-amber-900">Erros do lote</p>
+            <p className="text-xs font-semibold uppercase text-amber-900">{batchCopy(locale).batchErrors}</p>
             <ul className="mt-2 space-y-1 text-sm text-amber-900">
               {result.summary.errors.slice(0, 3).map((message) => (
-                <li key={message}>{sanitizeUserFacingMessage(message, "Falha ao enriquecer CNPJ em parte do lote.")}</li>
+                <li key={message}>{sanitizeUserFacingMessage(message, batchCopy(locale).cnpjPartialFailure)}</li>
               ))}
             </ul>
           </div>
@@ -462,21 +464,21 @@ function ActionResultSummary({ result }: { result: ActionResult }) {
 
   if (result.kind === "assign") {
     return (
-      <ResultBox title={`Atribuição concluída - ${formatScopeLabel(result.scopeLabel)}`}>
-        <ResultMetric label="Solicitados" value={result.requested} />
-        <ResultMetric label="Processados" value={result.summary.processed} />
-        <ResultMetric label="Atualizados" value={result.summary.changed} />
-        <ResultMetric label="IDs ausentes" value={result.summary.missing_lead_ids.length} />
+      <ResultBox title={`${batchCopy(locale).assignmentDone} - ${formatScopeLabel(result.scopeLabel, locale)}`}>
+        <ResultMetric label={batchCopy(locale).requested} value={result.requested} />
+        <ResultMetric label={batchCopy(locale).processed} value={result.summary.processed} />
+        <ResultMetric label={batchCopy(locale).updated} value={result.summary.changed} />
+        <ResultMetric label={batchCopy(locale).missingIds} value={result.summary.missing_lead_ids.length} />
       </ResultBox>
     );
   }
 
   return (
-    <ResultBox title={`Planilha baixada - ${formatScopeLabel(result.scopeLabel)}`}>
-      <ResultNarrative text="Exportação pronta para prospecção. O arquivo Excel já foi baixado no seu navegador." />
+    <ResultBox title={`${batchCopy(locale).spreadsheetDownloaded} - ${formatScopeLabel(result.scopeLabel, locale)}`}>
+      <ResultNarrative text={batchCopy(locale).exportReady} />
       <ResultMetric label="Leads" value={result.requested} />
       <div className="rounded-md border border-neutral-200 bg-white px-3 py-2">
-        <p className="text-xs font-medium text-neutral-500">Arquivo</p>
+        <p className="text-xs font-medium text-neutral-500">{batchCopy(locale).file}</p>
         <p className="mt-1 break-all text-sm font-semibold text-neutral-950">{result.filename}</p>
       </div>
     </ResultBox>
@@ -512,19 +514,19 @@ function ResultMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function FailedLeadSummary({ summary }: { summary: LeadBatchEnrichmentResponse["summary"] }) {
+function FailedLeadSummary({ summary, locale }: { summary: LeadBatchEnrichmentResponse["summary"]; locale: Locale }) {
   return (
     <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 sm:col-span-2 lg:col-span-4">
-      <p className="text-xs font-semibold uppercase text-amber-900">Leads com falha</p>
+      <p className="text-xs font-semibold uppercase text-amber-900">{batchCopy(locale).failedLeads}</p>
       <p className="mt-1 text-sm text-amber-950">
         {summary.failed_lead_ids.length
           ? `IDs: ${summary.failed_lead_ids.join(", ")}`
-          : "Alguns leads falharam, mas a API não retornou os IDs."}
+          : batchCopy(locale).failedWithoutIds}
       </p>
       {summary.error_messages.length ? (
         <ul className="mt-2 space-y-1 text-sm text-amber-900">
           {summary.error_messages.slice(0, 3).map((message) => (
-            <li key={message}>{sanitizeUserFacingMessage(message, "Falha ao enriquecer parte do lote.")}</li>
+            <li key={message}>{sanitizeUserFacingMessage(message, batchCopy(locale).enrichPartialFailure)}</li>
           ))}
         </ul>
       ) : null}
@@ -540,13 +542,13 @@ async function buildDirectActionScope(
 ): Promise<{ request: LeadScopeRequest; requested: number; scopeLabel: string }> {
   const request = buildScopeRequest(scope, selectedLeadIds, currentFilters);
   if (scope === "selected") {
-    return { request, requested: selectedLeadIds.length, scopeLabel: "Leads selecionados" };
+    return { request, requested: selectedLeadIds.length, scopeLabel: "Selected leads" };
   }
   if (scope === "latest") {
     const latestBatch = await getLatestImportBatch();
-    return { request, requested: latestBatch.lead_count, scopeLabel: `Última importação #${latestBatch.id}` };
+    return { request, requested: latestBatch.lead_count, scopeLabel: `Latest import batch #${latestBatch.id}` };
   }
-  return { request, requested: currentTotal, scopeLabel: "Lista filtrada atual" };
+  return { request, requested: currentTotal, scopeLabel: "Current filtered set" };
 }
 
 function buildScopeRequest(scope: ActionScope, selectedLeadIds: number[], currentFilters: LeadListParams): LeadScopeRequest {
@@ -570,7 +572,7 @@ function actionLabel(kind: ActionKind, locale: Locale) {
     return locale === "en" ? "Enrich" : "Enriquecer";
   }
   if (kind === "cnpj") {
-    return "Enriquecer CNPJ";
+    return locale === "en" ? "Enrich CNPJ" : "Enriquecer CNPJ";
   }
   if (kind === "assign") {
     return locale === "en" ? "Assign" : "Atribuir";
@@ -597,7 +599,7 @@ async function resolveActionScope(
       request,
       leadIds: resolved.lead_ids,
       requested: resolved.total || latestBatch.lead_count,
-      scopeLabel: resolved.scope_label || `Última importação #${latestBatch.id}`,
+      scopeLabel: resolved.scope_label || `Latest import batch #${latestBatch.id}`,
     };
   }
 
@@ -630,7 +632,7 @@ function formatError(error: unknown, locale: Locale) {
   return formatUserFacingError(error, "Não foi possível concluir a ação em lote.", locale);
 }
 
-function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"]) {
+function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"], locale: Locale) {
   const newPublicChannelCount =
     summary.emails_found +
     summary.instagrams_found +
@@ -638,19 +640,25 @@ function buildEnrichmentNarrative(summary: LeadBatchEnrichmentResponse["summary"
     summary.contact_forms_found;
 
   if (summary.success_count === 0) {
-    return `Processamos ${summary.processed.toLocaleString()} leads, mas nenhum concluiu o enriquecimento com sucesso.`;
+    return locale === "en"
+      ? `Processed ${summary.processed.toLocaleString()} leads, but none completed enrichment successfully.`
+      : `Processamos ${summary.processed.toLocaleString()} leads, mas nenhum concluiu o enriquecimento com sucesso.`;
   }
 
   if (newPublicChannelCount === 0) {
-    return `Processamos ${summary.processed.toLocaleString()} leads. ${summary.success_count.toLocaleString()} concluíram com sucesso, mas nenhum novo canal público foi encontrado.`;
+    return locale === "en"
+      ? `Processed ${summary.processed.toLocaleString()} leads. ${summary.success_count.toLocaleString()} completed successfully, but no new public channel was found.`
+      : `Processamos ${summary.processed.toLocaleString()} leads. ${summary.success_count.toLocaleString()} concluíram com sucesso, mas nenhum novo canal público foi encontrado.`;
   }
 
-  return `Processamos ${summary.processed.toLocaleString()} leads e encontramos ${summary.contacts_added.toLocaleString()} novos contatos em ${newPublicChannelCount.toLocaleString()} canais públicos.`;
+  return locale === "en"
+    ? `Processed ${summary.processed.toLocaleString()} leads and found ${summary.contacts_added.toLocaleString()} new contacts across ${newPublicChannelCount.toLocaleString()} public channels.`
+    : `Processamos ${summary.processed.toLocaleString()} leads e encontramos ${summary.contacts_added.toLocaleString()} novos contatos em ${newPublicChannelCount.toLocaleString()} canais públicos.`;
 }
 
-function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"]) {
+function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"], locale: Locale) {
   if (summary.processed === 0) {
-    return "Nenhum lead foi processado nesta consulta de CNPJ.";
+    return locale === "en" ? "No leads were processed in this CNPJ lookup." : "Nenhum lead foi processado nesta consulta de CNPJ.";
   }
 
   if (
@@ -659,20 +667,30 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
     summary.not_found_count === 0 &&
     summary.company_search_pending_retry_count > 0
   ) {
-    return `Busca CNPJ limitada pelo provedor. ${summary.company_search_pending_retry_count.toLocaleString()} empresa(s) ficaram para tentar novamente em cerca de 1 minuto.`;
+    return locale === "en"
+      ? `CNPJ search is provider-limited. ${summary.company_search_pending_retry_count.toLocaleString()} companies were left for retry in about 1 minute.`
+      : `Busca CNPJ limitada pelo provedor. ${summary.company_search_pending_retry_count.toLocaleString()} empresa(s) ficaram para tentar novamente em cerca de 1 minuto.`;
   }
 
   if (summary.error_count > 0 && summary.matched_count === 0 && summary.needs_review_count === 0 && summary.not_found_count === 0) {
     if (summary.provider_rate_limited_count > 0) {
-      return "A consulta pública de CNPJ atingiu o limite de uso. Tente novamente com menos empresas por vez.";
+      return locale === "en"
+        ? "The public CNPJ lookup hit the provider limit. Retry with fewer companies at a time."
+        : "A consulta pública de CNPJ atingiu o limite de uso. Tente novamente com menos empresas por vez.";
     }
     if (summary.company_search_rate_limited_count > 0) {
-      return "A busca cadastral paga atingiu o limite do provedor. Tente novamente em alguns instantes.";
+      return locale === "en"
+        ? "The paid registry search hit the provider limit. Retry shortly."
+        : "A busca cadastral paga atingiu o limite do provedor. Tente novamente em alguns instantes.";
     }
     if (summary.company_search_pending_retry_count > 0) {
-      return "Busca CNPJ limitada pelo provedor. Aguarde cerca de 1 minuto e tente novamente.";
+      return locale === "en"
+        ? "CNPJ search is provider-limited. Wait about 1 minute and retry."
+        : "Busca CNPJ limitada pelo provedor. Aguarde cerca de 1 minuto e tente novamente.";
     }
-    return "A consulta CNPJ encontrou erro de provedor em parte do lote. Tente novamente em alguns instantes.";
+    return locale === "en"
+      ? "The CNPJ lookup hit a provider error for part of the batch. Retry shortly."
+      : "A consulta CNPJ encontrou erro de provedor em parte do lote. Tente novamente em alguns instantes.";
   }
 
   if (summary.matched_count === 0 && summary.needs_review_count === 0 && summary.not_found_count > 0) {
@@ -681,89 +699,95 @@ function buildCnpjNarrative(summary: LeadBatchCNPJEnrichmentResponse["summary"])
       summary.company_search_no_candidates_count - summary.company_search_zero_candidates_count,
     );
     const reasons = [
-      summary.no_website_count ? `${summary.no_website_count.toLocaleString()} sem site` : null,
+      summary.no_website_count ? `${summary.no_website_count.toLocaleString()} ${locale === "en" ? "without website" : "sem site"}` : null,
       summary.no_cnpj_on_website_count
-        ? `${summary.no_cnpj_on_website_count.toLocaleString()} sem CNPJ visível no site`
+        ? `${summary.no_cnpj_on_website_count.toLocaleString()} ${locale === "en" ? "without visible CNPJ on the site" : "sem CNPJ visível no site"}`
         : null,
       summary.website_timeout_count
-        ? `${summary.website_timeout_count.toLocaleString()} sites demoraram demais`
+        ? `${summary.website_timeout_count.toLocaleString()} ${locale === "en" ? "sites timed out" : "sites demoraram demais"}`
         : null,
       summary.website_unreachable_count
-        ? `${summary.website_unreachable_count.toLocaleString()} sites sem resposta`
+        ? `${summary.website_unreachable_count.toLocaleString()} ${locale === "en" ? "sites did not respond" : "sites sem resposta"}`
         : null,
       summary.validation_failed_count
-        ? `${summary.validation_failed_count.toLocaleString()} com CNPJ sem validação pública`
+        ? `${summary.validation_failed_count.toLocaleString()} ${locale === "en" ? "with CNPJ that failed public validation" : "com CNPJ sem validação pública"}`
         : null,
       summary.low_confidence_count
-        ? `${summary.low_confidence_count.toLocaleString()} com baixa confiança`
+        ? `${summary.low_confidence_count.toLocaleString()} ${locale === "en" ? "low-confidence matches" : "com baixa confiança"}`
         : null,
       summary.provider_rate_limited_count
-        ? `${summary.provider_rate_limited_count.toLocaleString()} limitados pela consulta pública`
+        ? `${summary.provider_rate_limited_count.toLocaleString()} ${locale === "en" ? "limited by public lookup" : "limitados pela consulta pública"}`
         : null,
       summary.provider_error_count
-        ? `${summary.provider_error_count.toLocaleString()} com erro de provedor`
+        ? `${summary.provider_error_count.toLocaleString()} ${locale === "en" ? "with provider errors" : "com erro de provedor"}`
         : null,
       summary.company_search_not_configured_count
-        ? `${summary.company_search_not_configured_count.toLocaleString()} com busca paga não configurada`
+        ? `${summary.company_search_not_configured_count.toLocaleString()} ${locale === "en" ? "without paid search configured" : "com busca paga não configurada"}`
         : null,
       summary.company_search_zero_candidates_count
-        ? `${summary.company_search_zero_candidates_count.toLocaleString()} sem candidatos retornados pela CNPJá`
+        ? `${summary.company_search_zero_candidates_count.toLocaleString()} ${locale === "en" ? "with no candidates returned by CNPJá" : "sem candidatos retornados pela CNPJá"}`
         : null,
       genericCompanySearchNoCandidateCount
-        ? `${genericCompanySearchNoCandidateCount.toLocaleString()} sem candidatos na busca cadastral`
+        ? `${genericCompanySearchNoCandidateCount.toLocaleString()} ${locale === "en" ? "without registry candidates" : "sem candidatos na busca cadastral"}`
         : null,
       summary.company_search_low_confidence_count
-        ? `${summary.company_search_low_confidence_count.toLocaleString()} com baixa confiança na busca cadastral`
+        ? `${summary.company_search_low_confidence_count.toLocaleString()} ${locale === "en" ? "low-confidence registry matches" : "com baixa confiança na busca cadastral"}`
         : null,
       summary.company_search_pending_retry_count
-        ? `${summary.company_search_pending_retry_count.toLocaleString()} aguardando nova tentativa por limite do provedor`
+        ? `${summary.company_search_pending_retry_count.toLocaleString()} ${locale === "en" ? "waiting for retry because of provider limits" : "aguardando nova tentativa por limite do provedor"}`
         : null,
       summary.company_search_rate_limited_count
-        ? `${summary.company_search_rate_limited_count.toLocaleString()} limitados pela busca cadastral`
+        ? `${summary.company_search_rate_limited_count.toLocaleString()} ${locale === "en" ? "limited by registry search" : "limitados pela busca cadastral"}`
         : null,
       summary.company_search_provider_error_count
-        ? `${summary.company_search_provider_error_count.toLocaleString()} com erro na busca cadastral`
+        ? `${summary.company_search_provider_error_count.toLocaleString()} ${locale === "en" ? "with registry provider errors" : "com erro na busca cadastral"}`
         : null,
     ].filter(Boolean);
 
     if (reasons.length === 0) {
-      return "0 CNPJs confirmados. Nenhum CNPJ foi encontrado nos sites verificados.";
+      return locale === "en"
+        ? "0 CNPJs confirmed. No CNPJ was found on the checked websites."
+        : "0 CNPJs confirmados. Nenhum CNPJ foi encontrado nos sites verificados.";
     }
 
-    return `0 CNPJs confirmados. ${summary.not_found_count.toLocaleString()} sem correspondência: ${reasons.join(", ")}.`;
+    return locale === "en"
+      ? `0 CNPJs confirmed. ${summary.not_found_count.toLocaleString()} unmatched: ${reasons.join(", ")}.`
+      : `0 CNPJs confirmados. ${summary.not_found_count.toLocaleString()} sem correspondência: ${reasons.join(", ")}.`;
   }
 
   const paidSearchParts = [
     Math.max(0, summary.matched_count - summary.company_search_matched_count)
-      ? `${Math.max(0, summary.matched_count - summary.company_search_matched_count).toLocaleString()} confirmados por CNPJ já informado ou site`
+      ? `${Math.max(0, summary.matched_count - summary.company_search_matched_count).toLocaleString()} ${locale === "en" ? "confirmed from existing CNPJ or website" : "confirmados por CNPJ já informado ou site"}`
       : null,
     summary.company_search_matched_count
-      ? `${summary.company_search_matched_count.toLocaleString()} encontrados via busca cadastral`
+      ? `${summary.company_search_matched_count.toLocaleString()} ${locale === "en" ? "found through registry search" : "encontrados via busca cadastral"}`
       : null,
     summary.company_search_needs_review_count
-      ? `${summary.company_search_needs_review_count.toLocaleString()} candidatos da busca cadastral precisam revisão`
+      ? `${summary.company_search_needs_review_count.toLocaleString()} ${locale === "en" ? "registry candidates need review" : "candidatos da busca cadastral precisam revisão"}`
       : null,
   ].filter(Boolean);
 
   const paidSearchSuffix = paidSearchParts.length ? ` ${paidSearchParts.join(", ")}.` : "";
-  return `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} candidatos encontrados precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.${paidSearchSuffix}`;
+  return locale === "en"
+    ? `${summary.matched_count.toLocaleString()} filled automatically, ${summary.needs_review_count.toLocaleString()} candidates need review, ${summary.skipped_known_count.toLocaleString()} already had CNPJ, and ${summary.not_found_count.toLocaleString()} stayed unmatched.${paidSearchSuffix}`
+    : `${summary.matched_count.toLocaleString()} preenchidos automaticamente, ${summary.needs_review_count.toLocaleString()} candidatos encontrados precisam revisão, ${summary.skipped_known_count.toLocaleString()} já tinham CNPJ e ${summary.not_found_count.toLocaleString()} ficaram sem correspondência.${paidSearchSuffix}`;
 }
 
-function buildCnpjNarrativeV2(summary: LeadBatchCNPJEnrichmentResponse["summary"]) {
-  const baseNarrative = buildCnpjNarrative(summary);
+function buildCnpjNarrativeV2(summary: LeadBatchCNPJEnrichmentResponse["summary"], locale: Locale) {
+  const baseNarrative = buildCnpjNarrative(summary, locale);
   const extras = [
     summary.skipped_review_candidate_count
-      ? `${summary.skipped_review_candidate_count.toLocaleString()} candidatos aguardando revisão`
+      ? `${summary.skipped_review_candidate_count.toLocaleString()} ${locale === "en" ? "candidates waiting for review" : "candidatos aguardando revisão"}`
       : null,
     summary.paid_search_recently_attempted_count
-      ? `${summary.paid_search_recently_attempted_count.toLocaleString()} buscas pagas puladas por tentativa recente`
+      ? `${summary.paid_search_recently_attempted_count.toLocaleString()} ${locale === "en" ? "paid searches skipped because of recent attempts" : "buscas pagas puladas por tentativa recente"}`
       : null,
     summary.company_search_consulted_now_count
-      ? `${summary.company_search_consulted_now_count.toLocaleString()} consultados agora`
+      ? `${summary.company_search_consulted_now_count.toLocaleString()} ${locale === "en" ? "checked now" : "consultados agora"}`
       : null,
-    summary.paid_calls_made ? `${summary.paid_calls_made.toLocaleString()} consultas pagas feitas` : null,
+    summary.paid_calls_made ? `${summary.paid_calls_made.toLocaleString()} ${locale === "en" ? "paid calls made" : "consultas pagas feitas"}` : null,
     summary.paid_calls_skipped_duplicate
-      ? `${summary.paid_calls_skipped_duplicate.toLocaleString()} consultas duplicadas evitadas`
+      ? `${summary.paid_calls_skipped_duplicate.toLocaleString()} ${locale === "en" ? "duplicate calls avoided" : "consultas duplicadas evitadas"}`
       : null,
   ].filter(Boolean);
 
@@ -774,10 +798,90 @@ function buildCnpjNarrativeV2(summary: LeadBatchCNPJEnrichmentResponse["summary"
   return `${baseNarrative} ${extras.join(", ")}.`;
 }
 
-function formatScopeLabel(scopeLabel: string) {
+function formatScopeLabel(scopeLabel: string, locale: Locale) {
+  if (locale === "en") {
+    return scopeLabel
+      .replace(/^Leads selecionados$/i, "Selected leads")
+      .replace(/^Lista filtrada(?: atual)?$/i, "Current filtered set")
+      .replace(/^Última importação$/i, "Latest import batch")
+      .replace(/^Última importação #/i, "Latest import batch #");
+  }
+
   return scopeLabel
     .replace(/^Selected leads$/i, "Leads selecionados")
     .replace(/^Current filtered set$/i, "Lista filtrada")
     .replace(/^Latest import batch$/i, "Última importação")
     .replace(/^Latest import batch #/i, "Última importação #");
+}
+
+function batchCopy(locale: Locale) {
+  return locale === "en"
+    ? {
+        enrichDone: "Enrichment completed",
+        enrichDoneWithWarnings: "Enrichment completed with warnings",
+        cnpjDone: "CNPJ enrichment completed",
+        cnpjDoneWithWarnings: "CNPJ enrichment completed with warnings",
+        assignmentDone: "Assignment completed",
+        spreadsheetDownloaded: "Spreadsheet downloaded",
+        requested: "Requested",
+        processed: "Processed",
+        completed: "Completed",
+        newContacts: "New contacts",
+        publicChannels: "Public channels",
+        forms: "Forms",
+        skipped: "Skipped",
+        errors: "Errors",
+        filled: "Filled",
+        needsReview: "Need review",
+        notFound: "No match",
+        alreadyHadCnpj: "Already had CNPJ",
+        waitingReview: "Waiting review",
+        recentPaidSearch: "Recent paid search",
+        checkedNow: "Checked now",
+        paidCalls: "Paid calls",
+        duplicateCallsSkipped: "Duplicate calls skipped",
+        batchErrors: "Batch errors",
+        cnpjPartialFailure: "CNPJ enrichment failed for part of the batch.",
+        updated: "Updated",
+        missingIds: "Missing IDs",
+        exportReady: "Export ready for prospecting. The Excel file has already been downloaded in your browser.",
+        file: "File",
+        failedLeads: "Failed leads",
+        failedWithoutIds: "Some leads failed, but the API did not return their IDs.",
+        enrichPartialFailure: "Failed to enrich part of the batch.",
+      }
+    : {
+        enrichDone: "Enriquecimento concluído",
+        enrichDoneWithWarnings: "Enriquecimento concluído com alertas",
+        cnpjDone: "Enriquecimento CNPJ concluído",
+        cnpjDoneWithWarnings: "Enriquecimento CNPJ concluído com alertas",
+        assignmentDone: "Atribuição concluída",
+        spreadsheetDownloaded: "Planilha baixada",
+        requested: "Solicitados",
+        processed: "Processados",
+        completed: "Concluídos",
+        newContacts: "Novos contatos",
+        publicChannels: "Canais públicos",
+        forms: "Formulários",
+        skipped: "Ignorados",
+        errors: "Erros",
+        filled: "Preenchidos",
+        needsReview: "Precisam revisão",
+        notFound: "Sem correspondência",
+        alreadyHadCnpj: "Já tinham CNPJ",
+        waitingReview: "Aguardando revisão",
+        recentPaidSearch: "Busca paga recente",
+        checkedNow: "Consultados agora",
+        paidCalls: "Consultas pagas",
+        duplicateCallsSkipped: "Duplicadas evitadas",
+        batchErrors: "Erros do lote",
+        cnpjPartialFailure: "Falha ao enriquecer CNPJ em parte do lote.",
+        updated: "Atualizados",
+        missingIds: "IDs ausentes",
+        exportReady: "Exportação pronta para prospecção. O arquivo Excel já foi baixado no seu navegador.",
+        file: "Arquivo",
+        failedLeads: "Leads com falha",
+        failedWithoutIds: "Alguns leads falharam, mas a API não retornou os IDs.",
+        enrichPartialFailure: "Falha ao enriquecer parte do lote.",
+      };
 }

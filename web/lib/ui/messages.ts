@@ -1,4 +1,5 @@
 import { ApiError } from "@/lib/api/client";
+import { translateLooseText } from "@/lib/i18n/loose";
 import type { Locale } from "@/lib/i18n/translations";
 import { translations } from "@/lib/i18n/translations";
 
@@ -57,7 +58,7 @@ export function formatUserFacingError(
     if (isBackendUnavailableError(error)) {
       return translations[locale]["error.backendUnavailable"];
     }
-    return sanitizeUserFacingMessage(error.detail, fallbackMessage);
+    return translateLooseText(sanitizeUserFacingMessage(error.detail, fallbackMessage), locale);
   }
 
   if (error instanceof Error) {
@@ -67,7 +68,7 @@ export function formatUserFacingError(
     if (looksLikeBackendUnavailable(error.message)) {
       return translations[locale]["error.backendUnavailable"];
     }
-    return sanitizeUserFacingMessage(error.message, fallbackMessage);
+    return translateLooseText(sanitizeUserFacingMessage(error.message, fallbackMessage), locale);
   }
 
   return fallbackMessage;
