@@ -205,7 +205,32 @@ Open:
 - [http://localhost:3000](http://localhost:3000)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-## Local Docker Deployment
+## Cross-Platform Docker Quick Start
+
+macOS/Linux:
+
+```bash
+git clone https://github.com/HanuBehr/encontraaiapp.git
+cd encontraaiapp
+cp .env.example .env
+docker compose up --build
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/HanuBehr/encontraaiapp.git
+cd encontraaiapp
+Copy-Item .env.example .env
+docker compose up --build
+```
+
+Open:
+
+- [http://localhost:3000](http://localhost:3000)
+- [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+## Local Windows Installer
 
 For a local Windows Docker installation:
 
@@ -221,6 +246,12 @@ notepad .env
 Then open [http://localhost:3000](http://localhost:3000).
 
 See [`docs/client-install/README.md`](docs/client-install/README.md) for the full installation guide.
+
+## Production Hardening Roadmap
+
+- Managed PostgreSQL with migrations and backups.
+- Authentication, organization access control, and audit trails.
+- Background job processing with retries, observability, and provider contract tests.
 
 ## Environment
 
