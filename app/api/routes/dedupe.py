@@ -13,6 +13,7 @@ from app.schemas.dedupe import (
 )
 from app.schemas.lead import LeadListFilters
 from app.services.dedupe import DedupeService
+from app.services.observability import new_correlation_id, operation_log
 
 router = APIRouter(prefix="/dedupe", tags=["dedupe"])
 
@@ -52,7 +53,9 @@ def preview_duplicates(
         has_assignment=has_assignment,
     )
     service = DedupeService(db)
-    return service.preview_duplicates(filters=filters)
+    response = service.preview_duplicates(filters=filters)
+    operation_log("dedupe.preview_completed", correlation_id=new_correlation_id("dedupe-preview"), candidates=len(response.items))
+    return response
 
 
 @router.post("/pair", response_model=DedupeRunResponse)
@@ -67,6 +70,7 @@ def dedupe_pair(payload: DedupePairRequest, db: Session = Depends(get_db_session
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    operation_log("dedupe.pair_completed", correlation_id=new_correlation_id("dedupe-pair"), canonical_lead_id=result.canonical_lead_id)
     return DedupeRunResponse(processed=1, results=[result])
 
 
@@ -74,4 +78,5 @@ def dedupe_pair(payload: DedupePairRequest, db: Session = Depends(get_db_session
 def run_dedupe(payload: DedupeRunRequest | None = None, db: Session = Depends(get_db_session)) -> DedupeRunResponse:
     service = DedupeService(db)
     results = service.dedupe_batch(lead_ids=payload.lead_ids if payload else None, actor="api")
+    operation_log("dedupe.batch_completed", correlation_id=new_correlation_id("dedupe-run"), processed=len(results))
     return DedupeRunResponse(processed=len(results), results=results)

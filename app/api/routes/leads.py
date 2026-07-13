@@ -37,8 +37,10 @@ from app.schemas.lead import (
 from app.services.cnpj_enrichment import CNPJCandidateApprovalError, CNPJEnrichmentService
 from app.services.crm import CRMService
 from app.services.enrichment import EnrichmentService
+from app.services.jobs import JobRunner
 from app.services.lead_assignment import LeadAssignmentService
 from app.services.lead_scope import LeadScopeResolver, ResolvedLeadScope
+from app.services.observability import operation_log
 from app.services.providers.cnpja import CNPJAProviderError
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -152,14 +154,19 @@ def enrich_lead_batch(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> LeadBatchEnrichmentResponse:
-    service = EnrichmentService(db=db, settings=settings)
     try:
-        response = service.enrich_lead_ids(
-            payload.lead_ids,
-            actor="api",
-            scope_label="api lead ids",
-            continue_on_error=True,
-        )
+        response = JobRunner(db).run(
+            job_type="lead_batch_enrichment",
+            payload={"lead_ids": [int(lead_id) for lead_id in payload.lead_ids]},
+            operation=lambda _correlation_id: EnrichmentService(db=db, settings=settings).enrich_lead_ids(
+                payload.lead_ids,
+                actor="api",
+                scope_label="api lead ids",
+                continue_on_error=True,
+            ),
+            result_serializer=lambda result: result.model_dump(mode="json"),
+            cached_result_factory=LeadBatchEnrichmentResponse.model_validate,
+        ).value
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return response
@@ -171,16 +178,26 @@ def enrich_lead_batch_cnpj(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> LeadBatchCNPJEnrichmentResponse:
-    service = CNPJEnrichmentService(db=db, settings=settings)
     try:
-        return service.enrich_lead_ids(
-            payload.lead_ids,
-            force=payload.force,
-            search_mode=payload.search_mode,
-            force_paid_search=payload.force_paid_search,
-            actor="api",
-            scope_label="api lead ids",
-        )
+        return JobRunner(db).run(
+            job_type="lead_batch_cnpj_enrichment",
+            payload={
+                "lead_ids": [int(lead_id) for lead_id in payload.lead_ids],
+                "force": payload.force,
+                "search_mode": payload.search_mode,
+                "force_paid_search": payload.force_paid_search,
+            },
+            operation=lambda _correlation_id: CNPJEnrichmentService(db=db, settings=settings).enrich_lead_ids(
+                payload.lead_ids,
+                force=payload.force,
+                search_mode=payload.search_mode,
+                force_paid_search=payload.force_paid_search,
+                actor="api",
+                scope_label="api lead ids",
+            ),
+            result_serializer=lambda result: result.model_dump(mode="json"),
+            cached_result_factory=LeadBatchCNPJEnrichmentResponse.model_validate,
+        ).value
     except CNPJAProviderError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:
@@ -257,6 +274,14 @@ def assign_lead_batch(
         lead_ids=resolved.lead_ids,
         overwrite=payload.overwrite,
         dry_run=payload.dry_run,
+    )
+    operation_log(
+        "assignment.batch_completed",
+        correlation_id="assignment-api",
+        requested=len(resolved.lead_ids),
+        changed=result.changed,
+        dry_run=payload.dry_run,
+        overwrite=payload.overwrite,
     )
     if not payload.dry_run:
         db.commit()

@@ -18,6 +18,7 @@ from app.schemas.discovery import (
     DiscoverySearchResponse,
 )
 from app.services.discovery import DiscoveryService
+from app.services.observability import new_correlation_id, operation_log
 from app.services.providers.google_places import GooglePlacesProviderError
 
 router = APIRouter(prefix="/discovery", tags=["discovery"])
@@ -29,9 +30,13 @@ def preview_discovery_search(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> DiscoveryPreviewResponse:
+    correlation_id = new_correlation_id("discovery-preview")
+    operation_log("discovery.preview_started", correlation_id=correlation_id, terms=len(payload.search_terms), max_results_per_term=payload.max_results_per_term)
     service = DiscoveryService(db=db, settings=settings)
     try:
-        return service.preview(payload)
+        response = service.preview(payload)
+        operation_log("discovery.preview_completed", correlation_id=correlation_id, results=len(response.items), duplicates_removed=response.duplicates_removed)
+        return response
     except GooglePlacesProviderError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except ValueError as exc:
@@ -54,14 +59,18 @@ def import_discovery_preview(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> DiscoveryImportResponse:
+    correlation_id = new_correlation_id("discovery-import")
+    operation_log("discovery.import_started", correlation_id=correlation_id, selected=len(payload.selected_client_result_ids))
     service = DiscoveryService(db=db, settings=settings)
     try:
-        return service.import_preview(
+        response = service.import_preview(
             request=payload.search_request,
             preview=payload.preview,
             selected_client_result_ids=payload.selected_client_result_ids,
             skip_blocked=payload.skip_blocked,
         )
+        operation_log("discovery.import_completed", correlation_id=correlation_id, created=response.created_count, skipped_existing=response.skipped_existing_count)
+        return response
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -72,13 +81,17 @@ def enrich_discovery_preview(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> DiscoveryPreviewEnrichmentResponse:
+    correlation_id = new_correlation_id("preview-enrich")
+    operation_log("enrichment.preview_started", correlation_id=correlation_id, requested=len(payload.client_result_ids))
     service = DiscoveryService(db=db, settings=settings)
     try:
-        return service.enrich_preview(
+        response = service.enrich_preview(
             preview=payload.preview,
             client_result_ids=payload.client_result_ids,
             skip_blocked=payload.skip_blocked,
         )
+        operation_log("enrichment.preview_completed", correlation_id=correlation_id, processed=response.summary.processed, errors=response.summary.errors)
+        return response
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

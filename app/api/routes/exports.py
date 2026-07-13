@@ -9,6 +9,7 @@ from app.enums import CompanySizeFit, LeadSourceType, LeadStatus, TradeType
 from app.schemas.lead import LeadBlockedFilter, LeadListFilters, LeadScopeRequest, LeadSortBy, LeadSortDir
 from app.services.export_excel import ExcelExportService
 from app.services.lead_scope import LeadScopeResolver
+from app.services.observability import new_correlation_id, operation_log
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 
@@ -67,6 +68,7 @@ def export_excel(
     )
     service = ExcelExportService(db)
     filename, payload = service.build_workbook(filters)
+    operation_log("export.excel_completed", correlation_id=new_correlation_id("export"), scope="filters", filename=filename, bytes=len(payload))
     return _excel_response(filename, payload)
 
 
@@ -87,6 +89,7 @@ def export_excel_for_scope(
         scope_label=resolved.scope_label,
         scope_metadata=resolved.metadata,
     )
+    operation_log("export.excel_completed", correlation_id=new_correlation_id("export"), scope=resolved.scope_type, lead_count=len(resolved.lead_ids), filename=filename, bytes=len(workbook_payload))
     return _excel_response(filename, workbook_payload)
 
 
