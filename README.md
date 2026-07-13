@@ -286,6 +286,7 @@ Secrets must stay in local environment files or deployment secret managers. They
 ## Documentation
 
 - [`docs/README.md`](docs/README.md)
+- [`docs/architecture.md`](docs/architecture.md)
 - [`docs/DEMO_MODE.md`](docs/DEMO_MODE.md)
 - [`docs/deployment/VERCEL_DEMO.md`](docs/deployment/VERCEL_DEMO.md)
 - [`docs/deployment/VERCEL_BACKEND.md`](docs/deployment/VERCEL_BACKEND.md)
@@ -296,6 +297,8 @@ Secrets must stay in local environment files or deployment secret managers. They
 ## Current Scope
 
 This is not a CRM and it is not campaign automation. It is the lead preparation layer before outreach.
+
+The public demo uses fictional data and a simplified deployment model. Commercial implementations and client data remain private.
 
 Current focus:
 

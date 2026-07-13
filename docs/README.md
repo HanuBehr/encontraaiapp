@@ -13,6 +13,7 @@ This folder contains the operational documentation for Encontra.ai.
 
 ## Product And Demo
 
+- [`architecture.md`](architecture.md): system architecture, workflow boundaries, job processing, observability, deployment modes, and limitations.
 - [`DEMO_MODE.md`](DEMO_MODE.md): how the frontend-only demo works, what data it uses, and how browser-local persistence behaves.
 
 ## Deployment
