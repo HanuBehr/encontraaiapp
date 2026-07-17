@@ -124,10 +124,8 @@ export function DemoHome() {
 function ProductPreviewFrame() {
   return (
     <div className="ea-card relative mx-auto mt-10 w-full max-w-6xl overflow-hidden rounded-[2rem] p-2.5 shadow-[0_28px_88px_rgba(47,38,61,0.12),inset_0_1px_0_rgba(255,255,255,0.74)]">
-      <div className="relative aspect-[16/9] overflow-hidden rounded-[1.55rem] border border-white/12 bg-[radial-gradient(circle_at_18%_12%,rgba(139,92,246,0.36),transparent_20rem),radial-gradient(circle_at_82%_78%,rgba(96,165,250,0.18),transparent_22rem),linear-gradient(135deg,#171020_0%,#241931_48%,#120d1b_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] lg:aspect-[21/10]">
-        <div className="pointer-events-none absolute left-1/2 top-1/2 h-[36rem] w-[36rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-orchid/14 blur-3xl" />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_0%,rgba(255,255,255,0.05)_42%,transparent_58%)] opacity-60" />
-        <div className="pointer-events-none absolute inset-x-8 top-8 h-px bg-gradient-to-r from-transparent via-white/24 to-transparent" />
+      <div className="relative aspect-[16/9] overflow-hidden rounded-[1.55rem] border border-white/10 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.08),transparent_24rem),linear-gradient(135deg,#18151f_0%,#201c29_52%,#15121b_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] lg:aspect-[21/10]">
+        <div className="pointer-events-none absolute inset-x-8 top-8 h-px bg-white/10" />
         {/* Future media slot: replace this inner surface with /demo/functionality-loop.gif or a looping webm. */}
       </div>
     </div>
