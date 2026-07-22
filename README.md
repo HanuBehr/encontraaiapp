@@ -11,7 +11,7 @@ It handles discovery, duplicate prevention, contact enrichment, company-record e
 
 [Open the live demo](https://encontraaiapp.vercel.app) · Fictional data, no login or API keys required.
 
-![Encontra.ai discovery workspace](web/public/brand/ENCONTRAAI.png)
+![Encontra.ai discovery workspace](web/public/brand/encontra-macos-readme-window.png)
 
 ## Why I built it
 
