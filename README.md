@@ -13,6 +13,8 @@ It handles discovery, duplicate prevention, contact enrichment, company-record e
 
 ![Encontra.ai discovery workspace](web/public/brand/encontra-macos-readme-window.png)
 
+![Encontra.ai saved leads workspace](web/public/brand/encontra-saved-leads-macos-readme-window.png)
+
 ## Why I built it
 
 I kept seeing sales work begin with the same mess: provider searches copied into spreadsheets, duplicates mixed with useful companies, missing contact details and records nobody could confidently verify.
