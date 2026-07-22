@@ -15,9 +15,9 @@ It handles discovery, duplicate prevention, contact enrichment, company-record e
 
 ## Why I built it
 
-Sales teams rarely start with a clean market. They start with a niche, a location and a pile of provider results that still need to be checked, deduplicated, enriched and reorganized before anyone can use them.
+I kept seeing sales work begin with the same mess: provider searches copied into spreadsheets, duplicates mixed with useful companies, missing contact details and records nobody could confidently verify.
 
-I built Encontra.ai around that work between the search and the first sales call. The goal was not to generate the largest possible spreadsheet. It was to make each step visible, reviewable and difficult to corrupt silently.
+Encontra.ai started as a way to remove that manual cleanup without hiding uncertainty behind automation. When the system cannot confidently match, merge or classify something, it keeps the evidence and sends the decision to review.
 
 ## How it works
 
