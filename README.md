@@ -30,4 +30,3 @@ Search, preview, import, deduplicate, enrich, review, assign and export.
 **Integrations:** Google Places, geocoding, company registries and public website enrichment  
 **Delivery:** Docker, Vercel and GitHub Actions
 
-The public demo uses fictional browser-session data. Provider credentials, commercial implementations and client data remain private.
