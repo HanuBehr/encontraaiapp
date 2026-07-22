@@ -3,6 +3,8 @@
 [![CI](https://github.com/HanuBehr/encontraaiapp/actions/workflows/ci.yml/badge.svg)](https://github.com/HanuBehr/encontraaiapp/actions/workflows/ci.yml)
 [![Live demo](https://img.shields.io/badge/Live_demo-open-6d28d9?style=for-the-badge)](https://encontraaiapp.vercel.app)
 
+B2B prospecting is not slow because sales teams cannot sell. It is slow because the lead list is usually garbage.
+
 Encontra.ai turns a market search into a reviewed lead list without pretending provider data is clean.
 
 It handles discovery, duplicate prevention, contact enrichment, company-record evidence scoring, manual review, assignment rules and CRM-ready Excel exports.
